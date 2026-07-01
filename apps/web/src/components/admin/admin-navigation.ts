@@ -1,0 +1,65 @@
+import {
+  Bell,
+  Building2,
+  FileText,
+  LayoutDashboard,
+  LifeBuoy,
+  Search,
+  Settings,
+  ShieldCheck,
+  UsersRound,
+} from "lucide-react";
+
+export const adminNavigation = [
+  {
+    href: "/admin",
+    label: "Dashboard",
+    description: "Admin overview foundation",
+    icon: LayoutDashboard,
+  },
+  {
+    href: "/admin/settings",
+    label: "Settings",
+    description: "Tenant and platform settings shell",
+    icon: Settings,
+  },
+  {
+    href: "/client",
+    label: "Client shell",
+    description: "Preview client-facing workspace",
+    icon: UsersRound,
+  },
+] as const;
+
+export const adminQuickActions = [
+  {
+    label: "Search clients",
+    description: "Open global search UI",
+    icon: Search,
+  },
+  {
+    label: "Review notifications",
+    description: "Open notification center",
+    icon: Bell,
+  },
+  {
+    label: "Security settings",
+    description: "Open future security controls",
+    icon: ShieldCheck,
+  },
+  {
+    label: "Documentation",
+    description: "Open future admin documentation",
+    icon: FileText,
+  },
+  {
+    label: "Tenant profile",
+    description: "Open future tenant profile",
+    icon: Building2,
+  },
+  {
+    label: "Support",
+    description: "Open future support workspace",
+    icon: LifeBuoy,
+  },
+] as const;
