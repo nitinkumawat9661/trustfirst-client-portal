@@ -1,4 +1,6 @@
-import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@trustfirst/ui";
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@trustfirst/ui";
+import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { AppShell } from "@/components/shell/app-shell";
 
 export default function ClientPage() {
@@ -19,7 +21,17 @@ export default function ClientPage() {
             <CardDescription>Mobile-first shell for authenticated clients.</CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Future modules can attach here without changing the navigation base.
+            <div className="space-y-4">
+              <p>
+                Future modules can attach here without changing the navigation base.
+              </p>
+              <Button asChild size="sm">
+                <Link href="/client/requirements/new">
+                  New requirement
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
         <Card>
