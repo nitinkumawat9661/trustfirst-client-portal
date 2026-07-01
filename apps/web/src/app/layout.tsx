@@ -13,8 +13,23 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TrustFirst Client Portal",
+  metadataBase: new URL("https://trustfirst.example.com"),
+  title: {
+    default: "TrustFirst Client Portal",
+    template: "%s | TrustFirst Client Portal",
+  },
   description: "Secure client collaboration portal for trust-first service teams.",
+  applicationName: "TrustFirst Client Portal",
+  openGraph: {
+    title: "TrustFirst Client Portal",
+    description: "Secure client collaboration portal for trust-first service teams.",
+    siteName: "TrustFirst Client Portal",
+    type: "website",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
