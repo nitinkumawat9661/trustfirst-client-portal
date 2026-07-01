@@ -17,7 +17,7 @@ export type RequirementSection = {
   fields: RequirementField[];
 };
 
-export const requirementSections = [
+export const requirementSections: RequirementSection[] = [
   {
     id: "company",
     eyebrow: "Section 01",
@@ -202,6 +202,6 @@ export const requirementSections = [
       },
     ],
   },
-] satisfies RequirementSection[];
+] ;
 
 export const reviewStepIndex = requirementSections.length;
