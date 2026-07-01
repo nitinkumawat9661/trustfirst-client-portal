@@ -1,0 +1,24 @@
+{
+  "name": "trustfirst-client-portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-grade SaaS foundation for TrustFirst Client Portal.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @trustfirst/web",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "format": "npm run format --workspaces --if-present",
+    "db:generate": "npm run db:generate --workspace @trustfirst/database",
+    "db:migrate": "npm run db:migrate --workspace @trustfirst/database",
+    "db:studio": "npm run db:studio --workspace @trustfirst/database"
+  },
+  "engines": {
+    "node": ">=20.9.0",
+    "npm": ">=10.0.0"
+  }
+}
