@@ -15,6 +15,7 @@ export * from "./middleware/types";
 export * from "./middleware/validation-middleware";
 export * from "./notifications/notification-provider";
 export * from "./pagination/cursor";
+export * from "./platform-services";
 export * from "./repositories/repository";
 export * from "./storage/storage-provider";
 export * from "./tenant/tenant-resolver";
