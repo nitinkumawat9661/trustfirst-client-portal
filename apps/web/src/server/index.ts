@@ -1,6 +1,7 @@
 export * from "./api";
 export * from "./application/service";
 export * from "./authorization/authorization";
+export * from "./business-platform";
 export * from "./domain/entity";
 export * from "./domain/errors";
 export * from "./events/event-bus";
