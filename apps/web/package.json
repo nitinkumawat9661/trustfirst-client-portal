@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -15,6 +16,7 @@
     "@trustfirst/config": "*",
     "@trustfirst/database": "*",
     "@trustfirst/ui": "*",
+    "argon2": "^0.44.0",
     "framer-motion": "^12.42.2",
     "lucide-react": "^0.561.0",
     "next": "16.2.9",
@@ -32,6 +34,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.9"
   }
 }

@@ -1,5 +1,6 @@
 export * from "./api";
 export * from "./application/service";
+export * from "./auth";
 export * from "./authorization/authorization";
 export * from "./business-platform";
 export * from "./domain/entity";
@@ -18,6 +19,9 @@ export * from "./notifications/notification-provider";
 export * from "./pagination/cursor";
 export * from "./platform-services";
 export * from "./repositories/repository";
+export * from "./permissions";
+export * from "./security";
 export * from "./storage/storage-provider";
 export * from "./tenant/tenant-resolver";
+export * from "./tenants";
 export * from "./validation/validate";

@@ -17,6 +17,7 @@ export function SignInForm() {
     defaultValues: {
       email: "",
       password: "",
+      rememberMe: false,
     },
   });
 
@@ -24,6 +25,7 @@ export function SignInForm() {
     await signIn("credentials", {
       email: values.email,
       password: values.password,
+      rememberMe: values.rememberMe,
       callbackUrl: "/client",
       redirect: true,
     });

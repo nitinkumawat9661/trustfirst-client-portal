@@ -13,3 +13,12 @@ export function getPrisma() {
 }
 
 export type { Prisma, PrismaClient } from "@prisma/client";
+export {
+  AuditAction,
+  AuthTokenType,
+  TenantInvitationStatus,
+  TenantMemberStatus,
+  TenantStatus,
+  UserRole,
+  UserStatus,
+} from "@prisma/client";

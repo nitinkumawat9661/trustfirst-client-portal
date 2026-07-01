@@ -12,19 +12,84 @@ enum UserRole {
   CLIENT
 }
 
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  LOCKED
+  DISABLED
+}
+
+enum TenantStatus {
+  ACTIVE
+  TRIAL
+  SUSPENDED
+  ARCHIVED
+}
+
+enum TenantMemberStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  REMOVED
+}
+
+enum TenantInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum AuthTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  SESSION_REFRESH
+}
+
+enum AuditAction {
+  AUTH_LOGIN_SUCCESS
+  AUTH_LOGIN_FAILURE
+  AUTH_LOGOUT
+  AUTH_LOGOUT_ALL_DEVICES
+  AUTH_PASSWORD_RESET_REQUESTED
+  AUTH_PASSWORD_RESET_COMPLETED
+  AUTH_PASSWORD_CHANGED
+  AUTH_EMAIL_VERIFIED
+  TENANT_SWITCHED
+  PERMISSION_DENIED
+}
+
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  role          UserRole  @default(CLIENT)
-  accounts      Account[]
-  sessions      Session[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                 String               @id @default(cuid())
+  name               String?
+  email              String               @unique
+  normalizedEmail    String               @unique
+  emailVerified      DateTime?
+  image              String?
+  role               UserRole             @default(CLIENT)
+  status             UserStatus           @default(ACTIVE)
+  passwordHash       String?
+  passwordChangedAt  DateTime?
+  sessionVersion     Int                  @default(0)
+  failedLoginCount   Int                  @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  accounts           Account[]
+  sessions           Session[]
+  authTokens         AuthToken[]
+  loginHistory       LoginHistory[]
+  deviceSessions     DeviceSession[]
+  tenantMemberships  TenantMembership[]
+  tenantInvitations  TenantInvitation[]   @relation("TenantInvitationInviter")
+  auditEvents        AuditEvent[]         @relation("AuditEventActor")
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
   @@index([role])
+  @@index([status])
+  @@index([normalizedEmail])
+  @@index([lockedUntil])
   @@index([createdAt])
 }
 
@@ -48,13 +113,23 @@ model Account {
 }
 
 model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String         @id @default(cuid())
+  sessionToken    String         @unique
+  userId          String
+  activeTenantId  String?
+  rememberMe      Boolean        @default(false)
+  rotatedAt       DateTime?
+  revokedAt       DateTime?
+  expires         DateTime
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeTenant    Tenant?        @relation(fields: [activeTenantId], references: [id], onDelete: SetNull)
+  deviceSession   DeviceSession?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@index([userId])
+  @@index([activeTenantId])
+  @@index([revokedAt])
   @@index([expires])
 }
 
@@ -64,4 +139,201 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model Tenant {
+  id              String              @id @default(cuid())
+  slug            String              @unique
+  name            String
+  status          TenantStatus        @default(TRIAL)
+  primaryDomain   String?
+  branding        Json                @default("{}")
+  settings        Json                @default("{}")
+  memberships     TenantMembership[]
+  invitations     TenantInvitation[]
+  sessions        Session[]
+  deviceSessions  DeviceSession[]
+  loginHistory    LoginHistory[]
+  rateLimitEvents RateLimitEvent[]
+  auditEvents     AuditEvent[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([status])
+  @@index([primaryDomain])
+  @@index([createdAt])
+}
+
+model TenantMembership {
+  id        String             @id @default(cuid())
+  tenantId  String
+  userId    String
+  roleId    String
+  status    TenantMemberStatus @default(ACTIVE)
+  joinedAt  DateTime?
+  invitedAt DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role               @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+  @@index([tenantId, status])
+  @@index([roleId])
+}
+
+model TenantInvitation {
+  id              String                 @id @default(cuid())
+  tenantId        String
+  email           String
+  normalizedEmail String
+  roleId          String
+  tokenHash       String                 @unique
+  status          TenantInvitationStatus @default(PENDING)
+  invitedById     String
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role            Role                   @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  invitedBy       User                   @relation("TenantInvitationInviter", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([normalizedEmail])
+  @@index([expiresAt])
+}
+
+model Role {
+  id              String             @id @default(cuid())
+  key             String             @unique
+  name            String
+  description     String?
+  system          Boolean            @default(false)
+  permissions     RolePermission[]
+  memberships     TenantMembership[]
+  invitations     TenantInvitation[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([system])
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  name        String
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+model AuthToken {
+  id        String        @id @default(cuid())
+  userId    String
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([expiresAt])
+  @@index([usedAt])
+}
+
+model LoginHistory {
+  id         String   @id @default(cuid())
+  userId     String?
+  tenantId   String?
+  email      String
+  success    Boolean
+  failureCode String?
+  ipAddress  String?
+  userAgent  String?
+  deviceHash String?
+  occurredAt DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([userId, occurredAt])
+  @@index([tenantId, occurredAt])
+  @@index([email, occurredAt])
+  @@index([success])
+}
+
+model DeviceSession {
+  id           String    @id @default(cuid())
+  userId       String
+  tenantId     String?
+  sessionId    String?   @unique
+  deviceHash   String
+  label        String?
+  ipAddress    String?
+  userAgent    String?
+  lastSeenAt   DateTime  @default(now())
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  session      Session?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, deviceHash])
+  @@index([userId, revokedAt])
+  @@index([tenantId])
+  @@index([deviceHash])
+}
+
+model RateLimitEvent {
+  id         String   @id @default(cuid())
+  tenantId   String?
+  key        String
+  action     String
+  count      Int      @default(1)
+  resetAt    DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([key, action])
+  @@index([tenantId])
+  @@index([resetAt])
+}
+
+model AuditEvent {
+  id            String      @id @default(cuid())
+  tenantId      String?
+  actorId       String?
+  action        AuditAction
+  targetType    String?
+  targetId      String?
+  ipAddress     String?
+  userAgent     String?
+  correlationId String?
+  metadata      Json        @default("{}")
+  occurredAt    DateTime    @default(now())
+  tenant        Tenant?     @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  actor         User?       @relation("AuditEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, occurredAt])
+  @@index([actorId, occurredAt])
+  @@index([action, occurredAt])
+  @@index([targetType, targetId])
+  @@index([correlationId])
 }
