@@ -25,6 +25,11 @@ export type HardwareImportPreview = {
   validRows: number;
 };
 
+export type HardwareImportSummary = HardwareImportPreview & {
+  createdRows: number;
+  skippedRows: number;
+};
+
 export type HardwareCsvExportContract = {
   columns: string[];
   filename: string;
@@ -37,4 +42,13 @@ export type HardwareMovementSummary = {
   productId: string;
   quantity: number;
   type: HardwareInventoryMovementType;
+};
+
+export type HardwareOperationalDashboard = InventoryDashboard & {
+  pendingPaymentsCents: number;
+  recentBills: Array<{ documentNumber: string; totalCents: number }>;
+  recentPurchases: Array<{ documentNumber: string; totalCents: number }>;
+  todayPurchasesCents: number;
+  todaySalesCents: number;
+  topProducts: Array<{ name: string; quantity: number; sku: string }>;
 };

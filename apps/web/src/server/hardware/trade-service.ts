@@ -10,7 +10,7 @@ import { stockForProduct } from "./hardware-service";
 import { calculateTradeTotals } from "./trade-calculations";
 import { movementTypeForDocument, PrismaHardwareTradeRepository } from "./trade-repository";
 import type { HardwareTradeDocumentInput, HardwareTradeStatusInput } from "./trade-schemas";
-import type { HardwarePrintContract, HardwareReportSummary, HardwareTradeSummary, HardwareWhatsAppShareContract } from "./trade-types";
+import type { HardwarePrintContract, HardwarePrintProjection, HardwareReportSummary, HardwareTradeSummary, HardwareWhatsAppShareContract } from "./trade-types";
 
 type ActorContext = { tenantId: string; userId: string };
 type TradeRecord = Awaited<ReturnType<PrismaHardwareTradeRepository["list"]>>[number];
@@ -177,6 +177,28 @@ export class HardwareTradeService {
     });
   }
 
+  async convertQuotationToSale(context: ActorContext, documentId: string) {
+    const quotation = await this.getOrThrow(context.tenantId, documentId);
+    await this.enforce(context, "hardware.sales.manage");
+    if (quotation.type !== HardwareTradeDocumentType.SALES_QUOTATION) {
+      throw validation("Only sales quotations can be converted to sales orders.");
+    }
+    const input: HardwareTradeDocumentInput = {
+      currency: quotation.currency,
+      customerId: quotation.customerId ?? undefined,
+      items: quotation.items.map((item) => ({
+        discountCents: item.discountCents,
+        productId: item.productId,
+        quantity: item.quantity,
+        taxRateBps: item.taxRateBps,
+        unitAmountCents: item.unitAmountCents,
+      })),
+      roundOffCents: quotation.roundOffCents,
+      type: HardwareTradeDocumentType.SALES_ORDER,
+    };
+    return this.create(context, input);
+  }
+
   async reports(context: ActorContext): Promise<HardwareReportSummary> {
     await this.enforce(context, "hardware.sales.read");
     const [documents, products, movements, invoices] = await Promise.all([
@@ -209,6 +231,46 @@ export class HardwareTradeService {
 
   printContract(documentId: string): HardwarePrintContract {
     return { documentId, format: "a4", renderer: "pdf", templateKey: "hardware-trade-a4-v1" };
+  }
+
+  async printProjection(context: ActorContext, documentId: string): Promise<HardwarePrintProjection> {
+    await this.enforce(context, "hardware.sales.read");
+    const document = await this.getOrThrow(context.tenantId, documentId);
+    const [settings, customer] = await Promise.all([
+      this.prisma.hardwareBusinessSettings.findUnique({ where: { tenantId: context.tenantId } }),
+      document.customerId
+        ? this.prisma.clientOrganization.findFirst({
+            select: { name: true },
+            where: { id: document.customerId, tenantId: context.tenantId },
+          })
+        : Promise.resolve(null),
+    ]);
+    const summary = toSummary(document);
+    return {
+      customer,
+      document: { ...summary, totalsInWords: amountInWords(document.totalCents) },
+      firm: {
+        address: (settings?.address ?? {}) as Record<string, unknown>,
+        email: settings?.email ?? null,
+        firmName: settings?.firmName ?? "Configured Firm",
+        gstin: settings?.gstin ?? null,
+        logoPlaceholder: settings?.logoPlaceholder ?? null,
+        phone: settings?.phone ?? null,
+        termsFooter: settings?.termsFooter ?? null,
+      },
+      gstSummary: gstSummary(document.items),
+      items: document.items.map((item) => ({
+        description: item.description,
+        discountCents: item.discountCents,
+        lineTotalCents: item.lineTotalCents,
+        quantity: item.quantity,
+        taxCents: item.taxCents,
+        taxRateBps: item.taxRateBps,
+        unitAmountCents: item.unitAmountCents,
+      })),
+      printContract: this.printContract(documentId),
+      signatureLabel: "Authorised signature",
+    };
   }
 
   whatsAppShareContract(documentNumber: string): HardwareWhatsAppShareContract {
@@ -300,6 +362,25 @@ export class HardwareTradeService {
       userId: context.userId,
     });
   }
+}
+
+function gstSummary(items: TradeFullRecord["items"]) {
+  const grouped = new Map<number, { taxableCents: number; taxCents: number; taxRateBps: number }>();
+  for (const item of items) {
+    const existing = grouped.get(item.taxRateBps) ?? { taxableCents: 0, taxCents: 0, taxRateBps: item.taxRateBps };
+    existing.taxableCents += Math.max(item.quantity * item.unitAmountCents - item.discountCents, 0);
+    existing.taxCents += item.taxCents;
+    grouped.set(item.taxRateBps, existing);
+  }
+  return [...grouped.values()];
+}
+
+function amountInWords(amountCents: number) {
+  const rupees = Math.round(amountCents / 100);
+  if (rupees === 0) return "Zero only";
+  const units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+  if (rupees < 10) return `${units[rupees]} only`;
+  return `${rupees} only`;
 }
 
 function toSummary(document: TradeRecord): HardwareTradeSummary {

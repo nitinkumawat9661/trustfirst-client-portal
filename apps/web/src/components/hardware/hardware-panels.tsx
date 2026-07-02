@@ -1,6 +1,6 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@trustfirst/ui";
-import { Boxes, PackageSearch, Warehouse } from "lucide-react";
-import type { HardwareProductSummary, InventoryDashboard } from "@/server/hardware";
+import { Boxes, CircleDollarSign, PackageSearch, ReceiptText, TrendingUp, Warehouse } from "lucide-react";
+import { hardwareLabels, type HardwareOperationalDashboard, type HardwareProductSummary, type InventoryDashboard } from "@/server/hardware";
 
 export function InventoryCards({ dashboard }: { dashboard: InventoryDashboard }) {
   const cards = [
@@ -8,6 +8,35 @@ export function InventoryCards({ dashboard }: { dashboard: InventoryDashboard })
     { icon: Warehouse, label: "Stock In", value: dashboard.stockIn },
     { icon: Warehouse, label: "Stock Out", value: dashboard.stockOut },
     { icon: PackageSearch, label: "Low Stock", value: dashboard.lowStockProducts },
+  ];
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {cards.map((card) => (
+        <Card key={card.label}>
+          <CardContent className="flex items-center justify-between p-4">
+            <div>
+              <p className="text-xs text-muted-foreground">{card.label}</p>
+              <p className="mt-2 text-2xl font-semibold">{card.value}</p>
+            </div>
+            <card.icon aria-hidden className="size-5 text-muted-foreground" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export function HardwareOperationalDashboardCards({ dashboard }: { dashboard: HardwareOperationalDashboard }) {
+  const labels = hardwareLabels.en;
+  const cards = [
+    { icon: CircleDollarSign, label: labels.dashboardTodaySales, value: money(dashboard.todaySalesCents) },
+    { icon: ReceiptText, label: labels.dashboardTodayPurchases, value: money(dashboard.todayPurchasesCents) },
+    { icon: CircleDollarSign, label: labels.dashboardPendingPayments, value: money(dashboard.pendingPaymentsCents) },
+    { icon: PackageSearch, label: labels.lowStock, value: dashboard.lowStockProducts },
+    { icon: Warehouse, label: labels.dashboardStockValue, value: money(dashboard.stockValueCents) },
+    { icon: TrendingUp, label: labels.dashboardTopProducts, value: dashboard.topProducts.length },
+    { icon: ReceiptText, label: labels.dashboardRecentBills, value: dashboard.recentBills.length },
+    { icon: Boxes, label: labels.dashboardRecentPurchases, value: dashboard.recentPurchases.length },
   ];
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -71,4 +100,12 @@ export function HardwarePluginSummary() {
       </CardContent>
     </Card>
   );
+}
+
+function money(amountCents: number) {
+  return new Intl.NumberFormat("en-IN", {
+    currency: "INR",
+    maximumFractionDigits: 0,
+    style: "currency",
+  }).format(amountCents / 100);
 }

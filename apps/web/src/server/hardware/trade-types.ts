@@ -40,3 +40,33 @@ export type HardwareWhatsAppShareContract = {
   liveIntegration: false;
   messageTemplate: string;
 };
+
+export type HardwarePrintProjection = {
+  customer: {
+    name: string;
+  } | null;
+  document: HardwareTradeSummary & {
+    totalsInWords: string;
+  };
+  firm: {
+    address: Record<string, unknown>;
+    email: string | null;
+    firmName: string;
+    gstin: string | null;
+    logoPlaceholder: string | null;
+    phone: string | null;
+    termsFooter: string | null;
+  };
+  gstSummary: Array<{ taxableCents: number; taxCents: number; taxRateBps: number }>;
+  items: Array<{
+    description: string;
+    discountCents: number;
+    lineTotalCents: number;
+    quantity: number;
+    taxCents: number;
+    taxRateBps: number;
+    unitAmountCents: number;
+  }>;
+  printContract: HardwarePrintContract;
+  signatureLabel: string;
+};

@@ -430,6 +430,7 @@ model Tenant {
   hardwareTimelineEvents HardwareTimelineEvent[]
   hardwareTradeDocuments HardwareTradeDocument[]
   hardwareTradeTimelineEvents HardwareTradeTimelineEvent[]
+  hardwareBusinessSettings HardwareBusinessSettings?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -1433,9 +1434,33 @@ model HardwareStockLocation {
   updatedAt   DateTime                    @updatedAt
   tenant      Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   movements   HardwareInventoryMovement[]
+  defaultForSettings HardwareBusinessSettings[]
 
   @@unique([tenantId, code])
   @@index([tenantId, name])
+}
+
+model HardwareBusinessSettings {
+  id                     String                 @id @default(cuid())
+  tenantId               String                 @unique
+  firmName               String
+  gstin                  String?
+  address                Json                   @default("{}")
+  phone                  String?
+  email                  String?
+  logoPlaceholder        String?
+  invoicePrefix          String                 @default("INV")
+  financialYear          String
+  defaultGstMode         String                 @default("exclusive")
+  roundOffEnabled        Boolean                @default(true)
+  defaultStockLocationId String?
+  termsFooter            String?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  tenant                 Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  defaultStockLocation   HardwareStockLocation? @relation(fields: [defaultStockLocationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, defaultStockLocationId])
 }
 
 model HardwareInventoryMovement {

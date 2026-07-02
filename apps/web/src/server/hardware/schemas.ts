@@ -62,6 +62,25 @@ export const hardwareImportPreviewSchema = z.object({
   rows: z.array(z.record(z.string(), z.unknown())).max(500),
 });
 
+export const hardwareImportExecuteSchema = hardwareImportPreviewSchema.extend({
+  duplicateMode: z.enum(["reject", "skip"]).default("reject"),
+});
+
+export const hardwareBusinessSettingsSchema = z.object({
+  address: jsonRecord.optional(),
+  defaultGstMode: z.enum(["inclusive", "exclusive", "none"]).optional(),
+  defaultStockLocationId: z.string().optional(),
+  email: z.string().email().optional(),
+  financialYear: z.string().min(4).max(20),
+  firmName: z.string().min(2).max(240),
+  gstin: z.string().max(20).optional(),
+  invoicePrefix: z.string().min(1).max(20).optional(),
+  logoPlaceholder: z.string().max(500).optional(),
+  phone: z.string().max(40).optional(),
+  roundOffEnabled: z.boolean().optional(),
+  termsFooter: z.string().max(1000).optional(),
+});
+
 export const hardwareSearchSchema = z.object({
   q: z.string().min(1).max(120),
 });
@@ -73,3 +92,5 @@ export type HardwareProductInput = z.infer<typeof hardwareProductSchema>;
 export type HardwareLocationInput = z.infer<typeof hardwareLocationSchema>;
 export type HardwareMovementInput = z.infer<typeof hardwareMovementSchema>;
 export type HardwareImportPreviewInput = z.infer<typeof hardwareImportPreviewSchema>;
+export type HardwareImportExecuteInput = z.infer<typeof hardwareImportExecuteSchema>;
+export type HardwareBusinessSettingsInput = z.infer<typeof hardwareBusinessSettingsSchema>;

@@ -1,5 +1,6 @@
 import {
   HardwareInventoryMovementType,
+  HardwareTradeDocumentStatus,
   HardwareTradeDocumentType,
   InvoiceStatus,
   type PrismaClient,
@@ -79,6 +80,134 @@ describe("HardwareTradeService", () => {
 
     expect(report.outstandingCustomersCents).toBe(55_000);
     expect(report.outstandingSuppliersCents).toBe(50_000);
+  });
+
+  it("builds an A4 print projection with GST summary and firm settings", async () => {
+    const now = new Date();
+    const service = new HardwareTradeService(
+      prismaMock({
+        clientOrganization: { findFirst: async () => ({ name: "Sample Customer" }) },
+        hardwareBusinessSettings: {
+          findUnique: async () => ({
+            address: { city: "Indore", line1: "Market Road" },
+            email: "billing@example.com",
+            firmName: "Sample Hardware Firm",
+            gstin: "22AAAAA0000A1Z5",
+            logoPlaceholder: null,
+            phone: "9999999999",
+            termsFooter: "Goods once sold follow configured return terms.",
+          }),
+        },
+        hardwareTradeDocument: {
+          findFirst: async () => ({
+            customerId: "client_1",
+            discountCents: 100,
+            documentNumber: "HSQ-2026-0001",
+            id: "doc_1",
+            items: [
+              {
+                description: "PVC Pipe",
+                discountCents: 100,
+                lineTotalCents: 2241,
+                productId: "prod_1",
+                quantity: 2,
+                taxCents: 342,
+                taxRateBps: 1800,
+                unitAmountCents: 1000,
+              },
+            ],
+            paymentStatus: "unlinked",
+            roundOffCents: -1,
+            status: HardwareTradeDocumentStatus.DRAFT,
+            subtotalCents: 2000,
+            supplierId: null,
+            taxCents: 342,
+            totalCents: 2241,
+            type: HardwareTradeDocumentType.SALES_QUOTATION,
+            updatedAt: now,
+          }),
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const projection = await service.printProjection({ tenantId: "tenant_1", userId: "user_1" }, "doc_1");
+
+    expect(projection.firm.firmName).toBe("Sample Hardware Firm");
+    expect(projection.customer?.name).toBe("Sample Customer");
+    expect(projection.gstSummary).toEqual([{ taxableCents: 1900, taxCents: 342, taxRateBps: 1800 }]);
+    expect(projection.document.totalsInWords).toContain("only");
+  });
+
+  it("deducts stock when a sales order is confirmed", async () => {
+    const movements: Array<{ data: { type: HardwareInventoryMovementType } }> = [];
+    const now = new Date();
+    const document = {
+      customerId: "client_1",
+      discountCents: 0,
+      documentNumber: "HSO-2026-0001",
+      id: "doc_1",
+      items: [
+        {
+          description: "Basin Tap",
+          discountCents: 0,
+          lineTotalCents: 12000,
+          productId: "prod_1",
+          quantity: 2,
+          taxCents: 0,
+          taxRateBps: 0,
+          unitAmountCents: 6000,
+        },
+      ],
+      paymentStatus: "unlinked",
+      roundOffCents: 0,
+      status: HardwareTradeDocumentStatus.DRAFT,
+      subtotalCents: 12000,
+      supplierId: null,
+      taxCents: 0,
+      totalCents: 12000,
+      type: HardwareTradeDocumentType.SALES_ORDER,
+      updatedAt: now,
+    };
+    const service = new HardwareTradeService(
+      prismaMock({
+        $transaction: async (
+          callback: (tx: {
+            auditEvent: { create: () => Promise<unknown> };
+            hardwareInventoryMovement: {
+              create: (input: { data: { type: HardwareInventoryMovementType } }) => Promise<{ type: HardwareInventoryMovementType }>;
+            };
+            hardwareTradeDocument: { update: () => Promise<Record<string, unknown>> };
+            hardwareTradeTimelineEvent: { create: () => Promise<unknown> };
+          }) => Promise<unknown>,
+        ) =>
+          callback({
+            auditEvent: { create: async () => ({}) },
+            hardwareInventoryMovement: {
+              create: async (input: { data: { type: HardwareInventoryMovementType } }) => {
+                movements.push(input);
+                return input.data;
+              },
+            },
+            hardwareTradeDocument: {
+              update: async () => ({ ...document, status: HardwareTradeDocumentStatus.CONFIRMED }),
+            },
+            hardwareTradeTimelineEvent: { create: async () => ({}) },
+          }),
+        hardwareInventoryMovement: {
+          findMany: async () => [{ quantity: 5, type: HardwareInventoryMovementType.STOCK_IN }],
+        },
+        hardwareStockLocation: { findFirst: async () => ({ id: "loc_1" }) },
+        hardwareTradeDocument: { findFirst: async () => document },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await service.confirm(
+      { tenantId: "tenant_1", userId: "user_1" },
+      "doc_1",
+      { locationId: "loc_1" },
+    );
+
+    expect(movements[0]?.data.type).toBe(HardwareInventoryMovementType.STOCK_OUT);
   });
 
   it("blocks users without hardware trade permissions", async () => {

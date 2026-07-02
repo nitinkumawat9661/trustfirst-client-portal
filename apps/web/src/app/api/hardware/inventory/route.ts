@@ -4,7 +4,7 @@ import { hardwareContext, hardwareError, hardwareMovementSchema, hardwareRespons
 export async function GET() {
   try {
     const { context, service } = await hardwareContext();
-    return hardwareResponse(await service.dashboard(context));
+    return hardwareResponse(await service.operationalDashboard(context));
   } catch (error) {
     return hardwareError(error);
   }

@@ -25,6 +25,35 @@ export class PrismaHardwareRepository {
     return this.prisma.hardwareProduct.findFirst({ where: { sku, tenantId } });
   }
 
+  findProductByBarcode(tenantId: string, barcode: string) {
+    return this.prisma.hardwareProduct.findFirst({ where: { barcode, tenantId } });
+  }
+
+  getSettings(tenantId: string) {
+    return this.prisma.hardwareBusinessSettings.findUnique({ where: { tenantId } });
+  }
+
+  upsertSettings(input: Prisma.HardwareBusinessSettingsUncheckedCreateInput) {
+    return this.prisma.hardwareBusinessSettings.upsert({
+      create: input,
+      update: stripUndefined({
+        address: input.address,
+        defaultGstMode: input.defaultGstMode,
+        defaultStockLocationId: input.defaultStockLocationId,
+        email: input.email,
+        financialYear: input.financialYear,
+        firmName: input.firmName,
+        gstin: input.gstin,
+        invoicePrefix: input.invoicePrefix,
+        logoPlaceholder: input.logoPlaceholder,
+        phone: input.phone,
+        roundOffEnabled: input.roundOffEnabled,
+        termsFooter: input.termsFooter,
+      }) as Prisma.HardwareBusinessSettingsUncheckedUpdateInput,
+      where: { tenantId: input.tenantId },
+    });
+  }
+
   createCategory(data: Prisma.HardwareProductCategoryUncheckedCreateInput) {
     return this.prisma.hardwareProductCategory.create({ data });
   }
@@ -146,6 +175,10 @@ export class PrismaHardwareRepository {
       },
     });
   }
+}
+
+function stripUndefined<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 }
 
 function movementVerb(type: HardwareInventoryMovementType) {

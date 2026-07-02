@@ -1,10 +1,12 @@
-import { HardwareInventoryMovementType, type Prisma, type PrismaClient } from "@trustfirst/database";
+import { ClientLifecycleStage, HardwareInventoryMovementType, type Prisma, type PrismaClient } from "@trustfirst/database";
 import { AppError } from "../domain/errors";
 import { PermissionResolverService } from "../permissions";
 import { PrismaHardwareRepository } from "./hardware-repository";
 import { hardwareErpPluginManifest } from "./plugin-manifest";
 import type {
   HardwareBrandInput,
+  HardwareBusinessSettingsInput,
+  HardwareImportExecuteInput,
   HardwareCategoryInput,
   HardwareImportPreviewInput,
   HardwareLocationInput,
@@ -13,6 +15,8 @@ import type {
   HardwareUnitInput,
 } from "./schemas";
 import type { HardwareCsvExportContract, HardwareImportPreview, HardwareProductSummary, InventoryDashboard } from "./types";
+import type { HardwareImportSummary, HardwareOperationalDashboard } from "./types";
+import { genericHardwareDemoData } from "./demo-data";
 
 type ActorContext = { tenantId: string; userId: string };
 type ProductRecord = Awaited<ReturnType<PrismaHardwareRepository["listProducts"]>>[number];
@@ -88,6 +92,38 @@ export class HardwareService {
       name: input.name,
       tenantId: context.tenantId,
     });
+  }
+
+  async getSettings(context: ActorContext) {
+    await this.enforce(context, "hardware.settings.read");
+    return this.repository.getSettings(context.tenantId);
+  }
+
+  async saveSettings(context: ActorContext, input: HardwareBusinessSettingsInput) {
+    await this.enforce(context, "hardware.settings.manage");
+    if (input.defaultStockLocationId) {
+      await this.assertExists(
+        "hardwareStockLocation",
+        context.tenantId,
+        input.defaultStockLocationId,
+        "Default stock location was not found.",
+      );
+    }
+    return this.repository.upsertSettings(stripUndefined({
+      address: (input.address ?? {}) as Prisma.InputJsonValue,
+      defaultGstMode: input.defaultGstMode ?? "exclusive",
+      defaultStockLocationId: input.defaultStockLocationId,
+      email: input.email,
+      financialYear: input.financialYear,
+      firmName: input.firmName,
+      gstin: input.gstin,
+      invoicePrefix: input.invoicePrefix ?? "INV",
+      logoPlaceholder: input.logoPlaceholder,
+      phone: input.phone,
+      roundOffEnabled: input.roundOffEnabled ?? true,
+      tenantId: context.tenantId,
+      termsFooter: input.termsFooter,
+    }) as Prisma.HardwareBusinessSettingsUncheckedCreateInput);
   }
 
   async listLocations(context: ActorContext) {
@@ -179,6 +215,14 @@ export class HardwareService {
     return products.map((product) => toProductSummary(product, movements));
   }
 
+  async searchByBarcode(context: ActorContext, barcode: string) {
+    await this.enforce(context, "hardware.catalog.read");
+    const product = await this.repository.findProductByBarcode(context.tenantId, barcode);
+    if (!product) return null;
+    const movements = await this.repository.movementsForProduct(context.tenantId, product.id);
+    return toProductSummary(product, movements);
+  }
+
   async importPreview(context: ActorContext, input: HardwareImportPreviewInput): Promise<HardwareImportPreview> {
     await this.enforce(context, "hardware.catalog.manage");
     const errors = input.rows.flatMap((row, index) => {
@@ -187,6 +231,190 @@ export class HardwareService {
       return [];
     });
     return { errors, validRows: input.rows.length - errors.length };
+  }
+
+  async executeImport(context: ActorContext, input: HardwareImportExecuteInput): Promise<HardwareImportSummary> {
+    await this.enforce(context, "hardware.catalog.manage");
+    const errors: Array<{ message: string; row: number }> = [];
+    let createdRows = 0;
+    let skippedRows = 0;
+
+    for (const [index, row] of input.rows.entries()) {
+      const rowNumber = index + 1;
+      const sku = readText(row.sku);
+      const name = readText(row.name);
+      const barcode = readText(row.barcode);
+
+      if (!sku || !name) {
+        errors.push({ message: "SKU and name are required.", row: rowNumber });
+        continue;
+      }
+
+      const duplicateSku = await this.repository.findProductBySku(context.tenantId, sku);
+      const duplicateBarcode = barcode
+        ? await this.repository.findProductByBarcode(context.tenantId, barcode)
+        : null;
+
+      if (duplicateSku || duplicateBarcode) {
+        const message = duplicateSku ? "Duplicate SKU was found." : "Duplicate barcode was found.";
+        if (input.duplicateMode === "skip") {
+          skippedRows += 1;
+        } else {
+          errors.push({ message, row: rowNumber });
+        }
+        continue;
+      }
+
+      await this.repository.createProduct({
+        actorId: context.userId,
+        data: stripUndefined({
+          barcode,
+          lowStockThreshold: readNumber(row.lowStockThreshold) ?? 0,
+          name,
+          purchaseCostCents: readNumber(row.purchaseCostCents) ?? 0,
+          salesPriceCents: readNumber(row.salesPriceCents) ?? 0,
+          sku,
+          tenantId: context.tenantId,
+        }) as Prisma.HardwareProductUncheckedCreateInput,
+      });
+      createdRows += 1;
+    }
+
+    return { createdRows, errors, skippedRows, validRows: input.rows.length - errors.length };
+  }
+
+  async operationalDashboard(context: ActorContext): Promise<HardwareOperationalDashboard> {
+    await this.enforce(context, "hardware.inventory.read");
+    const [dashboard, tradeDocuments, invoices, products, movements] = await Promise.all([
+      this.dashboard(context),
+      this.prisma.hardwareTradeDocument.findMany({
+        orderBy: { updatedAt: "desc" },
+        take: 12,
+        where: { tenantId: context.tenantId },
+      }),
+      this.prisma.invoice.findMany({ where: { tenantId: context.tenantId } }),
+      this.repository.listProducts(context.tenantId),
+      this.repository.allMovements(context.tenantId),
+    ]);
+    const today = new Date().toISOString().slice(0, 10);
+    const saleDocs = tradeDocuments.filter((document) => document.type === "SALES_ORDER");
+    const purchaseDocs = tradeDocuments.filter((document) =>
+      ["PURCHASE_ENTRY", "SUPPLIER_BILL"].includes(document.type),
+    );
+    return {
+      ...dashboard,
+      pendingPaymentsCents: invoices
+        .filter((invoice) => invoice.status !== "PAID")
+        .reduce((total, invoice) => total + Math.max(invoice.totalAmountCents - invoice.paidAmountCents, 0), 0),
+      recentBills: tradeDocuments
+        .filter((document) => document.type === "SUPPLIER_BILL")
+        .slice(0, 5)
+        .map((document) => ({ documentNumber: document.documentNumber, totalCents: document.totalCents })),
+      recentPurchases: purchaseDocs
+        .slice(0, 5)
+        .map((document) => ({ documentNumber: document.documentNumber, totalCents: document.totalCents })),
+      todayPurchasesCents: purchaseDocs
+        .filter((document) => document.createdAt.toISOString().startsWith(today))
+        .reduce((total, document) => total + document.totalCents, 0),
+      todaySalesCents: saleDocs
+        .filter((document) => document.createdAt.toISOString().startsWith(today))
+        .reduce((total, document) => total + document.totalCents, 0),
+      topProducts: products
+        .map((product) => ({
+          name: product.name,
+          quantity: movements
+            .filter((movement) => movement.productId === product.id)
+            .reduce((total, movement) => total + movement.quantity, 0),
+          sku: product.sku,
+        }))
+        .sort((a, b) => b.quantity - a.quantity)
+        .slice(0, 5),
+    };
+  }
+
+  async seedDemoData(context: ActorContext) {
+    await this.enforce(context, "hardware.plugin.manage");
+    const categories = await Promise.all(
+      genericHardwareDemoData.categories.map((name) =>
+        this.prisma.hardwareProductCategory.upsert({
+          create: { name, slug: slugify(name), tenantId: context.tenantId },
+          update: {},
+          where: { tenantId_slug: { slug: slugify(name), tenantId: context.tenantId } },
+        }),
+      ),
+    );
+    await Promise.all(
+      genericHardwareDemoData.brands.map((name) =>
+        this.prisma.hardwareBrand.upsert({
+          create: { name, slug: slugify(name), tenantId: context.tenantId },
+          update: {},
+          where: { tenantId_slug: { slug: slugify(name), tenantId: context.tenantId } },
+        }),
+      ),
+    );
+    await Promise.all(
+      genericHardwareDemoData.units.map((code) =>
+        this.prisma.hardwareUnit.upsert({
+          create: { code, name: code, tenantId: context.tenantId },
+          update: {},
+          where: { tenantId_code: { code, tenantId: context.tenantId } },
+        }),
+      ),
+    );
+    const location = await this.prisma.hardwareStockLocation.upsert({
+      create: { code: "MAIN", name: "Main Godown", tenantId: context.tenantId },
+      update: {},
+      where: { tenantId_code: { code: "MAIN", tenantId: context.tenantId } },
+    });
+    const createdProducts = [];
+    for (const sample of genericHardwareDemoData.products) {
+      const category = categories.find((entry) => entry.name === sample.category);
+      const product = await this.prisma.hardwareProduct.upsert({
+        create: {
+          barcode: sample.barcode,
+          categoryId: category?.id ?? null,
+          lowStockThreshold: 5,
+          name: sample.name,
+          purchaseCostCents: 5000,
+          salesPriceCents: 6500,
+          sku: sample.sku,
+          tenantId: context.tenantId,
+        },
+        update: {},
+        where: { tenantId_sku: { sku: sample.sku, tenantId: context.tenantId } },
+      });
+      createdProducts.push(product);
+      await this.prisma.hardwareInventoryMovement.create({
+        data: {
+          locationId: location.id,
+          productId: product.id,
+          quantity: sample.stock,
+          referenceType: "demo_seed",
+          tenantId: context.tenantId,
+          type: HardwareInventoryMovementType.STOCK_IN,
+        },
+      });
+    }
+    const customers = await Promise.all(
+      [...genericHardwareDemoData.customers, ...genericHardwareDemoData.suppliers].map((name) =>
+        this.prisma.clientOrganization.upsert({
+          create: {
+            lifecycleStage: ClientLifecycleStage.CLIENT,
+            name,
+            slug: slugify(name),
+            tenantId: context.tenantId,
+          },
+          update: {},
+          where: { tenantId_slug: { slug: slugify(name), tenantId: context.tenantId } },
+        }),
+      ),
+    );
+    return {
+      categories: categories.length,
+      customers: customers.length,
+      location: location.name,
+      products: createdProducts.length,
+    };
   }
 
   async csvExport(context: ActorContext): Promise<HardwareCsvExportContract> {
@@ -247,6 +475,19 @@ export class HardwareService {
       userId: context.userId,
     });
   }
+}
+
+function readText(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function readNumber(value: unknown) {
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
 }
 
 function toProductSummary(product: ProductRecord, movements: MovementRecord[]): HardwareProductSummary {
