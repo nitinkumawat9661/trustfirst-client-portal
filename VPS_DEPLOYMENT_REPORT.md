@@ -2,7 +2,7 @@
 
 ## Status
 
-Sprint 30 created `.env.deploy.local` and collected safe host-key evidence for the authorized old shared VPS. Deployment is still blocked because the current server host key was not collected as usable key material and no trusted fingerprint gate is configured.
+Sprint 31 collected current host key fingerprints for the authorized old shared VPS using Git for Windows `ssh-keyscan`. Deployment is still blocked because no trusted fingerprint gate is configured.
 
 ## Shared Old VPS Deployment
 
@@ -11,7 +11,7 @@ Sprint 30 created `.env.deploy.local` and collected safe host-key evidence for t
 - Host masked: 45.10.x.x
 - Host-key status: not verified
 - Key path exists: yes
-- Current fingerprint collected: no
+- Current fingerprint collected: yes
 - Trusted fingerprint configured: no
 - Known_hosts repaired: no
 - Backup path: not created
@@ -38,15 +38,19 @@ Host-key verification command:
 npm run vps:host-key
 ```
 
-Result: blocked because `ssh-keyscan` did not return a usable host key.
+Result: blocked because no trusted fingerprint gate is configured.
 
 Evidence:
 
 - DNS/IP result: `45.10.21.141 (IPv4)`
 - Existing known_hosts fingerprints collected: yes
-- Current ssh-keyscan fingerprint collected: no
-- ssh-keyscan error: `choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com`
-- Strict SSH verification: connection timed out
+- Current ssh-keyscan fingerprints collected: yes
+- Current ED25519 fingerprint: `SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0`
+- Current RSA fingerprint: `SHA256:U/yYcVMljDyvORobFkagh5xyj+XmVLeed8MQt/MlwmY`
+- Current ECDSA fingerprint: `SHA256:xTzBtiL+q/EsSR3/2buZioRuZl/z64QeXJJjvJe86vA`
+- Windows ssh-keyscan error: `choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com`
+- Git for Windows ssh-keyscan: succeeded once; later repeat scans timed out
+- Strict SSH validation: not passed
 
 Because host identity is not verified, no `known_hosts` repair, bootstrap, database provisioning, deployment, migration, seed, smoke, or authenticated QA was attempted.
 

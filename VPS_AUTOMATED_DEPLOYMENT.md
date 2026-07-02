@@ -106,12 +106,12 @@ Secrets are written only to the VPS env file and are never printed by the script
 
 ## Shared Old VPS Deployment
 
-- Old VPS used: no, currently blocked by unverified host key.
+- Old VPS used: no, currently blocked by missing trusted fingerprint gate.
 - `.env.deploy.local` created: yes.
 - Host masked: `45.10.x.x`.
 - Host-key status: not verified.
 - Key path exists: yes.
-- Current fingerprint collected: no.
+- Current fingerprint collected: yes.
 - Trusted fingerprint configured: no.
 - Known_hosts repaired: no.
 - Backup path: not created.
@@ -136,6 +136,12 @@ npm run vps:validate
 ```
 
 If `ssh-keyscan` fails with `choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com`, collect the trusted host key using an updated OpenSSH client or from the VPS provider console before setting the trusted gate.
+
+On this machine, Git for Windows `ssh-keyscan` collected current host fingerprints successfully once:
+
+- ED25519: `SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0`
+- RSA: `SHA256:U/yYcVMljDyvORobFkagh5xyj+XmVLeed8MQt/MlwmY`
+- ECDSA: `SHA256:xTzBtiL+q/EsSR3/2buZioRuZl/z64QeXJJjvJe86vA`
 
 ## Deployment Output
 

@@ -53,6 +53,47 @@ function fingerprintLines(output) {
     .filter((entry) => entry.fingerprint);
 }
 
+function keyscanCandidates() {
+  const candidates = [{ label: "Windows OpenSSH ssh-keyscan", command: "ssh-keyscan" }];
+  const gitKeyscan = "C:\\Program Files\\Git\\usr\\bin\\ssh-keyscan.exe";
+  if (process.platform === "win32" && fs.existsSync(gitKeyscan)) {
+    candidates.push({ label: "Git for Windows ssh-keyscan", command: gitKeyscan });
+  }
+  return candidates;
+}
+
+function collectHostKeys(config) {
+  const attempts = [];
+  for (const candidate of keyscanCandidates()) {
+    const outputs = [];
+    const fingerprints = [];
+    for (const keyType of ["ed25519", "rsa", "ecdsa"]) {
+      const result = run(candidate.command, ["-T", "20", "-p", config.DEPLOY_PORT || "22", "-t", keyType, config.DEPLOY_HOST]);
+      const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
+      outputs.push(`### ${keyType}\n${output || "No output."}`);
+      fingerprints.push(
+        ...fingerprintLines(result.stdout ?? "").map((entry) => ({
+          ...entry,
+          source: candidate.label,
+        })),
+      );
+    }
+    attempts.push({ ...candidate, output: outputs.join("\n\n"), fingerprints });
+    if (fingerprints.length > 0) {
+      return {
+        output: attempts.map((attempt) => `## ${attempt.label}\n${attempt.output || "No output."}`).join("\n\n"),
+        fingerprints,
+        source: candidate.label,
+      };
+    }
+  }
+  return {
+    output: attempts.map((attempt) => `## ${attempt.label}\n${attempt.output || "No output."}`).join("\n\n"),
+    fingerprints: [],
+    source: "none",
+  };
+}
+
 function strictSshFingerprintLines(output) {
   const entries = [];
   const pattern = /fingerprint for the\s+([A-Z0-9-]+)\s+key sent by the remote host is\s+SHA256:([^\s.]+)/gi;
@@ -189,11 +230,11 @@ try {
 const target = knownHostsTarget(config);
 const dnsResult = await resolveHost(config.DEPLOY_HOST);
 const knownHost = run("ssh-keygen", ["-F", target]);
-const keyscan = run("ssh-keyscan", ["-p", config.DEPLOY_PORT || "22", config.DEPLOY_HOST]);
+const keyscan = collectHostKeys(config);
 const knownOutput = `${knownHost.stdout ?? ""}${knownHost.stderr ?? ""}`.trim();
-const scanOutput = `${keyscan.stdout ?? ""}${keyscan.stderr ?? ""}`.trim();
+const scanOutput = keyscan.output;
 const knownFingerprints = fingerprintLines(knownHost.stdout ?? "");
-const keyscanFingerprints = fingerprintLines(keyscan.stdout ?? "");
+const keyscanFingerprints = keyscan.fingerprints;
 let strictSshOutput = "";
 let currentFingerprints = keyscanFingerprints;
 if (keyscanFingerprints.length === 0) {
@@ -246,7 +287,7 @@ const ownerAccepted = config.DEPLOY_HOST_KEY_VERIFIED?.toLowerCase() === "yes";
 const trustedMatchesCurrent = trustedFingerprint ? currentSet.has(trustedFingerprint) : ownerAccepted;
 const verifiedKeyLines = trustedFingerprint
   ? keyscanFingerprints.filter((entry) => normalizeFingerprint(entry.fingerprint.fingerprint) === trustedFingerprint).map((entry) => entry.line)
-  : extractKeyLines(keyscan.stdout ?? "");
+  : keyscanFingerprints.map((entry) => entry.line).filter(Boolean);
 
 if (!trustedMatchesCurrent) {
   writeVerificationReport({

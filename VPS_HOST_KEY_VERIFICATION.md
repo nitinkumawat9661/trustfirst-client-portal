@@ -2,7 +2,7 @@
 
 ## Summary
 
-- Timestamp: 2026-07-02T17:55:01.430Z
+- Timestamp: 2026-07-02T18:05:09.868Z
 - .env.deploy.local created: yes
 - Host masked: 45.10.x.x
 - Port: 22
@@ -27,7 +27,9 @@
 
 ## Current ssh-keyscan Fingerprints
 
-- none collected
+- ED25519: SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0 (Git for Windows ssh-keyscan)
+- RSA: SHA256:U/yYcVMljDyvORobFkagh5xyj+XmVLeed8MQt/MlwmY (Git for Windows ssh-keyscan)
+- ECDSA: SHA256:xTzBtiL+q/EsSR3/2buZioRuZl/z64QeXJJjvJe86vA (Git for Windows ssh-keyscan)
 
 ## Risk Explanation
 
@@ -47,6 +49,7 @@ A host-key mismatch can mean the VPS was rebuilt, the provider rotated host keys
 ## Raw ssh-keyscan Output
 
 ```text
+## Windows OpenSSH ssh-keyscan
 # 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.15
 choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com
 # 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.15
@@ -57,6 +60,14 @@ choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com
 choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com
 # 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.15
 choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com
+
+## Git for Windows ssh-keyscan
+# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.15
+45.10.21.141 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHfng3mX7BxZIM7llpJvK2jGZLyDRAOZ7w7kHLSSUTgi
+# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.15
+45.10.21.141 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDst9tJQ7nsUceZlLbF4VDWrOdHZMR5FDz4psWrwcjcHWJIMSNMAdb3/UbMmA2zjJeYbS3b4CGok0c8m85iMhhG8RriiUdOXLOqBz5zIt55pb+FCOoh5b5rCTyuaazAak6Cs5T1LwSCdIdaaPCzZk9Ku/x2mXJMkE/RWZfvwWjj8xHpPc+mesxyw2SKD9l6cRF41xAFqZ5qqkz+bLW4VO4spUDr3wb8+Wf4Avk27RzI6qbRRa7HYH1xCIkPpVBKBMuLK6+RQzERC6v/8Sb8HL41tQ0mJS26SeXsvy0p1GoJUr/05yJUDsKo+rEOcf4kLmo3K9gAAxOfuLruSV0AGoTXpexSNHQ8hWsPlFDA7EQgL2gOgOhvWP+iW7jQzLePDGKdN72jkGwBC9XEd3loVhiqhlBbEJvkj1z/7Tt4/sFJ84kQn/bE24tko9RUy0ugGYuUEgd9DYPahG+e2s=
+# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.15
+45.10.21.141 ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBGJy8Qb535xJ0DjgfcSvLRB8E6f4LtPUpcEzN8xibf9ETA+5mbqNsXOcSP+bfzdzubQeT97bMmoQiEQ+VlshM6Q=
 ```
 
 ## Strict SSH Verification Output
@@ -67,4 +78,4 @@ ssh: connect to host 45.10.21.141 port 22: Connection timed out
 
 ## Notes
 
-ssh-keyscan did not return a usable host key. known_hosts was not modified.
+Git for Windows ssh-keyscan collected current host key material and SHA256 fingerprints were generated with `ssh-keygen -lf <temp-host-key-file> -E sha256`. The current fingerprints do not match existing known_hosts entries. No trusted gate is configured, so known_hosts was not modified and deployment was not attempted.
