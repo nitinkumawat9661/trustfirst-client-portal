@@ -6,6 +6,7 @@ const protectedRoutes = [
   "/admin",
   "/client",
   "/api/crm",
+  "/api/projects",
   "/api/requirements",
   "/api/tenants",
   "/api/auth/change-password",

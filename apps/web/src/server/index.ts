@@ -19,6 +19,7 @@ export * from "./middleware/validation-middleware";
 export * from "./notifications/notification-provider";
 export * from "./pagination/cursor";
 export * from "./platform-services";
+export * from "./projects";
 export * from "./repositories/repository";
 export * from "./requirements";
 export * from "./permissions";

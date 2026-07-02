@@ -128,6 +128,56 @@ enum RequirementTimelineVerb {
   VERSION_RESTORED
 }
 
+enum ProjectLifecycleStatus {
+  PLANNING
+  ACTIVE
+  BLOCKED
+  REVIEW
+  COMPLETED
+  ARCHIVED
+}
+
+enum ProjectTaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  REVIEW
+  DONE
+}
+
+enum ProjectPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum DeliverableReviewStatus {
+  DRAFT
+  IN_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+}
+
+enum ProjectTimelineVerb {
+  CREATED
+  UPDATED
+  STATUS_CHANGED
+  MILESTONE_CREATED
+  MILESTONE_UPDATED
+  MILESTONE_COMPLETED
+  TASK_CREATED
+  TASK_UPDATED
+  TASK_COMPLETED
+  DELIVERABLE_CREATED
+  DELIVERABLE_REVIEWED
+  COMMENTED
+  ATTACHED
+  ASSIGNED
+  COMPLETED
+}
+
 model User {
   id                 String               @id @default(cuid())
   name               String?
@@ -161,6 +211,7 @@ model User {
   reviewedRequirements Requirement[]      @relation("RequirementReviewer")
   requirementTimeline RequirementTimelineEvent[]
   requirementComments RequirementComment[]
+  managedProjects     Project[]            @relation("ProjectManager")
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
@@ -242,6 +293,7 @@ model Tenant {
   clientTags      ClientTag[]
   requirements    Requirement[]
   requirementTimelineEvents RequirementTimelineEvent[]
+  projects        Project[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -462,6 +514,7 @@ model ClientOrganization {
   tagAssignments     ClientTagAssignment[]
   customFieldValues  ClientCustomFieldValue[]
   requirementRecords Requirement[]
+  projectRecords     Project[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, lifecycleStage])
@@ -832,4 +885,193 @@ model RequirementNotification {
 
   @@index([tenantId, recipientId, readAt])
   @@index([tenantId, requirementId, createdAt])
+}
+
+model Project {
+  id              String                 @id @default(cuid())
+  tenantId        String
+  clientId        String?
+  name            String
+  slug            String
+  description     String?                @db.Text
+  status          ProjectLifecycleStatus @default(PLANNING)
+  priority        ProjectPriority        @default(MEDIUM)
+  managerId       String?
+  startDate       DateTime?
+  targetDate      DateTime?
+  completedAt     DateTime?
+  archivedAt      DateTime?
+  progress        Int                    @default(0)
+  calendar        Json                   @default("{}")
+  gantt           Json                   @default("{}")
+  metadata        Json                   @default("{}")
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client          ClientOrganization?    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  manager         User?                  @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
+  milestones      ProjectMilestone[]
+  tasks           ProjectTask[]
+  deliverables    ProjectDeliverable[]
+  attachments     ProjectAttachment[]
+  timeline        ProjectTimelineEvent[]
+  notifications   ProjectNotification[]
+  labels          ProjectLabel[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+  @@index([tenantId, clientId])
+  @@index([tenantId, managerId])
+  @@index([tenantId, updatedAt])
+  @@index([targetDate])
+}
+
+model ProjectMilestone {
+  id             String             @id @default(cuid())
+  tenantId       String
+  projectId      String
+  name           String
+  description    String?
+  status         String             @default("open")
+  dueAt          DateTime?
+  completedAt    DateTime?
+  progress       Int                @default(0)
+  dependencies   Json               @default("[]")
+  sortOrder      Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks          ProjectTask[]
+  deliverables   ProjectDeliverable[]
+
+  @@index([tenantId, projectId, dueAt])
+  @@index([tenantId, status])
+}
+
+model ProjectTask {
+  id             String            @id @default(cuid())
+  tenantId       String
+  projectId      String
+  milestoneId    String?
+  parentId       String?
+  title          String
+  description    String?           @db.Text
+  status         ProjectTaskStatus  @default(TODO)
+  priority       ProjectPriority    @default(MEDIUM)
+  assigneeId     String?
+  dueAt          DateTime?
+  estimatedHours Float?
+  actualHours    Float?
+  checklist      Json              @default("[]")
+  sortOrder      Int               @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone      ProjectMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  parent         ProjectTask?      @relation("ProjectTaskHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks       ProjectTask[]     @relation("ProjectTaskHierarchy")
+  labels         ProjectTaskLabel[]
+
+  @@index([tenantId, projectId, status])
+  @@index([tenantId, assigneeId])
+  @@index([tenantId, dueAt])
+  @@index([parentId])
+}
+
+model ProjectLabel {
+  id          String             @id @default(cuid())
+  tenantId    String
+  projectId   String
+  name        String
+  color       String?
+  createdAt   DateTime           @default(now())
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskLabels  ProjectTaskLabel[]
+
+  @@unique([tenantId, projectId, name])
+  @@index([tenantId, projectId])
+}
+
+model ProjectTaskLabel {
+  taskId  String
+  labelId String
+  task    ProjectTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label   ProjectLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([labelId])
+}
+
+model ProjectDeliverable {
+  id                   String                  @id @default(cuid())
+  tenantId             String
+  projectId            String
+  milestoneId          String?
+  title                String
+  description          String?                 @db.Text
+  requirementId        String?
+  requirementVersion   Int?
+  reviewStatus         DeliverableReviewStatus @default(DRAFT)
+  clientApprovalStatus String                   @default("pending")
+  dueAt                DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  project              Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone            ProjectMilestone?       @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  attachments          ProjectAttachment[]
+
+  @@index([tenantId, projectId, reviewStatus])
+  @@index([tenantId, requirementId, requirementVersion])
+  @@index([tenantId, dueAt])
+}
+
+model ProjectAttachment {
+  id            String              @id @default(cuid())
+  tenantId      String
+  projectId     String
+  deliverableId String?
+  name          String
+  mimeType      String
+  sizeBytes     Int
+  storageKey    String
+  uploadedById  String?
+  createdAt     DateTime            @default(now())
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliverable   ProjectDeliverable? @relation(fields: [deliverableId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, projectId, createdAt])
+  @@index([tenantId, deliverableId])
+  @@index([storageKey])
+}
+
+model ProjectTimelineEvent {
+  id         String              @id @default(cuid())
+  tenantId   String
+  projectId  String
+  actorId    String?
+  verb       ProjectTimelineVerb
+  summary    String
+  metadata   Json                @default("{}")
+  occurredAt DateTime            @default(now())
+  project    Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, projectId, occurredAt])
+  @@index([tenantId, verb])
+  @@index([actorId])
+}
+
+model ProjectNotification {
+  id        String   @id @default(cuid())
+  tenantId  String
+  projectId String
+  recipientId String?
+  type      String
+  payload   Json     @default("{}")
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, recipientId, readAt])
+  @@index([tenantId, projectId, createdAt])
 }
