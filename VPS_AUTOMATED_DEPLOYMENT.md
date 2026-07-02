@@ -2,7 +2,7 @@
 
 ## Status
 
-Automation is prepared for the authorized old shared VPS, but deployment must stop until strict SSH host-key verification succeeds.
+Automation is prepared for the authorized old shared VPS, but deployment must stop until `.env.deploy.local` exists and strict SSH host-key verification succeeds.
 
 The old shared VPS may be used only as an isolated TrustFirst section. Do not overwrite, delete, restart, or modify the existing CafeLuxe app, database, Nginx config, PM2 process, or files.
 
@@ -27,11 +27,19 @@ DEPLOY_APP_DIR=/var/www/trustfirst-client-portal
 DEPLOY_ENV_FILE=/etc/trustfirst-client-portal.env
 DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM=yes
 DEPLOY_ALLOW_SHARED_OLD_VPS=yes
+DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256=<trusted-sha256-fingerprint>
+DEPLOY_HOST_KEY_VERIFIED=
 ```
 
 `.env.deploy.local` is ignored by git and must not be committed.
 
 ## Commands
+
+Collect and verify host-key evidence before SSH validation:
+
+```bash
+npm run vps:host-key
+```
 
 Validate read-only SSH access:
 
@@ -72,6 +80,7 @@ The scripts refuse to continue when:
 - `DEPLOY_KEY_PATH` is missing or does not exist.
 - `DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM` is not `yes`.
 - `DEPLOY_ALLOW_SHARED_OLD_VPS` is not `yes`.
+- Neither `DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256` nor `DEPLOY_HOST_KEY_VERIFIED=yes` is configured.
 - `DEPLOY_APP_DIR` is not `/var/www/trustfirst-client-portal`.
 - `DEPLOY_ENV_FILE` is not `/etc/trustfirst-client-portal.env`.
 - `DEPLOY_APP_PORT` is not `3010`.
@@ -97,9 +106,11 @@ Secrets are written only to the VPS env file and are never printed by the script
 
 ## Shared Old VPS Deployment
 
-- Old VPS used: no, currently blocked by host-key mismatch.
-- Host masked: `45.10.x.x`.
-- Host-key status: blocked until the VPS owner verifies the new fingerprint.
+- Old VPS used: no, currently blocked by missing `.env.deploy.local`.
+- Host masked: not configured.
+- Host-key status: not verified.
+- Known_hosts repaired: no.
+- Backup path: not created.
 - App path: `/var/www/trustfirst-client-portal`.
 - Env path: `/etc/trustfirst-client-portal.env`.
 - DB name: `trustfirst_demo`.
@@ -113,13 +124,11 @@ Secrets are written only to the VPS env file and are never printed by the script
 - Authenticated QA passed: no.
 - Final demo readiness: blocked.
 
-If OpenSSH reports `REMOTE HOST IDENTIFICATION HAS CHANGED`, do not deploy. Verify the fingerprint out-of-band, then repair known_hosts safely:
+If OpenSSH reports `REMOTE HOST IDENTIFICATION HAS CHANGED`, do not deploy. Verify the fingerprint out-of-band, set the trusted gate in `.env.deploy.local`, then let the verification script repair `known_hosts` safely:
 
 ```bash
-ssh-keygen -F 45.10.21.141
-ssh-keygen -R 45.10.21.141
-ssh-keyscan -p 22 45.10.21.141 >> ~/.ssh/known_hosts
-ssh -p 22 -i ~/.ssh/cafeluxe_vps_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes root@45.10.21.141 "hostname && uname -a"
+npm run vps:host-key
+npm run vps:validate
 ```
 
 ## Deployment Output

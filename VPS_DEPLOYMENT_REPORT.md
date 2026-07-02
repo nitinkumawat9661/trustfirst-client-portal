@@ -2,13 +2,15 @@
 
 ## Status
 
-Sprint 28 deployment is blocked before bootstrap because strict SSH host-key verification fails for the authorized old shared VPS target. Deployment automation has been updated to support isolated shared-VPS deployment only when both confirmation flags are present.
+Sprint 29 deployment retry is blocked before host-key collection because `.env.deploy.local` is missing. Codex cannot safely identify `DEPLOY_HOST`, collect the current server key, compare a trusted fingerprint, repair `known_hosts`, or run isolated deployment.
 
 ## Shared Old VPS Deployment
 
 - Old VPS used: no
-- Host masked: 45.10.x.x
-- Host-key status: blocked - remote host identification changed
+- Host masked: not configured
+- Host-key status: not verified
+- Known_hosts repaired: no
+- Backup path: not created
 - App path: `/var/www/trustfirst-client-portal`
 - Env path: `/etc/trustfirst-client-portal.env`
 - DB name: `trustfirst_demo`
@@ -17,6 +19,7 @@ Sprint 28 deployment is blocked before bootstrap because strict SSH host-key ver
 - PM2 process: `trustfirst-client-portal`
 - URL: not available
 - CafeLuxe untouched: yes
+- Deployment attempted: no
 - Migrations applied: no
 - Seed completed: no
 - Smoke passed: no
@@ -25,23 +28,22 @@ Sprint 28 deployment is blocked before bootstrap because strict SSH host-key ver
 
 ## Validation Result
 
-Known host lookup found existing entries for `45.10.21.141`.
+Host-key verification command:
 
-Strict read-only SSH failed with:
-
-```text
-REMOTE HOST IDENTIFICATION HAS CHANGED
-Offending ECDSA key in C:\Users\DELL/.ssh/known_hosts:5
-Host key verification failed.
+```bash
+npm run vps:host-key
 ```
 
-Because host identity is not clean, no bootstrap, database provisioning, deployment, migration, seed, smoke, or authenticated QA was attempted.
+Result: blocked because `.env.deploy.local` is missing.
+
+Because host identity is not verified, no `known_hosts` repair, bootstrap, database provisioning, deployment, migration, seed, smoke, or authenticated QA was attempted.
 
 ## Environment
 
 - `.env.deploy.local`: missing
 - `DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM`: required
 - `DEPLOY_ALLOW_SHARED_OLD_VPS`: required
+- `DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256` or `DEPLOY_HOST_KEY_VERIFIED=yes`: required
 - `DEPLOY_APP_PORT`: must be `3010`
 - Deployment env file on VPS: not created
 - Storage directory on VPS: not created
@@ -63,4 +65,4 @@ Because host identity is not clean, no bootstrap, database provisioning, deploym
 
 ## Blocker
 
-See `VPS_BLOCKER_REPORT.md` for the safe host-key verification and known_hosts repair commands.
+See `VPS_BLOCKER_REPORT.md` and `VPS_HOST_KEY_VERIFICATION.md`.

@@ -7,6 +7,7 @@ export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)
 export const deployEnvPath = path.join(repoRoot, ".env.deploy.local");
 export const reportPath = path.join(repoRoot, "VPS_DEPLOYMENT_REPORT.md");
 export const blockerReportPath = path.join(repoRoot, "VPS_BLOCKER_REPORT.md");
+export const hostKeyVerificationPath = path.join(repoRoot, "VPS_HOST_KEY_VERIFICATION.md");
 
 const forbiddenHosts = new Set(["45.10.21.141", "cafeluxesite.in", "www.cafeluxesite.in"]);
 const confirmationValue = "yes";
@@ -62,6 +63,10 @@ export function validateDeployConfig(config) {
     throw new Error("Set DEPLOY_ALLOW_SHARED_OLD_VPS=yes in .env.deploy.local to confirm shared old VPS isolation rules are accepted.");
   }
 
+  if (!hasTrustedHostKeyGate(config)) {
+    throw new Error("Set DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256=<trusted-fingerprint> or DEPLOY_HOST_KEY_VERIFIED=yes before VPS validation/deployment.");
+  }
+
   const host = config.DEPLOY_HOST.trim().toLowerCase();
   if ((forbiddenHosts.has(host) || host.includes("cafeluxe") || host.includes("cafeluxesite")) && config.DEPLOY_ALLOW_SHARED_OLD_VPS?.toLowerCase() !== confirmationValue) {
     throw new Error("Refusing deployment to a known CafeLuxe host/IP/domain without DEPLOY_ALLOW_SHARED_OLD_VPS=yes.");
@@ -110,6 +115,21 @@ export function validateDeployConfig(config) {
   if (config.DEPLOY_APP_DIR.includes(".git") || config.DEPLOY_ENV_FILE.includes(config.DEPLOY_APP_DIR)) {
     throw new Error("Deployment env file must live outside the git app directory.");
   }
+}
+
+export function hasTrustedHostKeyGate(config) {
+  return Boolean(config.DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256?.trim()) || config.DEPLOY_HOST_KEY_VERIFIED?.toLowerCase() === confirmationValue;
+}
+
+export function normalizeFingerprint(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/^SHA256:/i, "")
+    .replace(/\s+/g, "");
+}
+
+export function knownHostsTarget(config) {
+  return String(config.DEPLOY_PORT || "22") === "22" ? config.DEPLOY_HOST : `[${config.DEPLOY_HOST}]:${config.DEPLOY_PORT}`;
 }
 
 function normalizeRemotePath(value) {

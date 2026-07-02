@@ -25,6 +25,7 @@
     "demo:manglam": "node scripts/demo-manglam.mjs",
     "demo:setup": "node scripts/demo-setup.mjs",
     "demo:start": "node scripts/demo-start.mjs",
+    "vps:host-key": "node scripts/vps-host-key-verify.mjs",
     "vps:validate": "node scripts/vps-validate-access.mjs",
     "vps:bootstrap": "node scripts/vps-bootstrap.mjs",
     "vps:deploy": "node scripts/vps-deploy.mjs",

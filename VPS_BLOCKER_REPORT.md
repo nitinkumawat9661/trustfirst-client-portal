@@ -2,15 +2,15 @@
 
 ## Shared Old VPS Deployment Blocker
 
-Sprint 28 cannot deploy TrustFirst to the authorized old shared VPS yet because strict SSH host-key verification fails for the previously discovered VPS IP.
+Sprint 29 cannot retry deployment because `.env.deploy.local` is missing, so Codex cannot safely identify `DEPLOY_HOST`, `DEPLOY_PORT`, or the trusted host-key gate for the authorized old shared VPS.
 
 No VPS files were changed. No remote database was created. No secrets were committed. No CafeLuxe process, files, database, or Nginx config were modified.
 
 ## Status
 
 - Shared old VPS used: no
-- Host: 45.10.x.x
-- Host-key status: blocked - remote host identification changed
+- Host: not configured
+- Host-key status: not verified
 - App path: `/var/www/trustfirst-client-portal`
 - Env path: `/etc/trustfirst-client-portal.env`
 - DB name: `trustfirst_demo`
@@ -26,48 +26,47 @@ No VPS files were changed. No remote database was created. No secrets were commi
 
 ## Checks Performed
 
-Known host lookup:
+Host-key verification command:
 
 ```bash
-ssh-keygen -F 45.10.21.141
-```
-
-Result:
-
-- `45.10.21.141` exists in local `known_hosts`.
-- Entries were found on lines 3, 4, and 5.
-
-Strict read-only SSH probe:
-
-```bash
-ssh -p 22 -i ~/.ssh/cafeluxe_vps_ed25519 -o BatchMode=yes -o ConnectTimeout=8 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes root@45.10.21.141 "hostname && uname -a"
+npm run vps:host-key
 ```
 
 Result:
 
 ```text
-WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
-The fingerprint for the ED25519 key sent by the remote host is SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0.
-Offending ECDSA key in C:\Users\DELL/.ssh/known_hosts:5
-Host key for 45.10.21.141 has changed and you have requested strict checking.
-Host key verification failed.
+Host-key verification blocked: .env.deploy.local is missing.
 ```
+
+`VPS_HOST_KEY_VERIFICATION.md` was generated with decision `not verified`.
 
 ## Required Manual Verification
 
 Codex must not bypass this with `StrictHostKeyChecking=no`.
 
-Before deployment can continue, the VPS owner must verify the new fingerprint out-of-band. If the fingerprint is expected, run:
+Before deployment can continue, create `.env.deploy.local` from `.env.deploy.example` and include the authorized host, user, key path, shared old VPS confirmations, and one trusted host-key gate:
 
 ```bash
-ssh-keygen -F 45.10.21.141
-ssh-keygen -R 45.10.21.141
-ssh-keyscan -p 22 45.10.21.141 >> ~/.ssh/known_hosts
-ssh -p 22 -i ~/.ssh/cafeluxe_vps_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes root@45.10.21.141 "hostname && uname -a"
+DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM=yes
+DEPLOY_ALLOW_SHARED_OLD_VPS=yes
+DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256=<trusted-sha256-fingerprint>
 ```
 
-Only continue if the final strict SSH command succeeds and the server owner confirms this is the authorized shared old VPS for the TrustFirst/Manglam demo.
+or, if the VPS owner has accepted the current fingerprint out-of-band:
+
+```bash
+DEPLOY_HOST_KEY_VERIFIED=yes
+```
+
+Then run:
+
+```bash
+npm run vps:host-key
+npm run vps:validate
+```
+
+Only continue to bootstrap/deploy after `vps:host-key` repairs `known_hosts` from a verified fingerprint and strict SSH validation succeeds.
 
 ## Additional Missing Deployment Input
 
-`.env.deploy.local` is not present in the repository workspace. After the host key is verified, create it from `.env.deploy.example` with the authorized host, user, key path, optional domain, and required shared VPS confirmations.
+`.env.deploy.local` is not present in the repository workspace. It is intentionally ignored by git and must not be committed.
