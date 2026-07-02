@@ -106,15 +106,17 @@ Secrets are written only to the VPS env file and are never printed by the script
 
 ## Shared Old VPS Deployment
 
-- Old VPS used: no, currently blocked by missing trusted fingerprint gate.
+- Old VPS used: no, currently blocked by SSH public-key authentication failure.
 - `.env.deploy.local` created: yes.
 - Host masked: `45.10.x.x`.
-- Host-key status: not verified.
+- Host-key status: trusted fingerprint matched.
 - Key path exists: yes.
 - Current fingerprint collected: yes.
-- Trusted fingerprint configured: no.
-- Known_hosts repaired: no.
-- Backup path: not created.
+- Trusted fingerprint configured: yes.
+- Trusted fingerprint used: `SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0`.
+- Known_hosts repaired: yes.
+- Backup path: `C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260702181522`.
+- Strict SSH validation passed: no.
 - App path: `/var/www/trustfirst-client-portal`.
 - Env path: `/etc/trustfirst-client-portal.env`.
 - DB name: `trustfirst_demo`.
@@ -127,6 +129,8 @@ Secrets are written only to the VPS env file and are never printed by the script
 - Smoke passed: no.
 - Authenticated QA passed: no.
 - Final demo readiness: blocked.
+
+The current blocker is SSH authorization: strict host checking accepts the verified key, but `root@45.10.21.141` rejects both available private keys with `Permission denied (publickey)`.
 
 If OpenSSH reports `REMOTE HOST IDENTIFICATION HAS CHANGED`, do not deploy. Verify the fingerprint out-of-band, set the trusted gate in `.env.deploy.local`, then let the verification script repair `known_hosts` safely:
 

@@ -190,9 +190,13 @@ http://<vps-ip>:3010
 
 ## Shared Old VPS Deployment
 
-- Old VPS used: no, currently blocked by host-key mismatch.
+- Old VPS used: no, currently blocked by SSH public-key authentication failure.
 - Host masked: `45.10.x.x`.
-- Host-key status: blocked - verify fingerprint before deployment.
+- Host-key status: trusted ED25519 fingerprint matched.
+- Trusted fingerprint used: `SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0`.
+- Known_hosts repaired: yes.
+- Known_hosts backup: `C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260702181522`.
+- Strict SSH validation passed: no, `root@45.10.21.141` rejected the available private keys.
 - App path: `/var/www/trustfirst-client-portal`.
 - Env path: `/etc/trustfirst-client-portal.env`.
 - DB name: `trustfirst_demo`.
@@ -214,6 +218,8 @@ ssh-keygen -R 45.10.21.141
 ssh-keyscan -p 22 45.10.21.141 >> ~/.ssh/known_hosts
 ssh -p 22 -i ~/.ssh/cafeluxe_vps_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes root@45.10.21.141 "hostname && uname -a"
 ```
+
+Do not run bootstrap or deploy until the VPS owner provides an authorized SSH user/key pair and the strict SSH command succeeds.
 
 ## Smoke Test
 

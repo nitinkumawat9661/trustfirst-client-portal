@@ -2,7 +2,7 @@
 
 ## Shared Old VPS Deployment Blocker
 
-Sprint 31 collected current host key material with Git for Windows `ssh-keyscan`, but deployment remains blocked because no trusted fingerprint gate is configured.
+Sprint 32 configured the trusted ED25519 host fingerprint and repaired `known_hosts`, but deployment remains blocked because strict SSH authentication fails for `root@45.10.21.141` with the available private keys.
 
 No VPS files were changed. No remote database was created. No secrets were committed. No CafeLuxe process, files, database, or Nginx config were modified.
 
@@ -11,11 +11,14 @@ No VPS files were changed. No remote database was created. No secrets were commi
 - Shared old VPS used: no
 - `.env.deploy.local` created: yes
 - Host: 45.10.x.x
-- Host-key status: not verified
+- Host-key status: trusted fingerprint matched
 - Key path exists: yes
 - Current fingerprint collected: yes
-- Trusted fingerprint configured: no
-- Known_hosts repaired: no
+- Trusted fingerprint configured: yes
+- Trusted fingerprint used: `SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0`
+- Known_hosts repaired: yes
+- Known_hosts backup: `C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260702181522`
+- Strict SSH validation passed: no
 - App path: `/var/www/trustfirst-client-portal`
 - Env path: `/etc/trustfirst-client-portal.env`
 - DB name: `trustfirst_demo`
@@ -40,10 +43,10 @@ npm run vps:host-key
 Result:
 
 ```text
-Host-key verification blocked: trusted fingerprint gate is missing.
+root@45.10.21.141: Permission denied (publickey).
 ```
 
-`VPS_HOST_KEY_VERIFICATION.md` was generated with decision `not verified`.
+`VPS_HOST_KEY_VERIFICATION.md` was generated with decision `trusted fingerprint matched; strict SSH authentication failed`.
 
 Evidence collected:
 
@@ -55,24 +58,19 @@ Evidence collected:
 - Current RSA fingerprint: `SHA256:U/yYcVMljDyvORobFkagh5xyj+XmVLeed8MQt/MlwmY`
 - Current ECDSA fingerprint: `SHA256:xTzBtiL+q/EsSR3/2buZioRuZl/z64QeXJJjvJe86vA`
 - ssh-keyscan error: `choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com`
-- Strict SSH result: not passed; repeat probes timed out
+- Strict SSH result: host key accepted, authentication failed with `Permission denied (publickey)`
+- Fallback private key check: `~/.ssh/id_ed25519` also failed with `Permission denied (publickey)`
 
 ## Required Manual Verification
 
 Codex must not bypass this with `StrictHostKeyChecking=no`.
 
-Before deployment can continue, the VPS owner/provider must confirm one current host fingerprint through a trusted channel. Then set one trusted host-key gate in `.env.deploy.local`:
+Before deployment can continue, the VPS owner/provider must provide SSH access that authorizes the configured user/key, or provide the correct `DEPLOY_USER` and private key for this VPS. The trusted fingerprint gate is already configured locally:
 
 ```bash
 DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM=yes
 DEPLOY_ALLOW_SHARED_OLD_VPS=yes
-DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256=<trusted-sha256-fingerprint>
-```
-
-or, if the VPS owner has accepted the current fingerprint out-of-band:
-
-```bash
-DEPLOY_HOST_KEY_VERIFIED=yes
+DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256=SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0
 ```
 
 Then run:
@@ -82,7 +80,7 @@ npm run vps:host-key
 npm run vps:validate
 ```
 
-Only continue to bootstrap/deploy after `vps:host-key` repairs `known_hosts` from verified key material and strict SSH validation succeeds.
+Only continue to bootstrap/deploy after strict SSH validation succeeds.
 
 ## Additional Missing Deployment Input
 
