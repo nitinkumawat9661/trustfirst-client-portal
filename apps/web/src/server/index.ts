@@ -11,6 +11,7 @@ export * from "./domain/entity";
 export * from "./domain/errors";
 export * from "./events/event-bus";
 export * from "./features/feature-flags";
+export * from "./hardware";
 export * from "./jobs/background-job";
 export * from "./middleware/audit-middleware";
 export * from "./middleware/authorization-middleware";

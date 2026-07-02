@@ -4,6 +4,7 @@ import {
   CreditCard,
   FileStack,
   FileText,
+  PackageSearch,
   LayoutDashboard,
   LifeBuoy,
   Search,
@@ -36,6 +37,12 @@ export const adminNavigation = [
     label: "Billing",
     description: "Invoice and payment foundation",
     icon: CreditCard,
+  },
+  {
+    href: "/admin/plugins/hardware-erp",
+    label: "Hardware ERP",
+    description: "Plugin foundation",
+    icon: PackageSearch,
   },
   {
     href: "/client",

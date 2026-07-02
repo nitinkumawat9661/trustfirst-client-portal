@@ -25,6 +25,8 @@ export {
   ContactInvitationStatus,
   DeliverableReviewStatus,
   BillingTimelineVerb,
+  HardwareInventoryMovementType,
+  HardwareTimelineVerb,
   InvoiceStatus,
   PaymentMode,
   PaymentProvider,

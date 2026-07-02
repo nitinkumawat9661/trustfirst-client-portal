@@ -61,6 +61,8 @@ enum AuditAction {
   BILLING_INVOICE_CREATED
   BILLING_INVOICE_ISSUED
   BILLING_PAYMENT_RECORDED
+  HARDWARE_CATALOG_UPDATED
+  HARDWARE_STOCK_MOVED
 }
 
 enum ClientLifecycleStage {
@@ -249,6 +251,23 @@ enum BillingTimelineVerb {
   ATTACHED
 }
 
+enum HardwareInventoryMovementType {
+  STOCK_IN
+  STOCK_OUT
+  ADJUSTMENT
+}
+
+enum HardwareTimelineVerb {
+  PRODUCT_CREATED
+  PRODUCT_UPDATED
+  STOCK_IN
+  STOCK_OUT
+  STOCK_ADJUSTED
+  LOW_STOCK_ALERTED
+  IMPORT_PREVIEWED
+  EXPORTED
+}
+
 model User {
   id                 String               @id @default(cuid())
   name               String?
@@ -376,6 +395,13 @@ model Tenant {
   invoices        Invoice[]
   payments        PaymentRecord[]
   billingTimelineEvents BillingTimelineEvent[]
+  hardwareCategories HardwareProductCategory[]
+  hardwareBrands HardwareBrand[]
+  hardwareUnits HardwareUnit[]
+  hardwareProducts HardwareProduct[]
+  hardwareStockLocations HardwareStockLocation[]
+  hardwareInventoryMovements HardwareInventoryMovement[]
+  hardwareTimelineEvents HardwareTimelineEvent[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -600,6 +626,8 @@ model ClientOrganization {
   commercialDocuments CommercialDocument[]
   billingProfiles BillingProfile[]
   invoices        Invoice[]
+  suppliedHardwareMovements HardwareInventoryMovement[] @relation("HardwareMovementSupplier")
+  customerHardwareMovements HardwareInventoryMovement[] @relation("HardwareMovementCustomer")
 
   @@unique([tenantId, slug])
   @@index([tenantId, lifecycleStage])
@@ -1279,6 +1307,148 @@ model InvoiceAttachment {
 
   @@index([tenantId, invoiceId, createdAt])
   @@index([storageKey])
+}
+
+model HardwareProductCategory {
+  id          String            @id @default(cuid())
+  tenantId    String
+  name        String
+  slug        String
+  description String?
+  metadata    Json              @default("{}")
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products    HardwareProduct[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, name])
+}
+
+model HardwareBrand {
+  id        String            @id @default(cuid())
+  tenantId  String
+  name      String
+  slug      String
+  metadata  Json              @default("{}")
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products  HardwareProduct[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, name])
+}
+
+model HardwareUnit {
+  id        String            @id @default(cuid())
+  tenantId  String
+  name      String
+  code      String
+  precision Int               @default(0)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products  HardwareProduct[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, name])
+}
+
+model HardwareProduct {
+  id                    String                      @id @default(cuid())
+  tenantId              String
+  categoryId            String?
+  brandId               String?
+  unitId                String?
+  sku                   String
+  name                  String
+  description           String?                     @db.Text
+  barcode               String?
+  gstTaxConfig          Json                        @default("{}")
+  salesPriceCents       Int                         @default(0)
+  purchaseCostCents     Int                         @default(0)
+  lowStockThreshold     Int                         @default(0)
+  metadata              Json                        @default("{}")
+  archivedAt            DateTime?
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  tenant                Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category              HardwareProductCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  brand                 HardwareBrand?              @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  unit                  HardwareUnit?               @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  inventoryMovements    HardwareInventoryMovement[]
+  timeline              HardwareTimelineEvent[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, name])
+  @@index([tenantId, barcode])
+  @@index([tenantId, categoryId])
+  @@index([tenantId, brandId])
+  @@index([tenantId, archivedAt])
+}
+
+model HardwareStockLocation {
+  id          String                      @id @default(cuid())
+  tenantId    String
+  name        String
+  code        String
+  address     Json                        @default("{}")
+  metadata    Json                        @default("{}")
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  tenant      Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  movements   HardwareInventoryMovement[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, name])
+}
+
+model HardwareInventoryMovement {
+  id             String                        @id @default(cuid())
+  tenantId       String
+  productId      String
+  locationId     String
+  type           HardwareInventoryMovementType
+  quantity       Int
+  unitCostCents  Int?
+  unitPriceCents Int?
+  supplierId     String?
+  customerId     String?
+  referenceType  String?
+  referenceId    String?
+  notes          String?                       @db.Text
+  metadata       Json                          @default("{}")
+  occurredAt     DateTime                      @default(now())
+  createdAt      DateTime                      @default(now())
+  tenant         Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product        HardwareProduct               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  location       HardwareStockLocation         @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  supplier       ClientOrganization?           @relation("HardwareMovementSupplier", fields: [supplierId], references: [id], onDelete: SetNull)
+  customer       ClientOrganization?           @relation("HardwareMovementCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, productId, occurredAt])
+  @@index([tenantId, locationId, occurredAt])
+  @@index([tenantId, type])
+  @@index([tenantId, supplierId])
+  @@index([tenantId, customerId])
+}
+
+model HardwareTimelineEvent {
+  id         String               @id @default(cuid())
+  tenantId   String
+  productId  String?
+  actorId    String?
+  verb       HardwareTimelineVerb
+  summary    String
+  metadata   Json                 @default("{}")
+  occurredAt DateTime             @default(now())
+  tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product    HardwareProduct?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, productId, occurredAt])
+  @@index([tenantId, verb])
+  @@index([actorId])
 }
 
 model ProjectMilestone {
