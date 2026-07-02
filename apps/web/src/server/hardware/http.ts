@@ -6,12 +6,21 @@ import { isAppError } from "../domain/errors";
 import { assertCsrfSafeRequest } from "../security";
 import { sanitizeRecord } from "../security/sanitize";
 import { HardwareService } from "./hardware-service";
+import { HardwareTradeService } from "./trade-service";
 
 export async function hardwareContext() {
   const user = await requireCurrentUser();
   return {
     context: { tenantId: user.activeTenantId ?? "public", userId: user.id },
     service: new HardwareService(getPrisma()),
+  };
+}
+
+export async function hardwareTradeContext() {
+  const user = await requireCurrentUser();
+  return {
+    context: { tenantId: user.activeTenantId ?? "public", userId: user.id },
+    service: new HardwareTradeService(getPrisma()),
   };
 }
 

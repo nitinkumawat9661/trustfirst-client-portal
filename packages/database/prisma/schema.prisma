@@ -268,6 +268,32 @@ enum HardwareTimelineVerb {
   EXPORTED
 }
 
+enum HardwareTradeDocumentType {
+  SALES_ORDER
+  PURCHASE_ORDER
+  SALES_QUOTATION
+  PURCHASE_ENTRY
+  SUPPLIER_BILL
+  SALE_RETURN
+  PURCHASE_RETURN
+}
+
+enum HardwareTradeDocumentStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+  ARCHIVED
+}
+
+enum HardwareTradeTimelineVerb {
+  CREATED
+  UPDATED
+  CONFIRMED
+  CANCELLED
+  RETURNED
+  INVOICE_DRAFTED
+}
+
 model User {
   id                 String               @id @default(cuid())
   name               String?
@@ -402,6 +428,8 @@ model Tenant {
   hardwareStockLocations HardwareStockLocation[]
   hardwareInventoryMovements HardwareInventoryMovement[]
   hardwareTimelineEvents HardwareTimelineEvent[]
+  hardwareTradeDocuments HardwareTradeDocument[]
+  hardwareTradeTimelineEvents HardwareTradeTimelineEvent[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -628,6 +656,8 @@ model ClientOrganization {
   invoices        Invoice[]
   suppliedHardwareMovements HardwareInventoryMovement[] @relation("HardwareMovementSupplier")
   customerHardwareMovements HardwareInventoryMovement[] @relation("HardwareMovementCustomer")
+  supplierHardwareDocuments HardwareTradeDocument[] @relation("HardwareTradeSupplier")
+  customerHardwareDocuments HardwareTradeDocument[] @relation("HardwareTradeCustomer")
 
   @@unique([tenantId, slug])
   @@index([tenantId, lifecycleStage])
@@ -890,6 +920,7 @@ model Requirement {
   notifications   RequirementNotification[]
   commercialDocuments CommercialDocument[]
   invoices        Invoice[]
+  hardwareTradeDocuments HardwareTradeDocument[]
 
   @@index([tenantId, status])
   @@index([tenantId, clientId])
@@ -1034,6 +1065,7 @@ model Project {
   labels          ProjectLabel[]
   commercialDocuments CommercialDocument[]
   invoices        Invoice[]
+  hardwareTradeDocuments HardwareTradeDocument[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, status])
@@ -1219,6 +1251,7 @@ model Invoice {
   timeline             BillingTimelineEvent[]
   comments             InvoiceComment[]
   attachments          InvoiceAttachment[]
+  hardwareTradeDocuments HardwareTradeDocument[]
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, status])
@@ -1378,6 +1411,7 @@ model HardwareProduct {
   brand                 HardwareBrand?              @relation(fields: [brandId], references: [id], onDelete: SetNull)
   unit                  HardwareUnit?               @relation(fields: [unitId], references: [id], onDelete: SetNull)
   inventoryMovements    HardwareInventoryMovement[]
+  tradeItems             HardwareTradeDocumentItem[]
   timeline              HardwareTimelineEvent[]
 
   @@unique([tenantId, sku])
@@ -1447,6 +1481,83 @@ model HardwareTimelineEvent {
   product    HardwareProduct?     @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, productId, occurredAt])
+  @@index([tenantId, verb])
+  @@index([actorId])
+}
+
+model HardwareTradeDocument {
+  id               String                       @id @default(cuid())
+  tenantId         String
+  documentNumber   String
+  type             HardwareTradeDocumentType
+  status           HardwareTradeDocumentStatus  @default(DRAFT)
+  customerId       String?
+  supplierId       String?
+  projectId        String?
+  requirementId    String?
+  billingInvoiceId String?
+  currency         String                       @default("INR")
+  subtotalCents    Int                          @default(0)
+  discountCents    Int                          @default(0)
+  taxCents         Int                          @default(0)
+  roundOffCents    Int                          @default(0)
+  totalCents       Int                          @default(0)
+  paymentStatus    String                       @default("unlinked")
+  metadata         Json                         @default("{}")
+  confirmedAt      DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+  tenant           Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer         ClientOrganization?          @relation("HardwareTradeCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  supplier         ClientOrganization?          @relation("HardwareTradeSupplier", fields: [supplierId], references: [id], onDelete: SetNull)
+  project          Project?                     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  requirement      Requirement?                 @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  billingInvoice   Invoice?                     @relation(fields: [billingInvoiceId], references: [id], onDelete: SetNull)
+  items            HardwareTradeDocumentItem[]
+  timeline         HardwareTradeTimelineEvent[]
+
+  @@unique([tenantId, documentNumber])
+  @@index([tenantId, type, status])
+  @@index([tenantId, customerId])
+  @@index([tenantId, supplierId])
+  @@index([tenantId, billingInvoiceId])
+  @@index([tenantId, updatedAt])
+}
+
+model HardwareTradeDocumentItem {
+  id               String                @id @default(cuid())
+  tenantId         String
+  documentId       String
+  productId        String
+  description      String
+  quantity         Int
+  unitAmountCents  Int
+  discountCents    Int                   @default(0)
+  taxRateBps       Int                   @default(0)
+  taxCents         Int                   @default(0)
+  lineTotalCents   Int
+  metadata         Json                  @default("{}")
+  document         HardwareTradeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  product          HardwareProduct       @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, documentId])
+  @@index([tenantId, productId])
+}
+
+model HardwareTradeTimelineEvent {
+  id         String                @id @default(cuid())
+  tenantId   String
+  documentId String
+  actorId    String?
+  verb       HardwareTradeTimelineVerb
+  summary    String
+  metadata   Json                  @default("{}")
+  occurredAt DateTime              @default(now())
+  tenant     Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document   HardwareTradeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, documentId, occurredAt])
   @@index([tenantId, verb])
   @@index([actorId])
 }
