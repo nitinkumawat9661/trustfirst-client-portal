@@ -20,6 +20,7 @@ export * from "./notifications/notification-provider";
 export * from "./pagination/cursor";
 export * from "./platform-services";
 export * from "./repositories/repository";
+export * from "./requirements";
 export * from "./permissions";
 export * from "./security";
 export * from "./storage/storage-provider";

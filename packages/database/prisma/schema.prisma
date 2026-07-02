@@ -96,6 +96,38 @@ enum ClientActivityVerb {
   RESTORED
 }
 
+enum RequirementStatus {
+  DRAFT
+  PENDING
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum RequirementPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum RequirementTimelineVerb {
+  CREATED
+  DRAFT_SAVED
+  SUBMITTED
+  REVIEW_REQUESTED
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+  COMMENTED
+  ATTACHED
+  ASSIGNED
+  VERSION_CREATED
+  VERSION_RESTORED
+}
+
 model User {
   id                 String               @id @default(cuid())
   name               String?
@@ -125,6 +157,10 @@ model User {
   clientNotes        ClientNote[]
   clientComments     ClientComment[]
   contactInvitations ClientContactInvitation[]
+  ownedRequirements  Requirement[]        @relation("RequirementOwner")
+  reviewedRequirements Requirement[]      @relation("RequirementReviewer")
+  requirementTimeline RequirementTimelineEvent[]
+  requirementComments RequirementComment[]
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
@@ -204,6 +240,8 @@ model Tenant {
   clientNotes     ClientNote[]
   clientComments  ClientComment[]
   clientTags      ClientTag[]
+  requirements    Requirement[]
+  requirementTimelineEvents RequirementTimelineEvent[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -423,6 +461,7 @@ model ClientOrganization {
   projects           ClientProject[]
   tagAssignments     ClientTagAssignment[]
   customFieldValues  ClientCustomFieldValue[]
+  requirementRecords Requirement[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, lifecycleStage])
@@ -649,4 +688,148 @@ model ClientCustomFieldValue {
 
   @@unique([tenantId, clientId, fieldKey])
   @@index([tenantId, fieldKey])
+}
+
+model Requirement {
+  id              String                 @id @default(cuid())
+  tenantId        String
+  clientId        String?
+  title           String
+  summary         String?
+  status          RequirementStatus      @default(DRAFT)
+  priority        RequirementPriority    @default(MEDIUM)
+  ownerId         String?
+  reviewerId      String?
+  dueAt           DateTime?
+  currentVersion  Int                    @default(1)
+  formSchema      Json                   @default("{}")
+  draftData       Json                   @default("{}")
+  submittedData   Json?
+  metadata        Json                   @default("{}")
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  archivedAt      DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client          ClientOrganization?    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  owner           User?                  @relation("RequirementOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  reviewer        User?                  @relation("RequirementReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  drafts          RequirementDraft[]
+  versions        RequirementVersion[]
+  timeline        RequirementTimelineEvent[]
+  attachments     RequirementAttachment[]
+  comments        RequirementComment[]
+  notifications   RequirementNotification[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, clientId])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, reviewerId])
+  @@index([tenantId, updatedAt])
+  @@index([dueAt])
+}
+
+model RequirementDraft {
+  id            String      @id @default(cuid())
+  tenantId      String
+  requirementId String
+  authorId      String?
+  data          Json
+  source        String      @default("manual")
+  revision      Int
+  createdAt     DateTime    @default(now())
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementId, revision])
+  @@index([tenantId, requirementId, createdAt])
+}
+
+model RequirementVersion {
+  id            String      @id @default(cuid())
+  tenantId      String
+  requirementId String
+  version       Int
+  data          Json
+  summary       String?
+  createdById   String?
+  createdAt     DateTime    @default(now())
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementId, version])
+  @@index([tenantId, requirementId, version])
+}
+
+model RequirementTimelineEvent {
+  id            String                  @id @default(cuid())
+  tenantId      String
+  requirementId String
+  actorId       String?
+  verb          RequirementTimelineVerb
+  summary       String
+  metadata      Json                    @default("{}")
+  occurredAt    DateTime                @default(now())
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requirement   Requirement             @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  actor         User?                   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, requirementId, occurredAt])
+  @@index([tenantId, verb])
+  @@index([actorId])
+}
+
+model RequirementAttachment {
+  id            String      @id @default(cuid())
+  tenantId      String
+  requirementId String
+  version       Int?
+  name          String
+  mimeType      String
+  sizeBytes     Int
+  storageKey    String
+  uploadedById  String?
+  createdAt     DateTime    @default(now())
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, requirementId])
+  @@index([tenantId, version])
+  @@index([storageKey])
+}
+
+model RequirementComment {
+  id            String               @id @default(cuid())
+  tenantId      String
+  requirementId String
+  parentId      String?
+  authorId      String?
+  body          String               @db.Text
+  mentions      Json                 @default("[]")
+  resolvedAt    DateTime?
+  resolvedById  String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  requirement   Requirement          @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  author        User?                @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  parent        RequirementComment?  @relation("RequirementCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies       RequirementComment[] @relation("RequirementCommentThread")
+
+  @@index([tenantId, requirementId, createdAt])
+  @@index([parentId])
+  @@index([resolvedAt])
+}
+
+model RequirementNotification {
+  id            String      @id @default(cuid())
+  tenantId      String
+  requirementId String
+  recipientId   String?
+  type          String
+  payload       Json        @default("{}")
+  readAt        DateTime?
+  createdAt     DateTime    @default(now())
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, recipientId, readAt])
+  @@index([tenantId, requirementId, createdAt])
 }
