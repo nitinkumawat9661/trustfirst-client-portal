@@ -1,6 +1,7 @@
 import {
   Bell,
   Building2,
+  FileStack,
   FileText,
   LayoutDashboard,
   LifeBuoy,
@@ -22,6 +23,12 @@ export const adminNavigation = [
     label: "Settings",
     description: "Tenant and platform settings shell",
     icon: Settings,
+  },
+  {
+    href: "/admin/documents",
+    label: "Documents",
+    description: "Commercial document engine",
+    icon: FileStack,
   },
   {
     href: "/client",

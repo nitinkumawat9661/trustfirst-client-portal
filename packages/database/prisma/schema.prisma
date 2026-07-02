@@ -178,6 +178,36 @@ enum ProjectTimelineVerb {
   COMPLETED
 }
 
+enum CommercialDocumentType {
+  QUOTATION
+  PROPOSAL
+  ESTIMATE
+  AGREEMENT
+  WORK_ORDER
+  RECEIPT
+  INVOICE
+}
+
+enum CommercialDocumentStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum CommercialDocumentTimelineVerb {
+  CREATED
+  UPDATED
+  SUBMITTED
+  APPROVED
+  REJECTED
+  ARCHIVED
+  VERSION_CREATED
+  COMMENTED
+  ATTACHED
+}
+
 model User {
   id                 String               @id @default(cuid())
   name               String?
@@ -212,6 +242,9 @@ model User {
   requirementTimeline RequirementTimelineEvent[]
   requirementComments RequirementComment[]
   managedProjects     Project[]            @relation("ProjectManager")
+  ownedCommercialDocuments CommercialDocument[] @relation("CommercialDocumentOwner")
+  approvedCommercialDocuments CommercialDocument[] @relation("CommercialDocumentApprover")
+  rejectedCommercialDocuments CommercialDocument[] @relation("CommercialDocumentRejector")
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
@@ -294,6 +327,8 @@ model Tenant {
   requirements    Requirement[]
   requirementTimelineEvents RequirementTimelineEvent[]
   projects        Project[]
+  commercialDocuments CommercialDocument[]
+  commercialDocumentTimelineEvents CommercialDocumentTimelineEvent[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -515,6 +550,7 @@ model ClientOrganization {
   customFieldValues  ClientCustomFieldValue[]
   requirementRecords Requirement[]
   projectRecords     Project[]
+  commercialDocuments CommercialDocument[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, lifecycleStage])
@@ -775,6 +811,7 @@ model Requirement {
   attachments     RequirementAttachment[]
   comments        RequirementComment[]
   notifications   RequirementNotification[]
+  commercialDocuments CommercialDocument[]
 
   @@index([tenantId, status])
   @@index([tenantId, clientId])
@@ -917,6 +954,7 @@ model Project {
   timeline        ProjectTimelineEvent[]
   notifications   ProjectNotification[]
   labels          ProjectLabel[]
+  commercialDocuments CommercialDocument[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, status])
@@ -924,6 +962,124 @@ model Project {
   @@index([tenantId, managerId])
   @@index([tenantId, updatedAt])
   @@index([targetDate])
+}
+
+model CommercialDocument {
+  id                  String                   @id @default(cuid())
+  tenantId            String
+  documentNumber      String
+  type                CommercialDocumentType
+  status              CommercialDocumentStatus @default(DRAFT)
+  title               String
+  summary             String?                  @db.Text
+  clientId            String?
+  projectId           String?
+  requirementId       String?
+  ownerId             String?
+  approvedById        String?
+  rejectedById        String?
+  templateKey         String
+  branding            Json                     @default("{}")
+  content             Json                     @default("{}")
+  metadata            Json                     @default("{}")
+  currentVersion      Int                      @default(1)
+  submittedAt         DateTime?
+  approvedAt          DateTime?
+  rejectedAt          DateTime?
+  archivedAt          DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  tenant              Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client              ClientOrganization?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  project             Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  requirement         Requirement?             @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  owner               User?                    @relation("CommercialDocumentOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  approvedBy          User?                    @relation("CommercialDocumentApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  rejectedBy          User?                    @relation("CommercialDocumentRejector", fields: [rejectedById], references: [id], onDelete: SetNull)
+  versions            CommercialDocumentVersion[]
+  timeline            CommercialDocumentTimelineEvent[]
+  comments            CommercialDocumentComment[]
+  attachments         CommercialDocumentAttachment[]
+
+  @@unique([tenantId, documentNumber])
+  @@index([tenantId, type, status])
+  @@index([tenantId, clientId])
+  @@index([tenantId, projectId])
+  @@index([tenantId, requirementId])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, updatedAt])
+  @@index([tenantId, archivedAt])
+}
+
+model CommercialDocumentVersion {
+  id          String             @id @default(cuid())
+  tenantId    String
+  documentId  String
+  version     Int
+  content     Json
+  summary     String?
+  createdById String?
+  createdAt   DateTime           @default(now())
+  document    CommercialDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@index([tenantId, documentId, version])
+}
+
+model CommercialDocumentTimelineEvent {
+  id          String                         @id @default(cuid())
+  tenantId    String
+  documentId  String
+  actorId     String?
+  verb        CommercialDocumentTimelineVerb
+  summary     String
+  metadata    Json                           @default("{}")
+  occurredAt  DateTime                       @default(now())
+  tenant      Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document    CommercialDocument             @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, documentId, occurredAt])
+  @@index([tenantId, verb])
+  @@index([actorId])
+}
+
+model CommercialDocumentComment {
+  id           String                      @id @default(cuid())
+  tenantId     String
+  documentId   String
+  parentId     String?
+  authorId     String?
+  body         String                      @db.Text
+  mentions     Json                        @default("[]")
+  resolvedAt   DateTime?
+  resolvedById String?
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+  document     CommercialDocument          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  parent       CommercialDocumentComment?  @relation("CommercialDocumentCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      CommercialDocumentComment[] @relation("CommercialDocumentCommentThread")
+
+  @@index([tenantId, documentId, createdAt])
+  @@index([parentId])
+  @@index([resolvedAt])
+}
+
+model CommercialDocumentAttachment {
+  id           String             @id @default(cuid())
+  tenantId     String
+  documentId   String
+  version      Int?
+  name         String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String
+  uploadedById String?
+  createdAt    DateTime           @default(now())
+  document     CommercialDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, documentId, createdAt])
+  @@index([tenantId, version])
+  @@index([storageKey])
 }
 
 model ProjectMilestone {
