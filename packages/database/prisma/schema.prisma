@@ -60,6 +60,42 @@ enum AuditAction {
   PERMISSION_DENIED
 }
 
+enum ClientLifecycleStage {
+  LEAD
+  PROSPECT
+  CLIENT
+  ARCHIVED
+}
+
+enum ClientStatus {
+  NEW
+  ACTIVE
+  ONBOARDING
+  AT_RISK
+  INACTIVE
+  ARCHIVED
+  SOFT_DELETED
+}
+
+enum ContactInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum ClientActivityVerb {
+  CREATED
+  UPDATED
+  COMMENTED
+  UPLOADED
+  APPROVED
+  STATUS_CHANGED
+  ARCHIVED
+  DELETED
+  RESTORED
+}
+
 model User {
   id                 String               @id @default(cuid())
   name               String?
@@ -83,6 +119,12 @@ model User {
   tenantMemberships  TenantMembership[]
   tenantInvitations  TenantInvitation[]   @relation("TenantInvitationInviter")
   auditEvents        AuditEvent[]         @relation("AuditEventActor")
+  ownedClients       ClientOrganization[] @relation("ClientOwner")
+  managedClients     ClientOrganization[] @relation("ClientAccountManager")
+  clientActivity     ClientActivityEvent[]
+  clientNotes        ClientNote[]
+  clientComments     ClientComment[]
+  contactInvitations ClientContactInvitation[]
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
@@ -156,6 +198,12 @@ model Tenant {
   loginHistory    LoginHistory[]
   rateLimitEvents RateLimitEvent[]
   auditEvents     AuditEvent[]
+  clients         ClientOrganization[]
+  clientContacts  ClientContact[]
+  clientActivities ClientActivityEvent[]
+  clientNotes     ClientNote[]
+  clientComments  ClientComment[]
+  clientTags      ClientTag[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -336,4 +384,269 @@ model AuditEvent {
   @@index([action, occurredAt])
   @@index([targetType, targetId])
   @@index([correlationId])
+}
+
+model ClientOrganization {
+  id                 String                 @id @default(cuid())
+  tenantId           String
+  name               String
+  legalName          String?
+  slug               String
+  lifecycleStage     ClientLifecycleStage   @default(LEAD)
+  status             ClientStatus           @default(NEW)
+  healthScore        Int                    @default(75)
+  ownerId            String?
+  accountManagerId   String?
+  website            String?
+  industry           String?
+  source             String?
+  metadata           Json                   @default("{}")
+  customFields       Json                   @default("{}")
+  archivedAt         DateTime?
+  archivedById       String?
+  deletedAt          DateTime?
+  deletedById        String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner              User?                  @relation("ClientOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  accountManager     User?                  @relation("ClientAccountManager", fields: [accountManagerId], references: [id], onDelete: SetNull)
+  contacts           ClientContact[]
+  contactInvitations ClientContactInvitation[]
+  activities         ClientActivityEvent[]
+  notes              ClientNote[]
+  comments           ClientComment[]
+  files              ClientFile[]
+  approvals          ClientApproval[]
+  tasks              ClientTask[]
+  requirements       ClientRequirement[]
+  projects           ClientProject[]
+  tagAssignments     ClientTagAssignment[]
+  customFieldValues  ClientCustomFieldValue[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, lifecycleStage])
+  @@index([tenantId, status])
+  @@index([tenantId, accountManagerId])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, deletedAt])
+  @@index([name])
+  @@index([createdAt])
+}
+
+model ClientContact {
+  id             String                 @id @default(cuid())
+  tenantId       String
+  clientId       String
+  name           String
+  email          String
+  normalizedEmail String
+  phone          String?
+  title          String?
+  role           String?
+  isPrimary      Boolean                @default(false)
+  invitedAt      DateTime?
+  lastActivityAt DateTime?
+  metadata       Json                   @default("{}")
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  tenant         Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client         ClientOrganization     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, clientId, normalizedEmail])
+  @@index([tenantId, normalizedEmail])
+  @@index([clientId, isPrimary])
+  @@index([lastActivityAt])
+}
+
+model ClientContactInvitation {
+  id              String                  @id @default(cuid())
+  tenantId        String
+  clientId        String
+  email           String
+  normalizedEmail String
+  role            String?
+  tokenHash       String                  @unique
+  status          ContactInvitationStatus @default(PENDING)
+  invitedById     String
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  client          ClientOrganization      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  invitedBy       User                    @relation(fields: [invitedById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, clientId, status])
+  @@index([normalizedEmail])
+  @@index([expiresAt])
+}
+
+model ClientActivityEvent {
+  id          String             @id @default(cuid())
+  tenantId    String
+  clientId    String
+  actorId     String?
+  verb        ClientActivityVerb
+  summary     String
+  metadata    Json               @default("{}")
+  occurredAt  DateTime           @default(now())
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client      ClientOrganization @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  actor       User?              @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, clientId, occurredAt])
+  @@index([tenantId, verb])
+  @@index([actorId])
+}
+
+model ClientNote {
+  id         String             @id @default(cuid())
+  tenantId   String
+  clientId   String
+  authorId   String?
+  title      String?
+  body       String             @db.Text
+  visibility String             @default("internal")
+  metadata   Json               @default("{}")
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client     ClientOrganization @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  author     User?              @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, clientId, createdAt])
+  @@index([tenantId, authorId])
+}
+
+model ClientComment {
+  id          String             @id @default(cuid())
+  tenantId    String
+  clientId    String
+  parentId    String?
+  authorId    String?
+  body        String             @db.Text
+  mentions    Json               @default("[]")
+  attachments Json               @default("[]")
+  resolvedAt  DateTime?
+  resolvedById String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client      ClientOrganization @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  author      User?              @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  parent      ClientComment?     @relation("ClientCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     ClientComment[]    @relation("ClientCommentThread")
+
+  @@index([tenantId, clientId, createdAt])
+  @@index([parentId])
+  @@index([resolvedAt])
+}
+
+model ClientFile {
+  id         String             @id @default(cuid())
+  tenantId   String
+  clientId   String
+  name       String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String
+  uploadedById String?
+  createdAt  DateTime           @default(now())
+  client     ClientOrganization @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, clientId, createdAt])
+  @@index([storageKey])
+}
+
+model ClientApproval {
+  id          String             @id @default(cuid())
+  tenantId    String
+  clientId    String
+  title       String
+  status      String             @default("pending")
+  requestedById String?
+  dueAt       DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  client      ClientOrganization @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, clientId, status])
+}
+
+model ClientTask {
+  id        String             @id @default(cuid())
+  tenantId  String
+  clientId  String
+  title     String
+  status    String             @default("open")
+  dueAt     DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  client    ClientOrganization @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, clientId, status])
+}
+
+model ClientRequirement {
+  id        String             @id @default(cuid())
+  tenantId  String
+  clientId  String
+  title     String
+  status    String             @default("pending")
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  client    ClientOrganization @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, clientId, status])
+}
+
+model ClientProject {
+  id        String             @id @default(cuid())
+  tenantId  String
+  clientId  String
+  name      String
+  status    String             @default("active")
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  client    ClientOrganization @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, clientId, status])
+}
+
+model ClientTag {
+  id          String                @id @default(cuid())
+  tenantId    String
+  name        String
+  color       String?
+  createdAt   DateTime              @default(now())
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignments ClientTagAssignment[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model ClientTagAssignment {
+  clientId String
+  tagId    String
+  client   ClientOrganization @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  tag      ClientTag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([clientId, tagId])
+  @@index([tagId])
+}
+
+model ClientCustomFieldValue {
+  id        String             @id @default(cuid())
+  tenantId  String
+  clientId  String
+  fieldKey  String
+  value     Json
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  client    ClientOrganization @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, clientId, fieldKey])
+  @@index([tenantId, fieldKey])
 }

@@ -2,7 +2,15 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { applySecurityHeaders } from "@/server/security/headers";
 
-const protectedRoutes = ["/admin", "/client", "/api/tenants", "/api/auth/change-password", "/api/auth/logout-all-devices", "/api/auth/refresh-session"];
+const protectedRoutes = [
+  "/admin",
+  "/client",
+  "/api/crm",
+  "/api/tenants",
+  "/api/auth/change-password",
+  "/api/auth/logout-all-devices",
+  "/api/auth/refresh-session",
+];
 
 export default auth((request) => {
   const { nextUrl } = request;
@@ -24,4 +32,3 @@ export const config = {
     "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\..*).*)",
   ],
 };
-

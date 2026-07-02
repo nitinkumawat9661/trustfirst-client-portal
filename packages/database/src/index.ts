@@ -16,6 +16,10 @@ export type { Prisma, PrismaClient } from "@prisma/client";
 export {
   AuditAction,
   AuthTokenType,
+  ClientActivityVerb,
+  ClientLifecycleStage,
+  ClientStatus,
+  ContactInvitationStatus,
   TenantInvitationStatus,
   TenantMemberStatus,
   TenantStatus,
