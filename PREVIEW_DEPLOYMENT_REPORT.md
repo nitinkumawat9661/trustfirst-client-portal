@@ -17,6 +17,8 @@
 - `vercel env ls preview` returned no project environment variables.
 - `npm run deploy:env` failed because `DATABASE_URL` and `AUTH_SECRET` are missing.
 - Preview `DATABASE_URL` could not be confirmed as non-production because it is not configured.
+- Sprint 23 attempted to provision Neon through Vercel Marketplace, but Vercel requires Marketplace terms acceptance for Neon before provisioning.
+- Sprint 23 attempted to set `AUTH_SECRET`, `AUTH_URL`, and `NEXTAUTH_URL` through Vercel CLI and REST API. CLI preview env writes failed due branch/project state, and REST writes returned `403 forbidden`.
 
 ## Migration Status
 
@@ -104,6 +106,7 @@ Checked routes:
 - Manual browser QA could not verify authenticated, tenant-aware business flows.
 - Vercel deployment protection currently redirects public smoke routes.
 - Payment gateways remain contract-only, as required.
+- See `BLOCKER_REPORT.md` for Sprint 23 database and preview environment access blockers.
 
 ## Demo Readiness Decision
 
