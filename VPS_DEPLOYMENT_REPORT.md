@@ -2,13 +2,17 @@
 
 ## Status
 
-Sprint 29 deployment retry is blocked before host-key collection because `.env.deploy.local` is missing. Codex cannot safely identify `DEPLOY_HOST`, collect the current server key, compare a trusted fingerprint, repair `known_hosts`, or run isolated deployment.
+Sprint 30 created `.env.deploy.local` and collected safe host-key evidence for the authorized old shared VPS. Deployment is still blocked because the current server host key was not collected as usable key material and no trusted fingerprint gate is configured.
 
 ## Shared Old VPS Deployment
 
 - Old VPS used: no
-- Host masked: not configured
+- `.env.deploy.local` created: yes
+- Host masked: 45.10.x.x
 - Host-key status: not verified
+- Key path exists: yes
+- Current fingerprint collected: no
+- Trusted fingerprint configured: no
 - Known_hosts repaired: no
 - Backup path: not created
 - App path: `/var/www/trustfirst-client-portal`
@@ -34,13 +38,21 @@ Host-key verification command:
 npm run vps:host-key
 ```
 
-Result: blocked because `.env.deploy.local` is missing.
+Result: blocked because `ssh-keyscan` did not return a usable host key.
+
+Evidence:
+
+- DNS/IP result: `45.10.21.141 (IPv4)`
+- Existing known_hosts fingerprints collected: yes
+- Current ssh-keyscan fingerprint collected: no
+- ssh-keyscan error: `choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com`
+- Strict SSH verification: connection timed out
 
 Because host identity is not verified, no `known_hosts` repair, bootstrap, database provisioning, deployment, migration, seed, smoke, or authenticated QA was attempted.
 
 ## Environment
 
-- `.env.deploy.local`: missing
+- `.env.deploy.local`: created locally and ignored by git
 - `DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM`: required
 - `DEPLOY_ALLOW_SHARED_OLD_VPS`: required
 - `DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256` or `DEPLOY_HOST_KEY_VERIFIED=yes`: required

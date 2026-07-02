@@ -137,8 +137,13 @@ function normalizeRemotePath(value) {
 }
 
 export function resolveKeyPath(keyPath) {
-  if (keyPath.startsWith("~")) return path.join(process.env.USERPROFILE || process.env.HOME || "", keyPath.slice(1));
-  return path.resolve(repoRoot, keyPath);
+  const expanded = expandEnvironmentPath(keyPath);
+  if (expanded.startsWith("~")) return path.join(process.env.USERPROFILE || process.env.HOME || "", expanded.slice(1));
+  return path.isAbsolute(expanded) ? expanded : path.resolve(repoRoot, expanded);
+}
+
+function expandEnvironmentPath(value) {
+  return String(value).replace(/%([^%]+)%/g, (_, name) => process.env[name] ?? `%${name}%`);
 }
 
 export function sshBaseArgs(config, options = {}) {

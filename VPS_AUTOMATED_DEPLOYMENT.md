@@ -2,7 +2,7 @@
 
 ## Status
 
-Automation is prepared for the authorized old shared VPS, but deployment must stop until `.env.deploy.local` exists and strict SSH host-key verification succeeds.
+Automation is prepared for the authorized old shared VPS, but deployment must stop until strict SSH host-key verification succeeds.
 
 The old shared VPS may be used only as an isolated TrustFirst section. Do not overwrite, delete, restart, or modify the existing CafeLuxe app, database, Nginx config, PM2 process, or files.
 
@@ -106,9 +106,13 @@ Secrets are written only to the VPS env file and are never printed by the script
 
 ## Shared Old VPS Deployment
 
-- Old VPS used: no, currently blocked by missing `.env.deploy.local`.
-- Host masked: not configured.
+- Old VPS used: no, currently blocked by unverified host key.
+- `.env.deploy.local` created: yes.
+- Host masked: `45.10.x.x`.
 - Host-key status: not verified.
+- Key path exists: yes.
+- Current fingerprint collected: no.
+- Trusted fingerprint configured: no.
 - Known_hosts repaired: no.
 - Backup path: not created.
 - App path: `/var/www/trustfirst-client-portal`.
@@ -130,6 +134,8 @@ If OpenSSH reports `REMOTE HOST IDENTIFICATION HAS CHANGED`, do not deploy. Veri
 npm run vps:host-key
 npm run vps:validate
 ```
+
+If `ssh-keyscan` fails with `choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com`, collect the trusted host key using an updated OpenSSH client or from the VPS provider console before setting the trusted gate.
 
 ## Deployment Output
 
