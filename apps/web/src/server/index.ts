@@ -3,6 +3,7 @@ export * from "./application/service";
 export * from "./auth";
 export * from "./authorization/authorization";
 export * from "./business-platform";
+export * from "./billing";
 export * from "./commercial-documents";
 export * from "./commercial-platform";
 export * from "./crm";

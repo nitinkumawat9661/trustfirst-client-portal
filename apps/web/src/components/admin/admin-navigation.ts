@@ -1,6 +1,7 @@
 import {
   Bell,
   Building2,
+  CreditCard,
   FileStack,
   FileText,
   LayoutDashboard,
@@ -29,6 +30,12 @@ export const adminNavigation = [
     label: "Documents",
     description: "Commercial document engine",
     icon: FileStack,
+  },
+  {
+    href: "/admin/billing",
+    label: "Billing",
+    description: "Invoice and payment foundation",
+    icon: CreditCard,
   },
   {
     href: "/client",

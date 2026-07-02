@@ -58,6 +58,9 @@ enum AuditAction {
   AUTH_EMAIL_VERIFIED
   TENANT_SWITCHED
   PERMISSION_DENIED
+  BILLING_INVOICE_CREATED
+  BILLING_INVOICE_ISSUED
+  BILLING_PAYMENT_RECORDED
 }
 
 enum ClientLifecycleStage {
@@ -208,6 +211,44 @@ enum CommercialDocumentTimelineVerb {
   ATTACHED
 }
 
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+  ARCHIVED
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+  CARD
+  OTHER
+}
+
+enum PaymentProvider {
+  RAZORPAY
+  STRIPE
+  PHONEPE
+  UPI_QR
+  MANUAL
+}
+
+enum BillingTimelineVerb {
+  INVOICE_CREATED
+  INVOICE_UPDATED
+  INVOICE_ISSUED
+  INVOICE_VOIDED
+  INVOICE_ARCHIVED
+  PAYMENT_RECORDED
+  COMMENTED
+  ATTACHED
+}
+
 model User {
   id                 String               @id @default(cuid())
   name               String?
@@ -245,6 +286,8 @@ model User {
   ownedCommercialDocuments CommercialDocument[] @relation("CommercialDocumentOwner")
   approvedCommercialDocuments CommercialDocument[] @relation("CommercialDocumentApprover")
   rejectedCommercialDocuments CommercialDocument[] @relation("CommercialDocumentRejector")
+  ownedInvoices     Invoice[]             @relation("InvoiceOwner")
+  invoicePayments   PaymentRecord[]       @relation("PaymentRecorder")
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
@@ -329,6 +372,10 @@ model Tenant {
   projects        Project[]
   commercialDocuments CommercialDocument[]
   commercialDocumentTimelineEvents CommercialDocumentTimelineEvent[]
+  billingProfiles BillingProfile[]
+  invoices        Invoice[]
+  payments        PaymentRecord[]
+  billingTimelineEvents BillingTimelineEvent[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -551,6 +598,8 @@ model ClientOrganization {
   requirementRecords Requirement[]
   projectRecords     Project[]
   commercialDocuments CommercialDocument[]
+  billingProfiles BillingProfile[]
+  invoices        Invoice[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, lifecycleStage])
@@ -812,6 +861,7 @@ model Requirement {
   comments        RequirementComment[]
   notifications   RequirementNotification[]
   commercialDocuments CommercialDocument[]
+  invoices        Invoice[]
 
   @@index([tenantId, status])
   @@index([tenantId, clientId])
@@ -955,6 +1005,7 @@ model Project {
   notifications   ProjectNotification[]
   labels          ProjectLabel[]
   commercialDocuments CommercialDocument[]
+  invoices        Invoice[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, status])
@@ -1000,6 +1051,8 @@ model CommercialDocument {
   timeline            CommercialDocumentTimelineEvent[]
   comments            CommercialDocumentComment[]
   attachments         CommercialDocumentAttachment[]
+  invoices            Invoice[]
+  receiptPayments     PaymentRecord[] @relation("PaymentReceiptDocument")
 
   @@unique([tenantId, documentNumber])
   @@index([tenantId, type, status])
@@ -1079,6 +1132,152 @@ model CommercialDocumentAttachment {
 
   @@index([tenantId, documentId, createdAt])
   @@index([tenantId, version])
+  @@index([storageKey])
+}
+
+model BillingProfile {
+  id            String             @id @default(cuid())
+  tenantId      String
+  clientId      String
+  legalName     String
+  billingEmail  String?
+  taxIdentifier String?
+  address       Json               @default("{}")
+  currency      String             @default("INR")
+  paymentTerms  Json               @default("{}")
+  metadata      Json               @default("{}")
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client        ClientOrganization @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, clientId])
+  @@index([tenantId, billingEmail])
+}
+
+model Invoice {
+  id                   String              @id @default(cuid())
+  tenantId             String
+  invoiceNumber        String
+  status               InvoiceStatus       @default(DRAFT)
+  title                String
+  summary              String?             @db.Text
+  clientId             String?
+  projectId            String?
+  requirementId        String?
+  commercialDocumentId String?
+  ownerId              String?
+  currency             String              @default("INR")
+  totalAmountCents     Int
+  paidAmountCents      Int                 @default(0)
+  dueAt                DateTime?
+  issuedAt             DateTime?
+  paidAt               DateTime?
+  voidedAt             DateTime?
+  archivedAt           DateTime?
+  paymentTerms         Json                @default("{}")
+  branding             Json                @default("{}")
+  lineItems            Json                @default("[]")
+  metadata             Json                @default("{}")
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  tenant               Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client               ClientOrganization? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  project              Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  requirement          Requirement?        @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  commercialDocument   CommercialDocument? @relation(fields: [commercialDocumentId], references: [id], onDelete: SetNull)
+  owner                User?               @relation("InvoiceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  payments             PaymentRecord[]
+  timeline             BillingTimelineEvent[]
+  comments             InvoiceComment[]
+  attachments          InvoiceAttachment[]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, clientId])
+  @@index([tenantId, projectId])
+  @@index([tenantId, requirementId])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, dueAt])
+  @@index([tenantId, updatedAt])
+}
+
+model PaymentRecord {
+  id                String              @id @default(cuid())
+  tenantId          String
+  invoiceId         String
+  amountCents       Int
+  mode              PaymentMode
+  provider          PaymentProvider     @default(MANUAL)
+  reference         String?
+  receiptDocumentId String?
+  recordedById      String?
+  receivedAt        DateTime
+  notes             String?             @db.Text
+  metadata          Json                @default("{}")
+  createdAt         DateTime            @default(now())
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice           Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  receiptDocument   CommercialDocument? @relation("PaymentReceiptDocument", fields: [receiptDocumentId], references: [id], onDelete: SetNull)
+  recordedBy        User?               @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, invoiceId, receivedAt])
+  @@index([tenantId, provider])
+  @@index([tenantId, mode])
+  @@index([receiptDocumentId])
+}
+
+model BillingTimelineEvent {
+  id         String              @id @default(cuid())
+  tenantId   String
+  invoiceId  String
+  actorId    String?
+  verb       BillingTimelineVerb
+  summary    String
+  metadata   Json                @default("{}")
+  occurredAt DateTime            @default(now())
+  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice    Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, invoiceId, occurredAt])
+  @@index([tenantId, verb])
+  @@index([actorId])
+}
+
+model InvoiceComment {
+  id           String           @id @default(cuid())
+  tenantId     String
+  invoiceId    String
+  parentId     String?
+  authorId     String?
+  body         String           @db.Text
+  mentions     Json             @default("[]")
+  resolvedAt   DateTime?
+  resolvedById String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  invoice      Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  parent       InvoiceComment?  @relation("InvoiceCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      InvoiceComment[] @relation("InvoiceCommentThread")
+
+  @@index([tenantId, invoiceId, createdAt])
+  @@index([parentId])
+  @@index([resolvedAt])
+}
+
+model InvoiceAttachment {
+  id           String   @id @default(cuid())
+  tenantId     String
+  invoiceId    String
+  name         String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String
+  uploadedById String?
+  createdAt    DateTime @default(now())
+  invoice      Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, invoiceId, createdAt])
   @@index([storageKey])
 }
 

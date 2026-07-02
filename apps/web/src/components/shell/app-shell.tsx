@@ -1,5 +1,5 @@
 import { Badge } from "@trustfirst/ui";
-import { Building2, FileText, LayoutDashboard, ShieldCheck, UsersRound } from "lucide-react";
+import { Building2, CreditCard, FileText, LayoutDashboard, ShieldCheck, UsersRound } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -16,6 +16,7 @@ const nav = {
   client: [
     { href: "/client", label: "Overview", icon: LayoutDashboard },
     { href: "/client/documents", label: "Documents", icon: FileText },
+    { href: "/client/billing", label: "Billing", icon: CreditCard },
     { href: "/admin", label: "Admin view", icon: Building2 },
   ],
 };
