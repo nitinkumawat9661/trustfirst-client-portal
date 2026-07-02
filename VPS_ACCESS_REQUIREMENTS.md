@@ -2,6 +2,8 @@
 
 Codex cannot deploy until the authorized old shared VPS host/user/key are configured and strict SSH host-key verification succeeds.
 
+Sprint 33 generated a dedicated TrustFirst deploy key locally. The public key request is documented in `VPS_SSH_ACCESS_REQUEST.md`; the private key is not committed.
+
 ## Required Access
 
 Provide a `.env.deploy.local` file using `.env.deploy.example` with:
@@ -49,6 +51,7 @@ The bootstrap script checks or installs:
 - Do not use `StrictHostKeyChecking=no`.
 - Do not use production databases.
 - Do not commit `.env.deploy.local` or `/etc/trustfirst-client-portal.env`.
+- Do not commit private SSH keys.
 
 ## Shared Old VPS Deployment
 
@@ -63,6 +66,7 @@ The bootstrap script checks or installs:
 - PM2 process: `trustfirst-client-portal`.
 - CafeLuxe untouched: yes.
 - Final demo readiness: blocked until the host key is verified and `.env.deploy.local` exists.
+- SSH access request: see `VPS_SSH_ACCESS_REQUEST.md`.
 
 ## First Command After Access Is Added
 

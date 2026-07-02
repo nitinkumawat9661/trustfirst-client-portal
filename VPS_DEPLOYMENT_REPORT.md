@@ -2,7 +2,7 @@
 
 ## Status
 
-Sprint 32 configured the trusted ED25519 host fingerprint and repaired `known_hosts` safely. Deployment is still blocked because strict SSH authentication fails for `root@45.10.21.141` with the available private keys.
+Sprint 33 attempted safe SSH authorization discovery after host-key verification. No existing user/key combination authorized successfully. A dedicated TrustFirst deploy key was generated locally and `VPS_SSH_ACCESS_REQUEST.md` was created for the VPS owner/provider.
 
 ## Shared Old VPS Deployment
 
@@ -17,6 +17,10 @@ Sprint 32 configured the trusted ED25519 host fingerprint and repaired `known_ho
 - Known_hosts repaired: yes
 - Backup path: `C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260702181522`
 - Strict SSH validation passed: no
+- SSH auth probes attempted: yes
+- Working user/key found: no
+- Deploy key generated: yes
+- Public key request created: yes
 - App path: `/var/www/trustfirst-client-portal`
 - Env path: `/etc/trustfirst-client-portal.env`
 - DB name: `trustfirst_demo`
@@ -40,7 +44,7 @@ Host-key verification command:
 npm run vps:host-key
 ```
 
-Result: trusted fingerprint matched and `known_hosts` was repaired, but strict SSH authentication failed with `Permission denied (publickey)`.
+Result: trusted fingerprint matched and `known_hosts` was repaired, but no existing local key authorized any tested user.
 
 Evidence:
 
@@ -52,7 +56,7 @@ Evidence:
 - Current ECDSA fingerprint: `SHA256:xTzBtiL+q/EsSR3/2buZioRuZl/z64QeXJJjvJe86vA`
 - Windows ssh-keyscan error: `choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com`
 - Git for Windows ssh-keyscan: succeeded once; later repeat scans timed out
-- Strict SSH validation: not passed; both `cafeluxe_vps_ed25519` and `id_ed25519` were rejected for `root`
+- Strict SSH validation: not passed; existing keys were rejected or timed out for tested users
 
 Because strict SSH validation failed, no VPS validation, bootstrap, database provisioning, deployment, migration, seed, smoke, or authenticated QA was attempted.
 
@@ -65,6 +69,7 @@ Because strict SSH validation failed, no VPS validation, bootstrap, database pro
 - `DEPLOY_APP_PORT`: must be `3010`
 - Deployment env file on VPS: not created
 - Storage directory on VPS: not created
+- Access request: `VPS_SSH_ACCESS_REQUEST.md`
 
 ## Database
 

@@ -130,7 +130,14 @@ Secrets are written only to the VPS env file and are never printed by the script
 - Authenticated QA passed: no.
 - Final demo readiness: blocked.
 
-The current blocker is SSH authorization: strict host checking accepts the verified key, but `root@45.10.21.141` rejects both available private keys with `Permission denied (publickey)`.
+The current blocker is SSH authorization: strict host checking accepts the verified key, but no existing local key/user combination authorized successfully. A dedicated deploy public key request is available in `VPS_SSH_ACCESS_REQUEST.md`.
+
+Once the VPS owner adds the requested key, update local `.env.deploy.local` only:
+
+```bash
+DEPLOY_USER=trustfirst
+DEPLOY_KEY_PATH=%USERPROFILE%\.ssh\trustfirst_vps_ed25519
+```
 
 If OpenSSH reports `REMOTE HOST IDENTIFICATION HAS CHANGED`, do not deploy. Verify the fingerprint out-of-band, set the trusted gate in `.env.deploy.local`, then let the verification script repair `known_hosts` safely:
 

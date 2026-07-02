@@ -2,7 +2,7 @@
 
 ## Shared Old VPS Deployment Blocker
 
-Sprint 32 configured the trusted ED25519 host fingerprint and repaired `known_hosts`, but deployment remains blocked because strict SSH authentication fails for `root@45.10.21.141` with the available private keys.
+Sprint 33 probed existing local SSH users/keys with strict host checking. No existing key/user combination authorized successfully, so a dedicated TrustFirst deploy key was generated and a public-key access request was created.
 
 No VPS files were changed. No remote database was created. No secrets were committed. No CafeLuxe process, files, database, or Nginx config were modified.
 
@@ -19,6 +19,10 @@ No VPS files were changed. No remote database was created. No secrets were commi
 - Known_hosts repaired: yes
 - Known_hosts backup: `C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260702181522`
 - Strict SSH validation passed: no
+- SSH auth probes attempted: yes
+- Working user/key found: no
+- Deploy key generated: yes
+- Public key request created: yes
 - App path: `/var/www/trustfirst-client-portal`
 - Env path: `/etc/trustfirst-client-portal.env`
 - DB name: `trustfirst_demo`
@@ -34,19 +38,16 @@ No VPS files were changed. No remote database was created. No secrets were commi
 
 ## Checks Performed
 
-Host-key verification command:
+SSH authorization probes:
 
-```bash
-npm run vps:host-key
-```
+Users tested: `root`, `ubuntu`, `deploy`, `admin`, `nitin`, `trustfirst`, `cafeluxe`.
 
-Result:
+Keys tested:
 
-```text
-root@45.10.21.141: Permission denied (publickey).
-```
+- `%USERPROFILE%\.ssh\cafeluxe_vps_ed25519`
+- `%USERPROFILE%\.ssh\id_ed25519`
 
-`VPS_HOST_KEY_VERIFICATION.md` was generated with decision `trusted fingerprint matched; strict SSH authentication failed`.
+Result: no authorized SSH login found. Several probes reached SSH and failed with `Permission denied (publickey)`; later probes timed out on port `22`.
 
 Evidence collected:
 
@@ -58,14 +59,15 @@ Evidence collected:
 - Current RSA fingerprint: `SHA256:U/yYcVMljDyvORobFkagh5xyj+XmVLeed8MQt/MlwmY`
 - Current ECDSA fingerprint: `SHA256:xTzBtiL+q/EsSR3/2buZioRuZl/z64QeXJJjvJe86vA`
 - ssh-keyscan error: `choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com`
-- Strict SSH result: host key accepted, authentication failed with `Permission denied (publickey)`
-- Fallback private key check: `~/.ssh/id_ed25519` also failed with `Permission denied (publickey)`
+- Strict SSH result: host key accepted, authentication failed or timed out during user/key probes
+- Fallback private key check: `~/.ssh/id_ed25519` did not authorize any tested user
+- New deploy key public request: `VPS_SSH_ACCESS_REQUEST.md`
 
 ## Required Manual Verification
 
 Codex must not bypass this with `StrictHostKeyChecking=no`.
 
-Before deployment can continue, the VPS owner/provider must provide SSH access that authorizes the configured user/key, or provide the correct `DEPLOY_USER` and private key for this VPS. The trusted fingerprint gate is already configured locally:
+Before deployment can continue, the VPS owner/provider must add the public key from `VPS_SSH_ACCESS_REQUEST.md` to an authorized deploy user, preferably `trustfirst` or `deploy`. The trusted fingerprint gate is already configured locally:
 
 ```bash
 DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM=yes
@@ -76,6 +78,8 @@ DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256=SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtW
 Then run:
 
 ```bash
+DEPLOY_USER=trustfirst
+DEPLOY_KEY_PATH=%USERPROFILE%\.ssh\trustfirst_vps_ed25519
 npm run vps:host-key
 npm run vps:validate
 ```
