@@ -18,6 +18,8 @@
     "deploy:migration-check": "node scripts/migration-safety.mjs",
     "deploy:smoke": "node scripts/smoke-test.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
+    "seed:manglam-demo": "node scripts/seed-manglam-demo.mjs",
+    "reset:manglam-demo": "node scripts/seed-manglam-demo.mjs --reset",
     "db:generate": "npm run db:generate --workspace @trustfirst/database",
     "db:migrate": "npm run db:migrate --workspace @trustfirst/database",
     "db:studio": "npm run db:studio --workspace @trustfirst/database"
