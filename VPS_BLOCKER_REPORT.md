@@ -1,102 +1,73 @@
-# VPS Staging Deployment Blocker
+# VPS Blocker Report
 
-## Summary
+## Shared Old VPS Deployment Blocker
 
-Sprint 26 cannot deploy the Manglam demo to a VPS because no usable, authorized VPS SSH target is available in the current environment.
+Sprint 28 cannot deploy TrustFirst to the authorized old shared VPS yet because strict SSH host-key verification fails for the previously discovered VPS IP.
 
-No VPS files were changed. No remote database was created. No secrets were committed. No production database was used.
+No VPS files were changed. No remote database was created. No secrets were committed. No CafeLuxe process, files, database, or Nginx config were modified.
 
-## Access Inspection Performed
+## Status
 
-Commands/checks run:
+- Shared old VPS used: no
+- Host: 45.10.x.x
+- Host-key status: blocked - remote host identification changed
+- App path: `/var/www/trustfirst-client-portal`
+- Env path: `/etc/trustfirst-client-portal.env`
+- DB name: `trustfirst_demo`
+- DB user: `trustfirst_demo`
+- App port: `3010`
+- PM2 process: `trustfirst-client-portal`
+- CafeLuxe untouched: yes
+- Migrations applied: no
+- Seed completed: no
+- Smoke passed: no
+- Authenticated QA passed: no
+- Final demo readiness: BLOCKED
 
-```bash
-ssh
-scp
-git remote -v
-gh repo view --json nameWithOwner,sshUrl,url
-vercel --version
-Get-ChildItem ~/.ssh
-Get-Content ~/.ssh/known_hosts
-rg "ssh|vps|server|host|domain|pm2|nginx|caddy|/var/www|trustfirst-client-portal.env"
-```
+## Checks Performed
 
-Findings:
-
-- SSH and SCP are installed.
-- The GitHub repo is `nitinkumawat9661/trustfirst-client-portal`.
-- No `~/.ssh/config` file exists.
-- No `SSH_HOST`, `VPS_HOST`, `DEPLOY_HOST`, `SERVER_HOST`, or domain-specific deployment variables are available in the shell.
-- SSH keys exist locally, but their public key comments indicate prior CafeLuxe VPS usage, not a TrustFirst/Manglam staging target:
-  - `id_ed25519.pub`
-  - `cafeluxe_vps_ed25519.pub`
-- Known hosts include:
-  - `github.com`
-  - `45.10.21.141`
-  - `cafeluxesite.in`
-
-## Read-Only SSH Probes Attempted
-
-Read-only `BatchMode` SSH probes were attempted against the known non-TrustFirst host/IP with common usernames and existing keys:
+Known host lookup:
 
 ```bash
-ssh -o BatchMode=yes -o ConnectTimeout=6 -i ~/.ssh/id_ed25519 root@45.10.21.141 "printf 'ok '; hostname; uname -srm"
-ssh -o BatchMode=yes -o ConnectTimeout=6 -i ~/.ssh/cafeluxe_vps_ed25519 root@45.10.21.141 "printf 'ok '; hostname; uname -srm"
-ssh -o BatchMode=yes -o ConnectTimeout=6 -i ~/.ssh/id_ed25519 ubuntu@45.10.21.141 "printf 'ok '; hostname; uname -srm"
-ssh -o BatchMode=yes -o ConnectTimeout=6 -i ~/.ssh/cafeluxe_vps_ed25519 ubuntu@45.10.21.141 "printf 'ok '; hostname; uname -srm"
-ssh -o BatchMode=yes -o ConnectTimeout=6 -i ~/.ssh/id_ed25519 deploy@45.10.21.141 "printf 'ok '; hostname; uname -srm"
-ssh -o BatchMode=yes -o ConnectTimeout=6 -i ~/.ssh/cafeluxe_vps_ed25519 deploy@45.10.21.141 "printf 'ok '; hostname; uname -srm"
-ssh -o BatchMode=yes -o ConnectTimeout=6 -i ~/.ssh/id_ed25519 nitin@45.10.21.141 "printf 'ok '; hostname; uname -srm"
-ssh -o BatchMode=yes -o ConnectTimeout=6 -i ~/.ssh/cafeluxe_vps_ed25519 nitin@45.10.21.141 "printf 'ok '; hostname; uname -srm"
+ssh-keygen -F 45.10.21.141
 ```
 
-Results:
+Result:
 
-- `45.10.21.141` returned remote host identification changed warnings for several user/key combinations.
-- Several probes timed out.
-- `cafeluxesite.in` probes timed out.
-- No successful SSH session was established.
-- The discovered host appears related to CafeLuxe, not an authorized TrustFirst/Manglam staging VPS.
+- `45.10.21.141` exists in local `known_hosts`.
+- Entries were found on lines 3, 4, and 5.
 
-## Missing Access
-
-To complete Sprint 26, Codex needs one authorized VPS target with:
-
-- SSH hostname or IP.
-- SSH username.
-- Usable SSH key or password/access method.
-- Confirmation that the server is intended for TrustFirst/Manglam staging.
-- Optional domain/subdomain to use for `AUTH_URL` and reverse proxy.
-
-## Why Deployment Cannot Proceed
-
-Deploying to `45.10.21.141` or `cafeluxesite.in` would be unsafe because:
-
-- The keys and host names are labeled for CafeLuxe, not this project.
-- SSH access did not succeed.
-- Host key mismatch warnings indicate the known host entry no longer matches the remote host.
-- No instruction explicitly authorizes that host for the TrustFirst/Manglam demo.
-
-## Next Steps Once VPS Access Exists
-
-Use the runbook in `VPS_STAGING_DEPLOYMENT.md`:
+Strict read-only SSH probe:
 
 ```bash
-ssh <user>@<vps-host>
-node -v
-npm -v
-psql --version
-git --version
+ssh -p 22 -i ~/.ssh/cafeluxe_vps_ed25519 -o BatchMode=yes -o ConnectTimeout=8 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes root@45.10.21.141 "hostname && uname -a"
 ```
 
-Then provision:
+Result:
 
-- `/var/www/trustfirst-client-portal`
-- `/etc/trustfirst-client-portal.env`
-- PostgreSQL database `trustfirst_demo`
-- PostgreSQL user `trustfirst_demo`
-- `/var/www/trustfirst-client-portal/storage/uploads`
-- PM2 or systemd service
-- Nginx or Caddy reverse proxy
+```text
+WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
+The fingerprint for the ED25519 key sent by the remote host is SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0.
+Offending ECDSA key in C:\Users\DELL/.ssh/known_hosts:5
+Host key for 45.10.21.141 has changed and you have requested strict checking.
+Host key verification failed.
+```
 
-After access is available, rerun Sprint 26 from Task 2.
+## Required Manual Verification
+
+Codex must not bypass this with `StrictHostKeyChecking=no`.
+
+Before deployment can continue, the VPS owner must verify the new fingerprint out-of-band. If the fingerprint is expected, run:
+
+```bash
+ssh-keygen -F 45.10.21.141
+ssh-keygen -R 45.10.21.141
+ssh-keyscan -p 22 45.10.21.141 >> ~/.ssh/known_hosts
+ssh -p 22 -i ~/.ssh/cafeluxe_vps_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes root@45.10.21.141 "hostname && uname -a"
+```
+
+Only continue if the final strict SSH command succeeds and the server owner confirms this is the authorized shared old VPS for the TrustFirst/Manglam demo.
+
+## Additional Missing Deployment Input
+
+`.env.deploy.local` is not present in the repository workspace. After the host key is verified, create it from `.env.deploy.example` with the authorized host, user, key path, optional domain, and required shared VPS confirmations.

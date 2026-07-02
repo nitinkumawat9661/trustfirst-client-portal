@@ -2,29 +2,49 @@
 
 ## Status
 
-VPS one-command deployment automation has been prepared. Deployment was not performed because no usable, authorized VPS SSH target is available in the current environment.
+Sprint 28 deployment is blocked before bootstrap because strict SSH host-key verification fails for the authorized old shared VPS target. Deployment automation has been updated to support isolated shared-VPS deployment only when both confirmation flags are present.
 
-## Deployment Target
+## Shared Old VPS Deployment
 
-- VPS URL: not available
-- Host: not configured
-- SSH access status: blocked
-- Server OS: not verified
-- Node version: not verified
-- PostgreSQL version: not verified
-- Git version: not verified
-- Reverse proxy: not verified
-- Domain/subdomain: not available
+- Old VPS used: no
+- Host masked: 45.10.x.x
+- Host-key status: blocked - remote host identification changed
+- App path: `/var/www/trustfirst-client-portal`
+- Env path: `/etc/trustfirst-client-portal.env`
+- DB name: `trustfirst_demo`
+- DB user: `trustfirst_demo`
+- App port: `3010`
+- PM2 process: `trustfirst-client-portal`
+- URL: not available
+- CafeLuxe untouched: yes
+- Migrations applied: no
+- Seed completed: no
+- Smoke passed: no
+- Authenticated QA passed: no
+- Final demo readiness: NOT READY FOR CLIENT DEMO
+
+## Validation Result
+
+Known host lookup found existing entries for `45.10.21.141`.
+
+Strict read-only SSH failed with:
+
+```text
+REMOTE HOST IDENTIFICATION HAS CHANGED
+Offending ECDSA key in C:\Users\DELL/.ssh/known_hosts:5
+Host key verification failed.
+```
+
+Because host identity is not clean, no bootstrap, database provisioning, deployment, migration, seed, smoke, or authenticated QA was attempted.
 
 ## Environment
 
-- Env configured: no
-- `/etc/trustfirst-client-portal.env`: not created
-- `DATABASE_URL`: not configured
-- `AUTH_SECRET`: not configured
-- `AUTH_URL`: not configured
-- Storage status: not configured
-- Upload directory: not created
+- `.env.deploy.local`: missing
+- `DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM`: required
+- `DEPLOY_ALLOW_SHARED_OLD_VPS`: required
+- `DEPLOY_APP_PORT`: must be `3010`
+- Deployment env file on VPS: not created
+- Storage directory on VPS: not created
 
 ## Database
 
@@ -36,31 +56,11 @@ VPS one-command deployment automation has been prepared. Deployment was not perf
 
 ## QA
 
-- Smoke passed: no VPS URL available
+- Smoke passed: no
 - Authenticated QA passed: no
 - Manglam demo QA passed: no
-- Final demo readiness: NOT READY FOR CLIENT DEMO
+- Final demo readiness: BLOCKED
 
 ## Blocker
 
-See `VPS_BLOCKER_REPORT.md`.
-
-Summary:
-
-- No TrustFirst/Manglam VPS host, username, or credentials are available.
-- Existing local SSH keys and known hosts appear related to CafeLuxe, not this project.
-- Read-only SSH probes to known CafeLuxe host/IP failed with host key mismatch warnings or timeouts.
-- Deploying to an unrelated or unverified host would be unsafe.
-
-## Automation Added
-
-- `.env.deploy.example`
-- `scripts/vps-validate-access.mjs`
-- `scripts/vps-bootstrap.mjs`
-- `scripts/vps-deploy.mjs`
-- `scripts/vps-smoke.mjs`
-- `scripts/vps-report.mjs`
-- `VPS_AUTOMATED_DEPLOYMENT.md`
-- `VPS_ACCESS_REQUIREMENTS.md`
-
-Run `npm run vps:validate` after `.env.deploy.local` is filled with authorized TrustFirst/Manglam VPS access.
+See `VPS_BLOCKER_REPORT.md` for the safe host-key verification and known_hosts repair commands.

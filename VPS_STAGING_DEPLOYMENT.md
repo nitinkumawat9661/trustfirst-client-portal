@@ -4,12 +4,16 @@
 
 This runbook deploys TrustFirst Client Portal as a VPS-hosted Manglam demo environment. It does not use Vercel, Neon, production client data, or live payment gateways.
 
+For Sprint 28, the authorized old shared VPS may be used only as an isolated TrustFirst section. Do not overwrite, delete, restart, or modify any existing CafeLuxe app, database, Nginx/Caddy config, PM2 process, or files.
+
 ## Required Inputs
 
 - VPS host or IP.
 - SSH username.
 - SSH key or password access.
 - Optional demo domain/subdomain.
+- Clean SSH host-key verification for the VPS.
+- `.env.deploy.local` with `DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM=yes` and `DEPLOY_ALLOW_SHARED_OLD_VPS=yes`.
 
 ## Server Requirements
 
@@ -43,6 +47,8 @@ git clone https://github.com/nitinkumawat9661/trustfirst-client-portal.git .
 npm ci
 ```
 
+Do not use any CafeLuxe path. The only approved app directory is `/var/www/trustfirst-client-portal`.
+
 ## PostgreSQL
 
 Create a VPS-only demo database:
@@ -59,6 +65,8 @@ GRANT ALL PRIVILEGES ON DATABASE trustfirst_demo TO trustfirst_demo;
 ```
 
 Never reuse a production database.
+
+The only approved demo database and database user are both `trustfirst_demo`.
 
 ## Environment File
 
@@ -135,12 +143,12 @@ npm run build
 
 ```bash
 npm install -g pm2
-pm2 start "npm run start --workspace @trustfirst/web" --name trustfirst-client-portal --env production
+PORT=3010 pm2 start "npm run start --workspace @trustfirst/web" --name trustfirst-client-portal --env production
 pm2 save
 pm2 startup
 ```
 
-Ensure the PM2 process receives `/etc/trustfirst-client-portal.env`.
+Ensure the PM2 process receives `/etc/trustfirst-client-portal.env`. Do not restart CafeLuxe PM2 processes.
 
 ## Reverse Proxy
 
@@ -154,7 +162,7 @@ server {
   client_max_body_size 25m;
 
   location / {
-    proxy_pass http://127.0.0.1:3000;
+    proxy_pass http://127.0.0.1:3010;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Host $host;
@@ -173,6 +181,39 @@ sudo certbot --nginx -d demo.example.com
 ```
 
 If no domain exists, use the VPS IP and document the lack of HTTPS/domain in `VPS_DEPLOYMENT_REPORT.md`.
+
+If no domain exists, the temporary app URL is:
+
+```text
+http://<vps-ip>:3010
+```
+
+## Shared Old VPS Deployment
+
+- Old VPS used: no, currently blocked by host-key mismatch.
+- Host masked: `45.10.x.x`.
+- Host-key status: blocked - verify fingerprint before deployment.
+- App path: `/var/www/trustfirst-client-portal`.
+- Env path: `/etc/trustfirst-client-portal.env`.
+- DB name: `trustfirst_demo`.
+- DB user: `trustfirst_demo`.
+- App port: `3010`.
+- PM2 process: `trustfirst-client-portal`.
+- CafeLuxe untouched: yes.
+- Migrations applied: no.
+- Seed completed: no.
+- Smoke passed: no.
+- Authenticated QA passed: no.
+- Final demo readiness: blocked.
+
+Safe host-key repair after out-of-band fingerprint verification:
+
+```bash
+ssh-keygen -F 45.10.21.141
+ssh-keygen -R 45.10.21.141
+ssh-keyscan -p 22 45.10.21.141 >> ~/.ssh/known_hosts
+ssh -p 22 -i ~/.ssh/cafeluxe_vps_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes root@45.10.21.141 "hostname && uname -a"
+```
 
 ## Smoke Test
 

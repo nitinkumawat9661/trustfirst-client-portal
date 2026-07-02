@@ -2,9 +2,9 @@
 
 ## Status
 
-Automation is prepared, but Codex cannot deploy until authorized VPS host, user, and key are provided.
+Automation is prepared for the authorized old shared VPS, but deployment must stop until strict SSH host-key verification succeeds.
 
-Do not use the CafeLuxe VPS or any unknown host.
+The old shared VPS may be used only as an isolated TrustFirst section. Do not overwrite, delete, restart, or modify the existing CafeLuxe app, database, Nginx config, PM2 process, or files.
 
 ## Configure Access
 
@@ -22,9 +22,11 @@ DEPLOY_USER=<ssh-user>
 DEPLOY_PORT=22
 DEPLOY_KEY_PATH=<path-to-private-key>
 DEPLOY_DOMAIN=<optional-demo-domain>
+DEPLOY_APP_PORT=3010
 DEPLOY_APP_DIR=/var/www/trustfirst-client-portal
 DEPLOY_ENV_FILE=/etc/trustfirst-client-portal.env
 DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM=yes
+DEPLOY_ALLOW_SHARED_OLD_VPS=yes
 ```
 
 `.env.deploy.local` is ignored by git and must not be committed.
@@ -69,9 +71,15 @@ The scripts refuse to continue when:
 - `DEPLOY_USER` is missing.
 - `DEPLOY_KEY_PATH` is missing or does not exist.
 - `DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM` is not `yes`.
-- Host looks like CafeLuxe known host/IP/domain.
+- `DEPLOY_ALLOW_SHARED_OLD_VPS` is not `yes`.
+- `DEPLOY_APP_DIR` is not `/var/www/trustfirst-client-portal`.
+- `DEPLOY_ENV_FILE` is not `/etc/trustfirst-client-portal.env`.
+- `DEPLOY_APP_PORT` is not `3010`.
+- TrustFirst path, env file, or PM2 process points to CafeLuxe.
+- The app port is already used by another running service.
 - SSH host key mismatch occurs.
 - The remote `DATABASE_URL` looks production-like.
+- The remote `DATABASE_URL` does not use database `trustfirst_demo` and user `trustfirst_demo`.
 - The deployment env file would live inside the git app directory.
 
 ## What Bootstrap Creates
@@ -87,11 +95,38 @@ The scripts refuse to continue when:
 
 Secrets are written only to the VPS env file and are never printed by the scripts.
 
+## Shared Old VPS Deployment
+
+- Old VPS used: no, currently blocked by host-key mismatch.
+- Host masked: `45.10.x.x`.
+- Host-key status: blocked until the VPS owner verifies the new fingerprint.
+- App path: `/var/www/trustfirst-client-portal`.
+- Env path: `/etc/trustfirst-client-portal.env`.
+- DB name: `trustfirst_demo`.
+- DB user: `trustfirst_demo`.
+- App port: `3010`.
+- PM2 process: `trustfirst-client-portal`.
+- CafeLuxe untouched: yes.
+- Migrations applied: no.
+- Seed completed: no.
+- Smoke passed: no.
+- Authenticated QA passed: no.
+- Final demo readiness: blocked.
+
+If OpenSSH reports `REMOTE HOST IDENTIFICATION HAS CHANGED`, do not deploy. Verify the fingerprint out-of-band, then repair known_hosts safely:
+
+```bash
+ssh-keygen -F 45.10.21.141
+ssh-keygen -R 45.10.21.141
+ssh-keyscan -p 22 45.10.21.141 >> ~/.ssh/known_hosts
+ssh -p 22 -i ~/.ssh/cafeluxe_vps_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes root@45.10.21.141 "hostname && uname -a"
+```
+
 ## Deployment Output
 
 After a successful deploy:
 
 - App process runs through PM2 when available.
 - If PM2 is unavailable, a systemd service is created.
-- If `DEPLOY_DOMAIN` is present and Nginx is available, an HTTP reverse proxy is configured to `127.0.0.1:3000`.
+- If `DEPLOY_DOMAIN` is present and Nginx is available, an HTTP reverse proxy is configured to `127.0.0.1:3010`.
 - HTTPS still requires domain DNS and certificate tooling availability on the VPS.

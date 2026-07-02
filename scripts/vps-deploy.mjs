@@ -1,10 +1,13 @@
 import {
   assertNoHostKeyMismatch,
   deploymentUrl,
+  expectedSharedVps,
+  hasHostKeyMismatch,
   loadDeployConfig,
   runSsh,
   shellQuote,
   validateDeployConfig,
+  writeHostKeyBlockerReport,
 } from "./vps-utils.mjs";
 
 const config = loadDeployConfig();
@@ -14,9 +17,13 @@ const remote = `
 set -euo pipefail
 APP_DIR=${shellQuote(config.DEPLOY_APP_DIR)}
 ENV_FILE=${shellQuote(config.DEPLOY_ENV_FILE)}
+APP_PORT=${shellQuote(config.DEPLOY_APP_PORT)}
+PM2_PROCESS=${shellQuote(config.DEPLOY_PM2_PROCESS)}
 DEPLOY_DOMAIN=${shellQuote(config.DEPLOY_DOMAIN || "")}
 AUTH_URL=${shellQuote(deploymentUrl(config))}
 REPO_URL="https://github.com/nitinkumawat9661/trustfirst-client-portal.git"
+DB_NAME=${shellQuote(expectedSharedVps.dbName)}
+DB_USER=${shellQuote(expectedSharedVps.dbUser)}
 
 need_sudo() {
   if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi
@@ -25,6 +32,29 @@ need_sudo() {
 if [ ! -f "$ENV_FILE" ]; then
   echo "Missing env file: $ENV_FILE. Run npm run vps:bootstrap first." >&2
   exit 1
+fi
+
+case "$APP_DIR:$ENV_FILE:$PM2_PROCESS" in
+  *[Cc]afe[Ll]uxe*|*[Cc]afe[Ll]uxesite*)
+    echo "Refusing to deploy because TrustFirst paths/process point to CafeLuxe." >&2
+    exit 1
+    ;;
+esac
+if [ "$APP_DIR" != "/var/www/trustfirst-client-portal" ] || [ "$ENV_FILE" != "/etc/trustfirst-client-portal.env" ]; then
+  echo "Refusing non-isolated TrustFirst app/env paths." >&2
+  exit 1
+fi
+if [ "$APP_PORT" != "3010" ] || [ "$DB_NAME" != "trustfirst_demo" ] || [ "$DB_USER" != "trustfirst_demo" ]; then
+  echo "Refusing shared VPS deploy with unexpected port, database, or user." >&2
+  exit 1
+fi
+if (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null || true) | grep -Eq "[:.]$APP_PORT[[:space:]]"; then
+  if command -v pm2 >/dev/null 2>&1 && pm2 jlist 2>/dev/null | grep -q "\"name\":\"$PM2_PROCESS\""; then
+    echo "Port $APP_PORT is currently owned by TrustFirst; deploy will restart only $PM2_PROCESS."
+  else
+    echo "Refusing deployment because port $APP_PORT is already used by another service." >&2
+    exit 1
+  fi
 fi
 
 if [ -d "$APP_DIR/.git" ]; then
@@ -47,7 +77,14 @@ case "$DATABASE_URL" in
     ;;
 esac
 case "$DATABASE_URL" in
-  *trustfirst_demo*|*127.0.0.1*|*localhost*) ;;
+  *trustfirst_demo*trustfirst_demo*|*trustfirst_demo*@*trustfirst_demo*) ;;
+  *)
+    echo "DATABASE_URL must use trustfirst_demo database and trustfirst_demo user." >&2
+    exit 1
+    ;;
+esac
+case "$DATABASE_URL" in
+  *127.0.0.1*|*localhost*) ;;
   *)
     echo "DATABASE_URL must point to the local trustfirst_demo database." >&2
     exit 1
@@ -63,8 +100,8 @@ npm run seed:manglam-demo
 npm run build
 
 if command -v pm2 >/dev/null 2>&1; then
-  pm2 delete trustfirst-client-portal >/dev/null 2>&1 || true
-  pm2 start "npm run start --workspace @trustfirst/web" --name trustfirst-client-portal --time --update-env
+  pm2 delete "$PM2_PROCESS" >/dev/null 2>&1 || true
+  PORT="$APP_PORT" pm2 start "npm run start --workspace @trustfirst/web" --name "$PM2_PROCESS" --time --update-env
   pm2 save
 else
   SERVICE_FILE="/etc/systemd/system/trustfirst-client-portal.service"
@@ -77,6 +114,7 @@ After=network.target postgresql.service
 Type=simple
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$ENV_FILE
+Environment=PORT=$APP_PORT
 ExecStart=$(command -v npm) run start --workspace @trustfirst/web
 Restart=always
 RestartSec=5
@@ -96,7 +134,7 @@ server {
   server_name $DEPLOY_DOMAIN;
   client_max_body_size 25m;
   location / {
-    proxy_pass http://127.0.0.1:3000;
+    proxy_pass http://127.0.0.1:$APP_PORT;
     proxy_http_version 1.1;
     proxy_set_header Host \\$host;
     proxy_set_header X-Forwarded-Host \\$host;
@@ -112,12 +150,15 @@ NGINX
   need_sudo systemctl reload nginx
 fi
 
-SMOKE_BASE_URL="$AUTH_URL" npm run deploy:smoke || SMOKE_BASE_URL="http://127.0.0.1:3000" npm run deploy:smoke
+SMOKE_BASE_URL="$AUTH_URL" npm run deploy:smoke || SMOKE_BASE_URL="http://127.0.0.1:$APP_PORT" npm run deploy:smoke
 echo "VPS deploy completed."
 `;
 
 const result = runSsh(config, `bash -lc ${shellQuote(remote)}`, { stdio: "pipe" });
-assertNoHostKeyMismatch(result);
+if (hasHostKeyMismatch(result)) {
+  writeHostKeyBlockerReport(config, `${result.stdout ?? ""}\n${result.stderr ?? ""}`);
+  assertNoHostKeyMismatch(result);
+}
 
 if (result.status !== 0) {
   process.stderr.write(result.stderr || result.stdout || "VPS deploy failed.\n");
