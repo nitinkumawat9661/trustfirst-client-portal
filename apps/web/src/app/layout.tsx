@@ -9,6 +9,16 @@ export const metadata: Metadata = {
   },
   description: "Secure client collaboration portal for trust-first service teams.",
   applicationName: "TrustFirst Client Portal",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "TrustFirst",
+  },
+  icons: {
+    icon: "/icons/pwa-icon.svg",
+    apple: "/icons/pwa-icon.svg",
+  },
+  manifest: "/manifest.webmanifest",
   openGraph: {
     title: "TrustFirst Client Portal",
     description: "Secure client collaboration portal for trust-first service teams.",

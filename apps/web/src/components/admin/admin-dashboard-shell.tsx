@@ -18,12 +18,15 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { adminNavigation, adminQuickActions } from "./admin-navigation";
+import { OfflineSyncPanel } from "@/components/offline/offline-sync-panel";
+import type { OfflineQueueScope } from "@/lib/offline-queue";
 
 type AdminDashboardShellProps = {
   children: ReactNode;
+  offlineScope: OfflineQueueScope;
 };
 
-export function AdminDashboardShell({ children }: AdminDashboardShellProps) {
+export function AdminDashboardShell({ children, offlineScope }: AdminDashboardShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -122,6 +125,7 @@ export function AdminDashboardShell({ children }: AdminDashboardShellProps) {
         </main>
       </div>
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+      <OfflineSyncPanel scope={offlineScope} />
     </div>
   );
 }

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="TrustFirst maskable app icon placeholder">
+  <rect width="512" height="512" fill="#0f172a"/>
+  <circle cx="256" cy="256" r="188" fill="#1d4ed8"/>
+  <path d="M256 98l132 52v99c0 84-53 147-132 179-79-32-132-95-132-179v-99l132-52z" fill="#38bdf8"/>
+  <path d="M198 259l39 39 82-99" fill="none" stroke="#ffffff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
