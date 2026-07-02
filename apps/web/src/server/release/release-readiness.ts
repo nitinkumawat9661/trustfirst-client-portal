@@ -31,6 +31,8 @@ export async function releaseReadinessChecklist(input: {
   const envReady = Boolean(process.env.DATABASE_URL && process.env.AUTH_SECRET && process.env.AUTH_SECRET.length >= 32);
   const authReady = Boolean(input.activeUserId && input.tenantId);
   const hardwareReady = products > 0 && locations > 0 && customers > 0 && Boolean(hardwareSettings);
+  const localDemoActive = process.env.TRUSTFIRST_DEMO_MODE === "local";
+  const localDemoReady = localDemoActive && process.env.AUTH_URL?.startsWith("http://localhost");
   const printReady = Boolean(hardwareSettings);
   const pwaReady = true;
   const offlineReady = true;
@@ -59,6 +61,16 @@ export async function releaseReadinessChecklist(input: {
       key: "hardware-demo",
       ready: hardwareReady,
       title: "Hardware demo status",
+    },
+    {
+      description: localDemoActive
+        ? localDemoReady
+          ? "Local demo mode is active for localhost QA."
+          : "Set AUTH_URL=http://localhost:3000 for local demo QA."
+        : "Local demo mode is not active for this environment.",
+      key: "local-demo",
+      ready: !localDemoActive || Boolean(localDemoReady),
+      title: "Local demo mode",
     },
     {
       description: "Manifest and offline page are part of the application package.",

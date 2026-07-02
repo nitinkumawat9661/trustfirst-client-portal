@@ -6,8 +6,10 @@ describe("releaseReadinessChecklist", () => {
   it("projects release readiness across env, db, auth, hardware, pwa, print, and offline queue", async () => {
     const originalDatabaseUrl = process.env.DATABASE_URL;
     const originalAuthSecret = process.env.AUTH_SECRET;
+    const originalDemoMode = process.env.TRUSTFIRST_DEMO_MODE;
     process.env.DATABASE_URL = "postgresql://user:pass@localhost:5432/demo";
     process.env.AUTH_SECRET = "abcdefghijklmnopqrstuvwxyz123456";
+    delete process.env.TRUSTFIRST_DEMO_MODE;
 
     const prisma = {
       $queryRaw: async () => [{ "?column?": 1 }],
@@ -30,6 +32,7 @@ describe("releaseReadinessChecklist", () => {
       "database",
       "auth",
       "hardware-demo",
+      "local-demo",
       "pwa",
       "print",
       "offline-queue",
@@ -37,5 +40,6 @@ describe("releaseReadinessChecklist", () => {
 
     process.env.DATABASE_URL = originalDatabaseUrl;
     process.env.AUTH_SECRET = originalAuthSecret;
+    process.env.TRUSTFIRST_DEMO_MODE = originalDemoMode;
   });
 });

@@ -20,6 +20,11 @@
     "seed:demo": "node scripts/seed-demo.mjs",
     "seed:manglam-demo": "node scripts/seed-manglam-demo.mjs",
     "reset:manglam-demo": "node scripts/seed-manglam-demo.mjs --reset",
+    "demo:env": "node scripts/demo-env.mjs",
+    "demo:db": "node scripts/demo-db.mjs",
+    "demo:manglam": "node scripts/demo-manglam.mjs",
+    "demo:setup": "node scripts/demo-setup.mjs",
+    "demo:start": "node scripts/demo-start.mjs",
     "db:generate": "npm run db:generate --workspace @trustfirst/database",
     "db:migrate": "npm run db:migrate --workspace @trustfirst/database",
     "db:studio": "npm run db:studio --workspace @trustfirst/database"
