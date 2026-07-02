@@ -1,7 +1,10 @@
 import argon2 from "argon2";
-import { PrismaClient } from "@prisma/client";
+import { createRequire } from "node:module";
 import { manglamProfile, manglamSeedData } from "./manglam-demo-profile.mjs";
 
+const requireFromDatabaseWorkspace = createRequire(new URL("../packages/database/package.json", import.meta.url));
+const prismaClientPackage = requireFromDatabaseWorkspace("@prisma/client");
+const { PrismaClient } = prismaClientPackage;
 const prisma = new PrismaClient();
 const reset = process.argv.includes("--reset");
 const demoPassword =

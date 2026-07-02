@@ -11,7 +11,7 @@ import {
 import { ArrowRight, ClipboardCheck, Clock3, FileText, Save } from "lucide-react";
 import Link from "next/link";
 import { requireCurrentUser } from "@/server/auth/session";
-import { RequirementService } from "@/server/requirements";
+import { RequirementService, type RequirementDashboard } from "@/server/requirements";
 import { AppShell } from "@/components/shell/app-shell";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export default async function RequirementsDashboardPage() {
   const user = await requireCurrentUser();
   const service = new RequirementService(getPrisma());
   const context = { tenantId: user.activeTenantId ?? "public", userId: user.id };
-  const dashboard = await service.dashboard(context);
+  const dashboard: RequirementDashboard = await service.dashboard(context);
   const cards = [
     { icon: FileText, label: "Total Requirements", value: dashboard.total },
     { icon: Save, label: "Drafts", value: dashboard.drafts },
@@ -99,4 +99,3 @@ export default async function RequirementsDashboardPage() {
     </AppShell>
   );
 }
-

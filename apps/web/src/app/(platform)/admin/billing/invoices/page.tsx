@@ -2,14 +2,14 @@ import { getPrisma } from "@trustfirst/database";
 import { Badge } from "@trustfirst/ui";
 import { InvoiceList } from "@/components/billing/billing-panels";
 import { requireCurrentUser } from "@/server/auth/session";
-import { BillingService } from "@/server/billing";
+import { BillingService, type InvoiceSummary } from "@/server/billing";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminBillingInvoicesPage() {
   const user = await requireCurrentUser();
   const service = new BillingService(getPrisma());
-  const invoices = await service.listInvoices({ tenantId: user.activeTenantId ?? "public", userId: user.id });
+  const invoices: InvoiceSummary[] = await service.listInvoices({ tenantId: user.activeTenantId ?? "public", userId: user.id });
 
   return (
     <div className="space-y-6">

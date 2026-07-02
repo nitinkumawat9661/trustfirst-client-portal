@@ -18,7 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import { requireCurrentUser } from "@/server/auth/session";
-import { ProjectService } from "@/server/projects";
+import { ProjectService, type ProjectDashboard, type ProjectSummary } from "@/server/projects";
 import { AppShell } from "@/components/shell/app-shell";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ export default async function ProjectsDashboardPage() {
   const user = await requireCurrentUser();
   const service = new ProjectService(getPrisma());
   const context = { tenantId: user.activeTenantId ?? "public", userId: user.id };
-  const [projects, dashboard] = await Promise.all([
+  const [projects, dashboard]: [ProjectSummary[], ProjectDashboard] = await Promise.all([
     service.list(context),
     service.dashboard(context),
   ]);
@@ -103,4 +103,3 @@ export default async function ProjectsDashboardPage() {
     </AppShell>
   );
 }
-

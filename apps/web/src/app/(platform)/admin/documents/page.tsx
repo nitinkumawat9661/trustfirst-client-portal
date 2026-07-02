@@ -3,14 +3,14 @@ import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from
 import { FileText, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { requireCurrentUser } from "@/server/auth/session";
-import { CommercialDocumentService } from "@/server/commercial-documents";
+import { CommercialDocumentService, type CommercialDocumentSummary } from "@/server/commercial-documents";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDocumentsPage() {
   const user = await requireCurrentUser();
   const service = new CommercialDocumentService(getPrisma());
-  const documents = await service.list({
+  const documents: CommercialDocumentSummary[] = await service.list({
     tenantId: user.activeTenantId ?? "public",
     userId: user.id,
   });

@@ -4,14 +4,14 @@ import { FileText } from "lucide-react";
 import Link from "next/link";
 import { AppShell } from "@/components/shell/app-shell";
 import { requireCurrentUser } from "@/server/auth/session";
-import { CommercialDocumentService } from "@/server/commercial-documents";
+import { CommercialDocumentService, type CommercialDocumentSummary } from "@/server/commercial-documents";
 
 export const dynamic = "force-dynamic";
 
 export default async function ClientDocumentsPage() {
   const user = await requireCurrentUser();
   const service = new CommercialDocumentService(getPrisma());
-  const documents = await service.list({
+  const documents: CommercialDocumentSummary[] = await service.list({
     tenantId: user.activeTenantId ?? "public",
     userId: user.id,
   });

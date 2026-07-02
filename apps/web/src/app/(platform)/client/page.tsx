@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { requireCurrentUser } from "@/server/auth/session";
-import { ClientService } from "@/server/crm";
+import { ClientService, type ClientDashboardMetrics, type ClientSummary } from "@/server/crm";
 import { AppShell } from "@/components/shell/app-shell";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export default async function ClientPage() {
   const user = await requireCurrentUser();
   const service = new ClientService(getPrisma());
   const context = { tenantId: user.activeTenantId ?? "public", userId: user.id };
-  const [clients, metrics] = await Promise.all([
+  const [clients, metrics]: [ClientSummary[], ClientDashboardMetrics] = await Promise.all([
     service.listClients(context),
     service.getDashboard(context),
   ]);
