@@ -152,11 +152,17 @@ export class HardwareTradeService {
     const document = await this.getOrThrow(context.tenantId, documentId);
     await this.enforce(context, "hardware.sales.manage");
     if (!document.customerId) throw validation("Sale invoice draft requires a customer link.");
+    const invoiceNumber = `DRAFT-${document.documentNumber}`;
+    const existingInvoice = await this.prisma.invoice.findFirst({
+      select: { id: true },
+      where: { invoiceNumber, tenantId: context.tenantId },
+    });
+    if (existingInvoice) throw validation("Draft invoice already exists for this hardware document.");
     const invoice = await this.prisma.invoice.create({
       data: {
         clientId: document.customerId,
         currency: document.currency,
-        invoiceNumber: `DRAFT-${document.documentNumber}`,
+        invoiceNumber,
         lineItems: document.items.map((item) => ({
           description: item.description,
           quantity: item.quantity,
@@ -410,7 +416,11 @@ function managePermission(type: HardwareTradeDocumentType) {
 function taxRateFromConfig(config: Prisma.JsonValue) {
   if (typeof config === "object" && config && !Array.isArray(config) && "rateBps" in config) {
     const rate = (config as { rateBps?: unknown }).rateBps;
-    return typeof rate === "number" ? rate : 0;
+    if (rate === undefined) return 0;
+    if (typeof rate !== "number" || !Number.isInteger(rate) || rate < 0 || rate > 10_000) {
+      throw validation("GST rate must be between 0 and 10000 basis points.");
+    }
+    return rate;
   }
   return 0;
 }

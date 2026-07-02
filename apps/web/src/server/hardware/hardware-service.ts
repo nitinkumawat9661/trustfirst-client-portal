@@ -15,7 +15,7 @@ import type {
   HardwareUnitInput,
 } from "./schemas";
 import type { HardwareCsvExportContract, HardwareImportPreview, HardwareProductSummary, InventoryDashboard } from "./types";
-import type { HardwareImportSummary, HardwareOperationalDashboard } from "./types";
+import type { HardwareDemoReadiness, HardwareImportSummary, HardwareOperationalDashboard } from "./types";
 import { genericHardwareDemoData } from "./demo-data";
 
 type ActorContext = { tenantId: string; userId: string };
@@ -136,6 +136,10 @@ export class HardwareService {
     if (await this.repository.findProductBySku(context.tenantId, input.sku)) {
       throw validation("Product SKU already exists for this tenant.");
     }
+    if (input.barcode && await this.repository.findProductByBarcode(context.tenantId, input.barcode)) {
+      throw validation("Product barcode already exists for this tenant.");
+    }
+    validateGstTaxConfig(input.gstTaxConfig);
     await this.validateOptionalLinks(context.tenantId, input);
     return this.repository.createProduct({
       actorId: context.userId,
@@ -244,9 +248,24 @@ export class HardwareService {
       const sku = readText(row.sku);
       const name = readText(row.name);
       const barcode = readText(row.barcode);
+      const salesPriceCents = readNumber(row.salesPriceCents);
+      const purchaseCostCents = readNumber(row.purchaseCostCents);
+      const lowStockThreshold = readNumber(row.lowStockThreshold);
 
       if (!sku || !name) {
         errors.push({ message: "SKU and name are required.", row: rowNumber });
+        continue;
+      }
+      if ([salesPriceCents, purchaseCostCents, lowStockThreshold].some((value) => value !== undefined && value < 0)) {
+        errors.push({ message: "Numeric import values cannot be negative.", row: rowNumber });
+        continue;
+      }
+      if (input.rows.slice(0, index).some((candidate) => readText(candidate.sku) === sku)) {
+        errors.push({ message: "Duplicate SKU exists inside this import file.", row: rowNumber });
+        continue;
+      }
+      if (barcode && input.rows.slice(0, index).some((candidate) => readText(candidate.barcode) === barcode)) {
+        errors.push({ message: "Duplicate barcode exists inside this import file.", row: rowNumber });
         continue;
       }
 
@@ -269,10 +288,10 @@ export class HardwareService {
         actorId: context.userId,
         data: stripUndefined({
           barcode,
-          lowStockThreshold: readNumber(row.lowStockThreshold) ?? 0,
+          lowStockThreshold: lowStockThreshold ?? 0,
           name,
-          purchaseCostCents: readNumber(row.purchaseCostCents) ?? 0,
-          salesPriceCents: readNumber(row.salesPriceCents) ?? 0,
+          purchaseCostCents: purchaseCostCents ?? 0,
+          salesPriceCents: salesPriceCents ?? 0,
           sku,
           tenantId: context.tenantId,
         }) as Prisma.HardwareProductUncheckedCreateInput,
@@ -281,6 +300,74 @@ export class HardwareService {
     }
 
     return { createdRows, errors, skippedRows, validRows: input.rows.length - errors.length };
+  }
+
+  async demoReadiness(context: ActorContext): Promise<HardwareDemoReadiness> {
+    await this.enforce(context, "hardware.inventory.read");
+    const [settings, locations, products, customerCount, documentCount] = await Promise.all([
+      this.repository.getSettings(context.tenantId),
+      this.repository.listLocations(context.tenantId),
+      this.repository.listProducts(context.tenantId),
+      this.prisma.clientOrganization.count({
+        where: { archivedAt: null, tenantId: context.tenantId },
+      }),
+      this.prisma.hardwareTradeDocument.count({
+        where: { tenantId: context.tenantId },
+      }),
+    ]);
+    const items = [
+      {
+        description: settings ? "Firm profile is configured." : "Configure firm name, financial year, and print footer.",
+        key: "settings",
+        ready: Boolean(settings),
+        title: "Hardware business settings",
+      },
+      {
+        description: settings?.defaultStockLocationId ? "Default stock location is selected." : "Select a default stock location for stock operations.",
+        key: "stock-location",
+        ready: locations.length > 0 && Boolean(settings?.defaultStockLocationId),
+        title: "Stock location",
+      },
+      {
+        description: products.length > 0 ? "Products exist for billing and stock flow." : "Seed or import demo products.",
+        key: "products",
+        ready: products.length > 0,
+        title: "Products",
+      },
+      {
+        description: customerCount > 0 ? "At least one customer or supplier exists." : "Create or seed demo customers and suppliers.",
+        key: "customers",
+        ready: customerCount > 0,
+        title: "Customers",
+      },
+      {
+        description: settings ? "A4 print projection can use configured firm details." : "Print preview needs business settings.",
+        key: "print",
+        ready: Boolean(settings),
+        title: "Print readiness",
+      },
+      {
+        description: "Offline queue foundation is installed for supported draft actions.",
+        key: "offline",
+        ready: true,
+        title: "Offline readiness",
+      },
+      {
+        description: documentCount > 0 ? "Hardware trade documents exist for demo walkthroughs." : "Create a quotation or sale during the demo flow.",
+        key: "documents",
+        ready: documentCount > 0,
+        title: "Demo documents",
+      },
+    ];
+    return {
+      counts: {
+        customers: customerCount,
+        products: products.length,
+        stockLocations: locations.length,
+      },
+      items,
+      ready: items.every((item) => item.ready),
+    };
   }
 
   async operationalDashboard(context: ActorContext): Promise<HardwareOperationalDashboard> {
@@ -417,6 +504,39 @@ export class HardwareService {
     };
   }
 
+  async resetDemoData(context: ActorContext) {
+    await this.enforce(context, "hardware.plugin.manage");
+    const sampleSkus = genericHardwareDemoData.products.map((product) => product.sku);
+    const sampleClientSlugs = [
+      ...genericHardwareDemoData.customers,
+      ...genericHardwareDemoData.suppliers,
+    ].map(slugify);
+    const [movements, products, categories, brands, clients] = await this.prisma.$transaction([
+      this.prisma.hardwareInventoryMovement.deleteMany({
+        where: { referenceType: "demo_seed", tenantId: context.tenantId },
+      }),
+      this.prisma.hardwareProduct.deleteMany({
+        where: { sku: { in: sampleSkus }, tenantId: context.tenantId },
+      }),
+      this.prisma.hardwareProductCategory.deleteMany({
+        where: { slug: { in: genericHardwareDemoData.categories.map(slugify) }, tenantId: context.tenantId },
+      }),
+      this.prisma.hardwareBrand.deleteMany({
+        where: { slug: { in: genericHardwareDemoData.brands.map(slugify) }, tenantId: context.tenantId },
+      }),
+      this.prisma.clientOrganization.deleteMany({
+        where: { slug: { in: sampleClientSlugs }, tenantId: context.tenantId },
+      }),
+    ]);
+    return {
+      brands: brands.count,
+      categories: categories.count,
+      clients: clients.count,
+      movements: movements.count,
+      products: products.count,
+    };
+  }
+
   async csvExport(context: ActorContext): Promise<HardwareCsvExportContract> {
     const products = await this.listProducts(context);
     return {
@@ -488,6 +608,14 @@ function readNumber(value: unknown) {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
+}
+
+function validateGstTaxConfig(config: Record<string, unknown> | undefined) {
+  const rate = config?.rateBps;
+  if (rate === undefined) return;
+  if (typeof rate !== "number" || !Number.isInteger(rate) || rate < 0 || rate > 10_000) {
+    throw validation("GST rate must be between 0 and 10000 basis points.");
+  }
 }
 
 function toProductSummary(product: ProductRecord, movements: MovementRecord[]): HardwareProductSummary {

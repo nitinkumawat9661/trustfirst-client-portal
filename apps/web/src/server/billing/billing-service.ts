@@ -193,6 +193,9 @@ export class BillingService {
 
   async recordPayment(context: ActorContext, invoiceId: string, input: PaymentRecordInput) {
     const invoice = await this.ensureInvoiceAccess(context, invoiceId, "billing.payments.manage");
+    if (input.amountCents <= 0) {
+      throw validation("Payment amount must be greater than zero.");
+    }
     if (!payableStatuses.has(currentStatus(invoice))) {
       throw validation("Payments can only be recorded against issued, overdue, or partially paid invoices.");
     }

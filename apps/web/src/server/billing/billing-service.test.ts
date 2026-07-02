@@ -125,6 +125,28 @@ describe("BillingService", () => {
     expect(result.invoice.paidAmountCents).toBe(40_000);
   });
 
+  it("rejects invalid manual payment amounts", async () => {
+    const service = new BillingService(
+      prismaMock({
+        invoice: {
+          findFirst: async () => ({ ...invoice, status: InvoiceStatus.ISSUED }),
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      service.recordPayment(
+        { tenantId: "tenant_1", userId: "user_1" },
+        "inv_1",
+        {
+          amountCents: 0,
+          mode: PaymentMode.CASH,
+          provider: PaymentProvider.MANUAL,
+        },
+      ),
+    ).rejects.toThrow("greater than zero");
+  });
+
   it("blocks users without billing permissions", async () => {
     const service = new BillingService(
       prismaMock({

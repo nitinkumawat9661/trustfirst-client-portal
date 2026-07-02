@@ -49,16 +49,28 @@ export function BarcodeProductForm({ language = "en" }: { language?: HardwareLan
 
 export function BillingBarcodeSearch() {
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader>
         <div className="flex items-center gap-2">
           <ScanLine aria-hidden className="size-5 text-muted-foreground" />
           <CardTitle>{hardwareLabels.en.billing}</CardTitle>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3">
-        <Input aria-label="Barcode search" placeholder="Scan barcode to add item" />
-        <Badge>Enter</Badge>
+      <CardContent className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <Input
+          aria-label="Barcode search"
+          autoComplete="off"
+          inputMode="numeric"
+          placeholder="Scan barcode to add item"
+        />
+        <div className="flex flex-wrap gap-2">
+          <Badge>Enter adds item</Badge>
+          <Badge>Tab moves field</Badge>
+        </div>
+        <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground sm:col-span-2">
+          Mobile billing layout keeps barcode, quantity, discount, and payment entry in a single-column scan flow below
+          640px.
+        </div>
       </CardContent>
     </Card>
   );

@@ -52,3 +52,20 @@ export type HardwareOperationalDashboard = InventoryDashboard & {
   todaySalesCents: number;
   topProducts: Array<{ name: string; quantity: number; sku: string }>;
 };
+
+export type HardwareDemoChecklistItem = {
+  description: string;
+  key: string;
+  ready: boolean;
+  title: string;
+};
+
+export type HardwareDemoReadiness = {
+  counts: {
+    customers: number;
+    products: number;
+    stockLocations: number;
+  };
+  items: HardwareDemoChecklistItem[];
+  ready: boolean;
+};

@@ -2,6 +2,17 @@ import { HardwareInventoryMovementType } from "@trustfirst/database";
 import { z } from "zod";
 
 const jsonRecord = z.record(z.string(), z.unknown());
+const gstTaxConfigSchema = jsonRecord.superRefine((value, context) => {
+  const rate = value.rateBps;
+  if (rate === undefined) return;
+  if (typeof rate !== "number" || !Number.isInteger(rate) || rate < 0 || rate > 10_000) {
+    context.addIssue({
+      code: "custom",
+      message: "GST rate must be between 0 and 10000 basis points.",
+      path: ["rateBps"],
+    });
+  }
+});
 
 export const hardwareCategorySchema = z.object({
   description: z.string().max(1000).optional(),
@@ -25,7 +36,7 @@ export const hardwareProductSchema = z.object({
   brandId: z.string().optional(),
   categoryId: z.string().optional(),
   description: z.string().max(5000).optional(),
-  gstTaxConfig: jsonRecord.optional(),
+  gstTaxConfig: gstTaxConfigSchema.optional(),
   lowStockThreshold: z.number().int().min(0).optional(),
   metadata: jsonRecord.optional(),
   name: z.string().min(2).max(240),

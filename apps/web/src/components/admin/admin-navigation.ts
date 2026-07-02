@@ -45,6 +45,12 @@ export const adminNavigation = [
     icon: PackageSearch,
   },
   {
+    href: "/admin/hardware/demo",
+    label: "Hardware demo QA",
+    description: "Demo readiness checklist",
+    icon: ShieldCheck,
+  },
+  {
     href: "/client",
     label: "Client shell",
     description: "Preview client-facing workspace",

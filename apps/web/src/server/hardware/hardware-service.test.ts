@@ -20,6 +20,7 @@ function prismaMock(overrides: Partial<PrismaClient> = {}) {
             { permission: { key: "hardware.inventory.manage" } },
             { permission: { key: "hardware.settings.read" } },
             { permission: { key: "hardware.settings.manage" } },
+            { permission: { key: "hardware.plugin.manage" } },
           ],
         },
         status: "ACTIVE",
@@ -100,6 +101,111 @@ describe("HardwareService", () => {
       skippedRows: 2,
       validRows: 3,
     });
+  });
+
+  it("rejects invalid import rows before execution", async () => {
+    const service = new HardwareService(
+      prismaMock({
+        $transaction: async (
+          callback: (tx: {
+            auditEvent: { create: () => Promise<unknown> };
+            hardwareProduct: { create: (input: { data: Record<string, unknown> }) => Promise<Record<string, unknown>> };
+            hardwareTimelineEvent: { create: () => Promise<unknown> };
+          }) => Promise<unknown>,
+        ) =>
+          callback({
+            auditEvent: { create: async () => ({}) },
+            hardwareProduct: {
+              create: async ({ data }: { data: Record<string, unknown> }) => ({ id: "prod_1", ...data }),
+            },
+            hardwareTimelineEvent: { create: async () => ({}) },
+          }),
+        hardwareProduct: { findFirst: async () => null },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const summary = await service.executeImport(
+      { tenantId: "tenant_1", userId: "user_1" },
+      {
+        duplicateMode: "reject",
+        rows: [
+          { barcode: "111", name: "Pipe", purchaseCostCents: -1, sku: "P-1" },
+          { barcode: "222", name: "Tap", sku: "DUP-IN-FILE" },
+          { barcode: "333", name: "Tap copy", sku: "DUP-IN-FILE" },
+        ],
+      },
+    );
+
+    expect(summary.createdRows).toBe(1);
+    expect(summary.errors).toEqual([
+      { message: "Numeric import values cannot be negative.", row: 1 },
+      { message: "Duplicate SKU exists inside this import file.", row: 3 },
+    ]);
+  });
+
+  it("blocks duplicate barcodes and invalid GST rates when creating products", async () => {
+    const duplicateBarcodeService = new HardwareService(
+      prismaMock({
+        hardwareProduct: {
+          findFirst: async ({ where }: { where: { barcode?: string; sku?: string } }) =>
+            where.barcode === "BAR-1" ? { id: "existing" } : null,
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      duplicateBarcodeService.createProduct(
+        { tenantId: "tenant_1", userId: "user_1" },
+        { barcode: "BAR-1", name: "Tap", sku: "SKU-1" },
+      ),
+    ).rejects.toThrow("barcode");
+
+    const invalidGstService = new HardwareService(
+      prismaMock({
+        hardwareProduct: { findFirst: async () => null },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      invalidGstService.createProduct(
+        { tenantId: "tenant_1", userId: "user_1" },
+        { gstTaxConfig: { rateBps: 12_000 }, name: "Tap", sku: "SKU-2" },
+      ),
+    ).rejects.toThrow("GST rate");
+  });
+
+  it("reports demo readiness and tenant-scoped missing setup", async () => {
+    const service = new HardwareService(
+      prismaMock({
+        clientOrganization: { count: async () => 0 },
+        hardwareBusinessSettings: { findUnique: async () => null },
+        hardwareProduct: { findMany: async () => [] },
+        hardwareStockLocation: { findMany: async () => [] },
+        hardwareTradeDocument: { count: async () => 0 },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const readiness = await service.demoReadiness({ tenantId: "tenant_1", userId: "user_1" });
+
+    expect(readiness.ready).toBe(false);
+    expect(readiness.items.find((item) => item.key === "offline")?.ready).toBe(true);
+    expect(readiness.items.find((item) => item.key === "settings")?.ready).toBe(false);
+  });
+
+  it("prevents tenant mismatches on linked product metadata", async () => {
+    const service = new HardwareService(
+      prismaMock({
+        hardwareProduct: { findFirst: async () => null },
+        hardwareProductCategory: { findFirst: async () => null },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      service.createProduct(
+        { tenantId: "tenant_1", userId: "user_1" },
+        { categoryId: "other_tenant_category", name: "Tap", sku: "SKU-1" },
+      ),
+    ).rejects.toThrow("Category was not found");
   });
 
   it("searches products by barcode with current stock", async () => {

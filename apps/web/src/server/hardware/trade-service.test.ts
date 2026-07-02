@@ -210,6 +210,58 @@ describe("HardwareTradeService", () => {
     expect(movements[0]?.data.type).toBe(HardwareInventoryMovementType.STOCK_OUT);
   });
 
+  it("blocks duplicate draft invoice numbers for hardware documents", async () => {
+    const now = new Date();
+    const service = new HardwareTradeService(
+      prismaMock({
+        hardwareTradeDocument: {
+          findFirst: async () => ({
+            currency: "INR",
+            customerId: "client_1",
+            discountCents: 0,
+            documentNumber: "HSO-2026-0001",
+            id: "doc_1",
+            items: [],
+            paymentStatus: "unlinked",
+            roundOffCents: 0,
+            status: HardwareTradeDocumentStatus.DRAFT,
+            subtotalCents: 0,
+            supplierId: null,
+            taxCents: 0,
+            totalCents: 10_000,
+            type: HardwareTradeDocumentType.SALES_ORDER,
+            updatedAt: now,
+          }),
+        },
+        invoice: { findFirst: async () => ({ id: "inv_1" }) },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      service.draftSaleInvoice({ tenantId: "tenant_1", userId: "user_1" }, "doc_1"),
+    ).rejects.toThrow("already exists");
+  });
+
+  it("rejects invalid GST rates from product tax configuration", async () => {
+    const service = new HardwareTradeService(
+      prismaMock({
+        hardwareProduct: {
+          findMany: async () => [{ gstTaxConfig: { rateBps: 12_001 }, id: "prod_1", name: "Tap" }],
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      service.create(
+        { tenantId: "tenant_1", userId: "user_1" },
+        {
+          items: [{ productId: "prod_1", quantity: 1, unitAmountCents: 1000 }],
+          type: HardwareTradeDocumentType.SALES_ORDER,
+        },
+      ),
+    ).rejects.toThrow("GST rate");
+  });
+
   it("blocks users without hardware trade permissions", async () => {
     const service = new HardwareTradeService(
       prismaMock({

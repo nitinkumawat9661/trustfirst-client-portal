@@ -8,3 +8,12 @@ export async function POST() {
     return hardwareError(error);
   }
 }
+
+export async function DELETE() {
+  try {
+    const { context, service } = await hardwareContext();
+    return hardwareResponse(await service.resetDemoData(context));
+  } catch (error) {
+    return hardwareError(error);
+  }
+}
