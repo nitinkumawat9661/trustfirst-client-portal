@@ -2,11 +2,12 @@
 
 ## Status
 
-VPS deployment was not performed because no usable, authorized VPS SSH target is available in the current environment.
+VPS one-command deployment automation has been prepared. Deployment was not performed because no usable, authorized VPS SSH target is available in the current environment.
 
 ## Deployment Target
 
 - VPS URL: not available
+- Host: not configured
 - SSH access status: blocked
 - Server OS: not verified
 - Node version: not verified
@@ -50,3 +51,16 @@ Summary:
 - Existing local SSH keys and known hosts appear related to CafeLuxe, not this project.
 - Read-only SSH probes to known CafeLuxe host/IP failed with host key mismatch warnings or timeouts.
 - Deploying to an unrelated or unverified host would be unsafe.
+
+## Automation Added
+
+- `.env.deploy.example`
+- `scripts/vps-validate-access.mjs`
+- `scripts/vps-bootstrap.mjs`
+- `scripts/vps-deploy.mjs`
+- `scripts/vps-smoke.mjs`
+- `scripts/vps-report.mjs`
+- `VPS_AUTOMATED_DEPLOYMENT.md`
+- `VPS_ACCESS_REQUIREMENTS.md`
+
+Run `npm run vps:validate` after `.env.deploy.local` is filled with authorized TrustFirst/Manglam VPS access.

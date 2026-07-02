@@ -25,6 +25,11 @@
     "demo:manglam": "node scripts/demo-manglam.mjs",
     "demo:setup": "node scripts/demo-setup.mjs",
     "demo:start": "node scripts/demo-start.mjs",
+    "vps:validate": "node scripts/vps-validate-access.mjs",
+    "vps:bootstrap": "node scripts/vps-bootstrap.mjs",
+    "vps:deploy": "node scripts/vps-deploy.mjs",
+    "vps:smoke": "node scripts/vps-smoke.mjs",
+    "vps:report": "node scripts/vps-report.mjs",
     "db:generate": "npm run db:generate --workspace @trustfirst/database",
     "db:migrate": "npm run db:migrate --workspace @trustfirst/database",
     "db:studio": "npm run db:studio --workspace @trustfirst/database"
