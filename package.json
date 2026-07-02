@@ -14,6 +14,10 @@
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "format": "npm run format --workspaces --if-present",
+    "deploy:env": "node scripts/validate-env.mjs",
+    "deploy:migration-check": "node scripts/migration-safety.mjs",
+    "deploy:smoke": "node scripts/smoke-test.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs",
     "db:generate": "npm run db:generate --workspace @trustfirst/database",
     "db:migrate": "npm run db:migrate --workspace @trustfirst/database",
     "db:studio": "npm run db:studio --workspace @trustfirst/database"

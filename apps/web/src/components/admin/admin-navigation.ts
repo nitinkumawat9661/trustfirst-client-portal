@@ -51,6 +51,12 @@ export const adminNavigation = [
     icon: ShieldCheck,
   },
   {
+    href: "/admin/release-checklist",
+    label: "Release checklist",
+    description: "Preview deployment gate",
+    icon: FileText,
+  },
+  {
     href: "/client",
     label: "Client shell",
     description: "Preview client-facing workspace",
