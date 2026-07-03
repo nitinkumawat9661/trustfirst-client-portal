@@ -4,6 +4,8 @@
 
 Automation is active and has successfully deployed TrustFirst Client Portal to the authorized shared VPS using the isolated TrustFirst section.
 
+Sprint 35 HTTPS setup is blocked until `DEPLOY_DOMAIN` is configured and DNS points to the VPS.
+
 Do not overwrite, delete, restart, or modify the existing CafeLuxe app, database, Nginx/Caddy config, PM2 process, files, or port `3000`.
 
 ## Current Target
@@ -11,6 +13,7 @@ Do not overwrite, delete, restart, or modify the existing CafeLuxe app, database
 - Host: `45.10.x.x`
 - Deploy user: `trustfirst`
 - App URL: `http://45.10.21.141:3010`
+- HTTPS demo URL: blocked, no domain configured
 - App path: `/var/www/trustfirst-client-portal`
 - Env file: `/etc/trustfirst-client-portal.env`
 - DB name: `trustfirst_demo`
@@ -109,7 +112,15 @@ Secrets are written only to the VPS env file and are never printed by the script
 - External smoke: passed
 - Authenticated QA: passed
 - CafeLuxe untouched: yes
+- Domain configured: no
+- DNS resolves: no, not checked because domain is empty
+- Nginx TrustFirst site created: no
+- HTTPS certificate issued: no
+- AUTH_URL updated: no
+- PM2 restarted for domain: no
+- HTTPS smoke passed: no
+- Final demo readiness: READY FOR STAGING QA ONLY
 
 ## HTTPS Note
 
-No TrustFirst domain is configured yet, so the current staging URL is direct HTTP on port `3010`. Configure an HTTPS domain/reverse proxy before a polished client-facing browser demo because secure production cookies are intentionally enabled.
+No TrustFirst domain is configured yet, so the current staging URL is direct HTTP on port `3010`. Configure `demo.trustfirstsolutions.in` with an A record to `45.10.21.141`, then set `DEPLOY_DOMAIN=demo.trustfirstsolutions.in` in `.env.deploy.local` before rerunning domain setup. Do not fake HTTPS.

@@ -2,11 +2,14 @@
 
 ## Status
 
-TrustFirst Client Portal was deployed successfully to the authorized shared VPS as an isolated Manglam demo environment.
+TrustFirst Client Portal is deployed successfully to the authorized shared VPS as an isolated Manglam demo environment.
+
+Sprint 35 HTTPS domain setup is blocked because `DEPLOY_DOMAIN` is empty in `.env.deploy.local`. The app remains available for staging QA at the direct HTTP port URL.
 
 ## Deployment Target
 
 - VPS URL: `http://45.10.21.141:3010`
+- Final HTTPS demo URL: blocked, no domain configured
 - Host: `45.10.x.x`
 - Shared old VPS used: yes
 - Deploy user: `trustfirst`
@@ -19,6 +22,7 @@ TrustFirst Client Portal was deployed successfully to the authorized shared VPS 
 - Git version: 2.34.1
 - Reverse proxy: not changed; no TrustFirst domain configured
 - Domain/subdomain: not configured
+- Required DNS record: `demo.trustfirstsolutions.in A 45.10.21.141`
 
 ## Environment
 
@@ -30,6 +34,8 @@ TrustFirst Client Portal was deployed successfully to the authorized shared VPS 
 - App port: `3010`
 - PM2 process: `trustfirst-client-portal`
 - UFW: `3010/tcp` allowed for TrustFirst
+- AUTH_URL updated to HTTPS domain: no
+- PM2 restarted for HTTPS domain: no
 
 ## Database
 
@@ -44,11 +50,13 @@ TrustFirst Client Portal was deployed successfully to the authorized shared VPS 
 ## QA
 
 - External smoke: passed against `http://45.10.21.141:3010`
+- HTTPS smoke: not run, blocked by missing domain
 - Auth route: 200
 - Manifest: 200
 - Offline page: 200
 - Protected admin routes: redirected when unauthenticated
-- Authenticated QA: passed with generated Manglam demo admin credentials without printing the password
+- Authenticated QA: passed on current staging environment with generated Manglam demo admin credentials without printing the password
+- Authenticated QA over HTTPS: not run, blocked by missing domain
 - Authenticated pages checked: `/admin/hardware/demo/manglam`, `/admin/hardware/products`, `/admin/hardware/inventory`, `/admin/billing`, `/admin/release-checklist`
 - CafeLuxe files untouched: yes
 - CafeLuxe database untouched: yes
@@ -59,7 +67,7 @@ TrustFirst Client Portal was deployed successfully to the authorized shared VPS 
 
 ## Demo Readiness
 
-Final demo readiness: deployed and ready for staging QA on the shared VPS.
+Final demo readiness: READY FOR STAGING QA ONLY.
 
 For a polished browser-based client demo, configure a real HTTPS domain or reverse proxy for TrustFirst. The app intentionally uses secure production cookies, so direct HTTP on an IP/port is acceptable for smoke checks but is not the preferred final login experience.
 
@@ -68,3 +76,4 @@ For a polished browser-based client demo, configure a real HTTPS domain or rever
 - Deployment used a tracked-source archive over verified SSH because the GitHub remote currently exposes no `main` branch heads to clone from.
 - Secrets were generated on the VPS and written only to `/etc/trustfirst-client-portal.env`.
 - No `.env.deploy.local`, private SSH key, database password, `AUTH_SECRET`, or demo password was committed.
+- Domain blocker details are documented in `DOMAIN_BLOCKER_REPORT.md`.

@@ -10,6 +10,7 @@ The authorized old shared VPS may be used only as an isolated TrustFirst section
 
 - Status: deployed
 - URL: `http://45.10.21.141:3010`
+- HTTPS demo URL: blocked, no domain configured
 - Deploy user: `trustfirst`
 - App path: `/var/www/trustfirst-client-portal`
 - Env file: `/etc/trustfirst-client-portal.env`
@@ -22,6 +23,7 @@ The authorized old shared VPS may be used only as an isolated TrustFirst section
 - External smoke: passed
 - Authenticated QA: passed
 - CafeLuxe untouched: yes
+- Final demo readiness: READY FOR STAGING QA ONLY
 
 ## Standard Command Flow
 
@@ -110,6 +112,26 @@ Checked:
 - `/admin/billing`
 - `/admin/hardware/inventory`
 - `/admin/hardware/print/sample`
+
+## Sprint 35 Domain Status
+
+- Domain configured: no
+- DNS resolves to `45.10.21.141`: no, not checked because `DEPLOY_DOMAIN` is empty
+- Nginx TrustFirst site created: no
+- HTTPS certificate issued: no
+- AUTH_URL updated to HTTPS domain: no
+- PM2 restarted for HTTPS domain: no
+- HTTPS smoke passed: no
+- HTTP staging smoke passed: yes
+- Authenticated QA over HTTPS: no
+- Manglam full demo QA over HTTPS: no
+- CafeLuxe untouched: yes
+
+Required DNS record:
+
+```text
+demo.trustfirstsolutions.in A 45.10.21.141
+```
 
 ## Authenticated QA
 
