@@ -33,10 +33,13 @@ Do not commit `.env.deploy.local`.
 - HTTPS smoke passed: no
 - HTTP staging smoke passed: yes, `http://45.10.21.141:3010`
 - HTTP staging login enabled: yes, temporary env-gated workaround
-- HTTP staging auth bypass enabled: yes, temporary env-gated workaround
-- Sign-in removed for HTTP staging: yes
+- HTTP staging auth bypass enabled: yes, temporary env-gated and internal-header-gated workaround
+- Sign-in removed for ordinary HTTP staging traffic: no, public/admin routes are protected again
 - Login status: passed on HTTP staging after enabling the explicit gate
-- Admin pages open without login: yes
+- Admin pages open without login: no, unless controlled internal QA sends `x-trustfirst-internal-qa: yes`
+- Public Manglam requirement intake route: added at `/intake/manglam-trading-demo`
+- Public intake admin queue: protected at `/admin/requirements/intake`
+- Public intake deployment QA: passed on HTTP staging
 - Authenticated QA over HTTPS: no
 - Manglam full demo QA over HTTPS: no
 - Manglam full demo QA over HTTP staging: passed

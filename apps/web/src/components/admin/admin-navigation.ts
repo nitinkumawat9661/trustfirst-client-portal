@@ -4,9 +4,9 @@ import {
   CreditCard,
   FileStack,
   FileText,
-  PackageSearch,
   LayoutDashboard,
   LifeBuoy,
+  PackageSearch,
   Search,
   Settings,
   ShieldCheck,
@@ -31,6 +31,12 @@ export const adminNavigation = [
     label: "Documents",
     description: "Commercial document engine",
     icon: FileStack,
+  },
+  {
+    href: "/admin/requirements/intake",
+    label: "Requirement intake",
+    description: "Public submission queue",
+    icon: FileText,
   },
   {
     href: "/admin/billing",

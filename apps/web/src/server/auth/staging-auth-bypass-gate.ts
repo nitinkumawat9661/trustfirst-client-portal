@@ -12,12 +12,14 @@ export type StagingAuthBypassEnv = {
 export function isHttpStagingAuthBypassEnabled(input: {
   env?: StagingAuthBypassEnv;
   host?: string | null;
+  internalQaHeader?: string | null;
 }) {
   const env = input.env ?? process.env;
   if (env.NODE_ENV !== "production") return false;
   if (env.TRUSTFIRST_HTTP_STAGING_AUTH_BYPASS !== "yes") return false;
   if (env.DEPLOY_ALLOW_SHARED_OLD_VPS !== "yes") return false;
   if (input.host !== HTTP_STAGING_HOST) return false;
+  if (input.internalQaHeader !== "yes") return false;
 
   try {
     const authUrl = new URL(env.AUTH_URL ?? "");

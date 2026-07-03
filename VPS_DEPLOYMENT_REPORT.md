@@ -4,24 +4,25 @@
 
 TrustFirst Client Portal is deployed successfully to the authorized shared VPS as an isolated Manglam demo environment.
 
-Sprint 35 HTTPS domain setup is blocked because `DEPLOY_DOMAIN` is empty in `.env.deploy.local`. The app remains available for staging QA at the direct HTTP port URL, with temporary HTTP staging login enabled by an explicit env gate.
+Sprint 37 added a public write-only Manglam requirement intake and restored public lockdown for admin/client routes. Sprint 35 HTTPS domain setup remains blocked because `DEPLOY_DOMAIN` is empty in `.env.deploy.local`.
 
 ## Deployment Target
 
 - VPS URL: `http://45.10.21.141:3010`
+- Public intake URL: `http://45.10.21.141:3010/intake/manglam-trading-demo`
+- Protected intake queue: `/admin/requirements/intake`
 - Final HTTPS demo URL: blocked, no domain configured
 - Host: `45.10.x.x`
 - Shared old VPS used: yes
 - Deploy user: `trustfirst`
 - Host-key status: verified by trusted ED25519 fingerprint
-- SSH access status: passed
+- SSH access status: passed after one transient timeout retry
 - Server OS: Ubuntu 22.04.5 LTS
 - Node version: v22.23.0
 - npm version: 10.9.8
 - PostgreSQL version: 14.23
 - Git version: 2.34.1
 - Reverse proxy: not changed; no TrustFirst domain configured
-- Domain/subdomain: not configured
 - Required DNS record: `demo.trustfirstsolutions.in A 45.10.21.141`
 
 ## Environment
@@ -34,22 +35,22 @@ Sprint 35 HTTPS domain setup is blocked because `DEPLOY_DOMAIN` is empty in `.en
 - App port: `3010`
 - PM2 process: `trustfirst-client-portal`
 - UFW: `3010/tcp` allowed for TrustFirst
-- AUTH_URL updated to HTTPS domain: no
 - AUTH_URL status: `http://45.10.21.141:3010`
 - HTTP staging login enabled: yes
-- HTTP staging auth bypass enabled: yes
-- Sign-in removed for HTTP staging: yes
-- PM2 restarted for HTTPS domain: no
+- HTTP staging auth bypass enabled: yes, internal QA header required
+- Sign-in removed for ordinary HTTP staging traffic: no
+- PM2 restarted by deploy: yes
 
 ## Database
 
 - PostgreSQL setup: completed
 - Database: `trustfirst_demo`
 - User: `trustfirst_demo`
-- Migration status: all 9 migrations applied successfully
+- Migration status: all 9 migrations applied; no pending migrations
 - Seed status: `seed:manglam-demo` completed
 - Tenant slug: `manglam-trading-demo`
-- Seed verification: 8 products, 2 stock locations, 6 clients, 3 hardware trade documents, 0 invoices
+- Public intake DB verification: passed
+- Latest public intake submission: `PUB-REQ-2026-0001`
 
 ## QA
 
@@ -58,13 +59,15 @@ Sprint 35 HTTPS domain setup is blocked because `DEPLOY_DOMAIN` is empty in `.en
 - Auth route: 200
 - Manifest: 200
 - Offline page: 200
-- Protected admin routes: redirected when unauthenticated
-- Authenticated QA: passed on current HTTP staging environment with generated Manglam demo admin credentials without printing the password
-- No-login admin QA: passed on current HTTP staging environment
+- Public intake page: 200
+- Public intake API submit: passed
+- Thank-you page: 200
+- Public intake stored as Requirement: passed, status `PENDING`, priority `HIGH`
+- Protected admin routes without login: 307 redirect
+- Protected client routes without login: 307 redirect
+- Protected requirements API without login: 307 redirect
+- Admin intake queue with internal QA header: 200 and shows `PUB-REQ-2026-0001`
 - Authenticated QA over HTTPS: not run, blocked by missing domain
-- Manglam full demo QA over HTTP staging: passed
-- Manglam flow checked: settings, catalog, opening stock, quotation, quotation-to-sale, stock deduction, invoice draft, A4 print preview, manual payment, outstanding dashboard, offline page
-- Authenticated pages checked: `/admin/hardware/demo/manglam`, `/admin/hardware/products`, `/admin/hardware/inventory`, `/admin/billing`, `/admin/release-checklist`
 - CafeLuxe files untouched: yes
 - CafeLuxe database untouched: yes
 - CafeLuxe PM2 process untouched: yes
@@ -74,15 +77,13 @@ Sprint 35 HTTPS domain setup is blocked because `DEPLOY_DOMAIN` is empty in `.en
 
 ## Demo Readiness
 
-Final demo readiness: READY FOR HTTP STAGING QA ONLY.
+Final readiness: READY FOR PUBLIC HTTP STAGING INTAKE QA ONLY.
 
-For a polished browser-based client demo, configure a real HTTPS domain or reverse proxy for TrustFirst. The app intentionally uses secure production cookies, so direct HTTP on an IP/port is acceptable for smoke checks but is not the preferred final login experience.
+The public intake link is usable on HTTP staging. A polished production-style client demo still requires a real HTTPS domain and removal of the temporary HTTP staging env gates.
 
 ## Notes
 
-- Deployment used a tracked-source archive over verified SSH because the GitHub remote currently exposes no `main` branch heads to clone from.
-- Secrets were generated on the VPS and written only to `/etc/trustfirst-client-portal.env`.
+- Deployment used the committed local archive for `feat: add public manglam requirement intake`.
 - No `.env.deploy.local`, private SSH key, database password, `AUTH_SECRET`, or demo password was committed.
-- Domain blocker details are documented in `DOMAIN_BLOCKER_REPORT.md`.
-- Temporary HTTP login rollback is documented in `HTTP_STAGING_LOGIN_NOTE.md`.
-- Temporary HTTP auth bypass rollback is documented in `HTTP_STAGING_AUTH_BYPASS_NOTE.md`.
+- `npm ci` on the VPS reported three moderate npm audit findings. They were not changed in Sprint 37 because remediation may require dependency upgrades outside the public intake scope.
+- `npm run vps:validate` currently prints PM2 environment details and should be redacted in a future deployment tooling hardening pass.

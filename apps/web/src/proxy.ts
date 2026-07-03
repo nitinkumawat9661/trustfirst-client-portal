@@ -6,7 +6,11 @@ import { applySecurityHeaders } from "@/server/security/headers";
 const protectedRoutes = [
   "/admin",
   "/client",
+  "/master",
+  "/api/admin",
+  "/api/client",
   "/api/crm",
+  "/api/master",
   "/api/projects",
   "/api/requirements",
   "/api/tenants",
@@ -23,6 +27,7 @@ export default auth((request) => {
 
   const stagingBypass = isHttpStagingAuthBypassEnabled({
     host: request.headers.get("host"),
+    internalQaHeader: request.headers.get("x-trustfirst-internal-qa"),
   });
 
   if (isProtected && !request.auth?.user?.id && !stagingBypass) {

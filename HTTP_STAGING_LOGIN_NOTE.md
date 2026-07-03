@@ -36,4 +36,18 @@ After HTTPS domain setup:
 
 Do not use this setting for production clients.
 
-For the temporary no-login demo path, see `HTTP_STAGING_AUTH_BYPASS_NOTE.md`. Remove both HTTP staging env gates after HTTPS is configured.
+## Sprint 37 Public Intake Lockdown
+
+The temporary no-login auth bypass no longer opens admin or client routes for ordinary browser traffic. It now also requires this internal QA request header:
+
+```text
+x-trustfirst-internal-qa: yes
+```
+
+Use that header only for controlled internal QA checks. Public users should only receive the intake link:
+
+```text
+/intake/manglam-trading-demo
+```
+
+Remove both HTTP staging env gates after HTTPS is configured.

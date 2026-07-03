@@ -12,7 +12,9 @@ The authorized old shared VPS may be used only as an isolated TrustFirst section
 - URL: `http://45.10.21.141:3010`
 - HTTPS demo URL: blocked, no domain configured
 - HTTP staging login: enabled by explicit env gate
-- HTTP staging auth bypass: enabled by explicit env gate
+- HTTP staging auth bypass: enabled by explicit env gate and internal QA header
+- Public intake URL: `http://45.10.21.141:3010/intake/manglam-trading-demo`
+- Protected intake queue: `/admin/requirements/intake`
 - Deploy user: `trustfirst`
 - App path: `/var/www/trustfirst-client-portal`
 - Env file: `/etc/trustfirst-client-portal.env`
@@ -24,6 +26,8 @@ The authorized old shared VPS may be used only as an isolated TrustFirst section
 - Known_hosts repaired: yes
 - External smoke: passed
 - Authenticated QA: passed
+- Public intake QA: passed
+- Public admin/client route lockdown: passed
 - CafeLuxe untouched: yes
 - Final demo readiness: READY FOR HTTP STAGING QA ONLY
 
@@ -126,10 +130,10 @@ Checked:
 - HTTPS smoke passed: no
 - HTTP staging smoke passed: yes
 - HTTP staging login enabled: yes
-- HTTP staging auth bypass enabled: yes
-- Sign-in removed for HTTP staging: yes
+- HTTP staging auth bypass enabled: yes, internal QA header required
+- Sign-in removed for ordinary HTTP staging traffic: no
 - Login status: passed
-- Admin pages open without login: yes
+- Admin pages open without login: no for public browser traffic; internal QA header required for controlled bypass
 - Authenticated QA over HTTPS: no
 - Manglam full demo QA over HTTPS: no
 - Manglam full demo QA over HTTP staging: passed

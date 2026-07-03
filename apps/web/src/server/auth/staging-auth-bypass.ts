@@ -9,7 +9,10 @@ const DEMO_ADMIN_EMAIL = "manglam-demo-admin@trustfirst.example.com";
 
 export async function isHttpStagingAuthBypassActive() {
   const requestHeaders = await headers();
-  return isHttpStagingAuthBypassEnabled({ host: requestHeaders.get("host") });
+  return isHttpStagingAuthBypassEnabled({
+    host: requestHeaders.get("host"),
+    internalQaHeader: requestHeaders.get("x-trustfirst-internal-qa"),
+  });
 }
 
 export async function getHttpStagingBypassUser(): Promise<Session["user"] | null> {

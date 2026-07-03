@@ -4,7 +4,7 @@
 
 Automation is active and has successfully deployed TrustFirst Client Portal to the authorized shared VPS using the isolated TrustFirst section.
 
-Sprint 35 HTTPS setup is blocked until `DEPLOY_DOMAIN` is configured and DNS points to the VPS. Temporary HTTP staging login is enabled only for `http://45.10.21.141:3010`.
+Sprint 35 HTTPS setup is blocked until `DEPLOY_DOMAIN` is configured and DNS points to the VPS. Temporary HTTP staging login is enabled only for `http://45.10.21.141:3010`. Sprint 37 exposes only the public Manglam intake link to anonymous visitors and keeps admin/client routes locked down.
 
 Do not overwrite, delete, restart, or modify the existing CafeLuxe app, database, Nginx/Caddy config, PM2 process, files, or port `3000`.
 
@@ -15,7 +15,8 @@ Do not overwrite, delete, restart, or modify the existing CafeLuxe app, database
 - App URL: `http://45.10.21.141:3010`
 - HTTPS demo URL: blocked, no domain configured
 - HTTP staging login: enabled by `TRUSTFIRST_HTTP_STAGING_LOGIN=yes`
-- HTTP staging auth bypass: enabled by `TRUSTFIRST_HTTP_STAGING_AUTH_BYPASS=yes`
+- HTTP staging auth bypass: enabled by `TRUSTFIRST_HTTP_STAGING_AUTH_BYPASS=yes` only when `x-trustfirst-internal-qa: yes` is sent
+- Public intake URL: `http://45.10.21.141:3010/intake/manglam-trading-demo`
 - App path: `/var/www/trustfirst-client-portal`
 - Env file: `/etc/trustfirst-client-portal.env`
 - DB name: `trustfirst_demo`
@@ -122,7 +123,8 @@ Secrets are written only to the VPS env file and are never printed by the script
 - PM2 restarted for domain: no
 - HTTPS smoke passed: no
 - Login status: passed on HTTP staging
-- Admin pages open without login: yes
+- Admin pages open without login: no for public browser traffic; internal QA header required for bypass
+- Public intake deployment QA: passed
 - Manglam full demo QA: passed on HTTP staging
 - Final demo readiness: READY FOR HTTP STAGING QA ONLY
 

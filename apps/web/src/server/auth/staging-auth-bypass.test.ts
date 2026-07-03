@@ -15,8 +15,18 @@ describe("HTTP staging auth bypass gate", () => {
       isHttpStagingAuthBypassEnabled({
         env: validEnv,
         host: "45.10.21.141:3010",
+        internalQaHeader: "yes",
       }),
     ).toBe(true);
+  });
+
+  it("requires the internal QA header so public browsers cannot unlock admin routes", () => {
+    expect(
+      isHttpStagingAuthBypassEnabled({
+        env: validEnv,
+        host: "45.10.21.141:3010",
+      }),
+    ).toBe(false);
   });
 
   it("keeps HTTPS/domain deployments on normal auth", () => {
@@ -24,6 +34,7 @@ describe("HTTP staging auth bypass gate", () => {
       isHttpStagingAuthBypassEnabled({
         env: { ...validEnv, AUTH_URL: "https://demo.trustfirstsolutions.in" },
         host: "demo.trustfirstsolutions.in",
+        internalQaHeader: "yes",
       }),
     ).toBe(false);
   });
@@ -33,6 +44,7 @@ describe("HTTP staging auth bypass gate", () => {
       isHttpStagingAuthBypassEnabled({
         env: withoutSharedVpsSafetyFlag(validEnv),
         host: "45.10.21.141:3010",
+        internalQaHeader: "yes",
       }),
     ).toBe(false);
 
@@ -40,6 +52,7 @@ describe("HTTP staging auth bypass gate", () => {
       isHttpStagingAuthBypassEnabled({
         env: validEnv,
         host: "localhost:3010",
+        internalQaHeader: "yes",
       }),
     ).toBe(false);
   });
