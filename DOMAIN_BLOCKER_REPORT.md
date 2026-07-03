@@ -40,6 +40,7 @@ Do not commit `.env.deploy.local`.
 - Public Manglam requirement intake route: added at `/intake/manglam-trading-demo`
 - Public intake admin queue: protected at `/admin/requirements/intake`
 - Public intake deployment QA: passed on HTTP staging
+- Sprint 38 browser loading fix: deployed and verified on HTTP staging
 - Authenticated QA over HTTPS: no
 - Manglam full demo QA over HTTPS: no
 - Manglam full demo QA over HTTP staging: passed

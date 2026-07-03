@@ -68,3 +68,9 @@ http://45.10.21.141:3010/intake/manglam-trading-demo
 ```
 
 until a proper HTTPS demo domain is configured. The HTTPS domain remains required before production client usage.
+
+## Sprint 38 Loading Fix
+
+The public intake page no longer depends on the root streaming loading fallback or client-side hydration to show the form. It now renders a native server-side form and posts directly to the public intake API.
+
+This keeps anonymous access limited to the public intake route and submit endpoint while preventing the browser from staying on a spinner if inline streaming reveal scripts are blocked by CSP.

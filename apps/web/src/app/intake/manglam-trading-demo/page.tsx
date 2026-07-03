@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ManglamPublicIntakeForm } from "@/features/intake/manglam-public-intake-form";
+import { ManglamPublicIntakeServerForm } from "@/features/intake/manglam-public-intake-server-form";
 
 export const metadata: Metadata = {
   title: "Manglam Requirement Intake",
@@ -17,13 +17,13 @@ export default function ManglamRequirementIntakePage() {
         <div className="mb-5">
           <p className="text-sm font-semibold text-primary">TrustFirst Client Portal</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-normal sm:text-4xl">
-            Requirement intake for hardware ERP demo
+            Manglam Trading Company Software Requirement Form
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-            Please complete the sections below. The submission goes directly to the protected TrustFirst admin intake queue.
+            Please complete the public intake below. The submission goes directly to the protected TrustFirst admin intake queue.
           </p>
         </div>
-        <ManglamPublicIntakeForm />
+        <ManglamPublicIntakeServerForm />
       </div>
     </main>
   );

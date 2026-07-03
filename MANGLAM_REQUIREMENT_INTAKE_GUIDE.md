@@ -2,7 +2,7 @@
 
 ## Public Link
 
-Use this temporary staging link for the requirement intake:
+Use this temporary staging link for the requirement intake after Sprint 38 deployment:
 
 ```text
 http://45.10.21.141:3010/intake/manglam-trading-demo
@@ -10,22 +10,22 @@ http://45.10.21.141:3010/intake/manglam-trading-demo
 
 After HTTPS domain setup, replace the host with the configured TrustFirst demo domain.
 
+## Browser Loading
+
+Sprint 38 fixed a browser-only stuck-loading issue by rendering the form as native server HTML. The page should show `Manglam Trading Company Software Requirement Form` directly, without login and without a spinner-only screen.
+
 ## What The Form Collects
 
-The intake form captures ten sections:
+The intake form captures:
 
-1. Contact and firm details
-2. Business profile
-3. Product catalog
-4. Stock and godown
-5. Sales and billing
-6. Purchase and suppliers
-7. Payments and outstanding
-8. Reports and dashboard
-9. Users, language, offline
-10. Current issues and demo success criteria
+1. Business Details
+2. Product/Catalog Details
+3. Stock Details
+4. Supplier/Customer Details
+5. Billing Details
+6. Reports, Access And Demo Success
 
-The form autosaves a local browser draft. Draft data stays on the submitter device until final submission.
+The public page submits natively to TrustFirst. Public users cannot list or read submissions.
 
 ## Submission Result
 
@@ -57,7 +57,7 @@ Admins can mark a submission as reviewed. Conversion into deeper business workfl
 
 ## Demo Script
 
-1. Open the public intake link.
+1. Open the public intake link and confirm the form title is visible.
 2. Fill the required firm, business, catalog, payment, report, and pain-point fields.
 3. Submit the form.
 4. Confirm the thank-you page shows a public submission number.
@@ -65,10 +65,11 @@ Admins can mark a submission as reviewed. Conversion into deeper business workfl
 6. Verify the new submission appears in the protected queue.
 7. Mark the item reviewed.
 8. Confirm anonymous browser access to `/admin`, `/client`, and protected APIs is blocked.
+9. Run `SMOKE_BASE_URL=http://45.10.21.141:3010 npm run intake:smoke` after deployment.
 
 ## Limitations
 
 - This is an intake foundation, not a public portal.
-- Public users cannot upload files in this Sprint 37 path.
+- Public users cannot upload files in this intake path.
 - Public users cannot edit a submitted requirement after final submit.
 - Final production client usage still requires HTTPS/domain setup.

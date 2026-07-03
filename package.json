@@ -17,6 +17,7 @@
     "deploy:env": "node scripts/validate-env.mjs",
     "deploy:migration-check": "node scripts/migration-safety.mjs",
     "deploy:smoke": "node scripts/smoke-test.mjs",
+    "intake:smoke": "node scripts/intake-smoke.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "seed:manglam-demo": "node scripts/seed-manglam-demo.mjs",
     "reset:manglam-demo": "node scripts/seed-manglam-demo.mjs --reset",

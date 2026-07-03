@@ -51,3 +51,7 @@ Use that header only for controlled internal QA checks. Public users should only
 ```
 
 Remove both HTTP staging env gates after HTTPS is configured.
+
+## Public Intake Loading
+
+Sprint 38 moved `/intake/manglam-trading-demo` away from the global streaming loading shell and into a native server-rendered form. This fix does not change HTTP staging login or expose admin routes.

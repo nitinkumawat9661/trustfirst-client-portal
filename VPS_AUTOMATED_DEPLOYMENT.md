@@ -17,6 +17,7 @@ Do not overwrite, delete, restart, or modify the existing CafeLuxe app, database
 - HTTP staging login: enabled by `TRUSTFIRST_HTTP_STAGING_LOGIN=yes`
 - HTTP staging auth bypass: enabled by `TRUSTFIRST_HTTP_STAGING_AUTH_BYPASS=yes` only when `x-trustfirst-internal-qa: yes` is sent
 - Public intake URL: `http://45.10.21.141:3010/intake/manglam-trading-demo`
+- Public intake browser loading fix: Sprint 38 native server form deployed and verified
 - App path: `/var/www/trustfirst-client-portal`
 - Env file: `/etc/trustfirst-client-portal.env`
 - DB name: `trustfirst_demo`
@@ -55,6 +56,12 @@ Run smoke only:
 
 ```bash
 npm run vps:smoke
+```
+
+Run public intake marker and route-lockdown smoke:
+
+```bash
+SMOKE_BASE_URL=http://45.10.21.141:3010 npm run intake:smoke
 ```
 
 Generate/update report:
@@ -124,7 +131,7 @@ Secrets are written only to the VPS env file and are never printed by the script
 - HTTPS smoke passed: no
 - Login status: passed on HTTP staging
 - Admin pages open without login: no for public browser traffic; internal QA header required for bypass
-- Public intake deployment QA: passed
+- Public intake deployment QA: passed after Sprint 38 browser-loading fix
 - Manglam full demo QA: passed on HTTP staging
 - Final demo readiness: READY FOR HTTP STAGING QA ONLY
 
