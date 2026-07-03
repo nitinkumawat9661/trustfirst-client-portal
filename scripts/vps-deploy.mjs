@@ -1,17 +1,56 @@
+import { spawnSync } from "node:child_process";
 import {
   assertNoHostKeyMismatch,
   deploymentUrl,
   expectedSharedVps,
   hasHostKeyMismatch,
   loadDeployConfig,
+  repoRoot,
   runSsh,
   shellQuote,
+  sshBaseArgs,
   validateDeployConfig,
   writeHostKeyBlockerReport,
 } from "./vps-utils.mjs";
 
 const config = loadDeployConfig();
 validateDeployConfig(config);
+const remoteArchive = `/tmp/trustfirst-client-portal-${Date.now()}.tar`;
+
+function failWithResult(message, result) {
+  process.stderr.write(`${message}\n${result.stderr?.toString() || result.stdout?.toString() || ""}`);
+  process.exit(result.status ?? 1);
+}
+
+const archive = spawnSync("git", ["archive", "--format=tar", "HEAD"], {
+  cwd: repoRoot,
+  encoding: "buffer",
+  maxBuffer: 250 * 1024 * 1024,
+  shell: false,
+  stdio: ["ignore", "pipe", "pipe"],
+});
+
+if (archive.status !== 0 || !archive.stdout?.length) {
+  failWithResult("Failed to create a tracked-source deploy archive from local HEAD.", archive);
+}
+
+const upload = spawnSync("ssh", [...sshBaseArgs(config), `cat > ${shellQuote(remoteArchive)}`], {
+  cwd: repoRoot,
+  encoding: "buffer",
+  input: archive.stdout,
+  maxBuffer: 20 * 1024 * 1024,
+  shell: false,
+  stdio: ["pipe", "pipe", "pipe"],
+});
+
+if (hasHostKeyMismatch(upload)) {
+  writeHostKeyBlockerReport(config, `${upload.stdout ?? ""}\n${upload.stderr ?? ""}`);
+  assertNoHostKeyMismatch(upload);
+}
+
+if (upload.status !== 0) {
+  failWithResult("Failed to upload the TrustFirst deploy archive over verified SSH.", upload);
+}
 
 const remote = `
 set -euo pipefail
@@ -21,7 +60,7 @@ APP_PORT=${shellQuote(config.DEPLOY_APP_PORT)}
 PM2_PROCESS=${shellQuote(config.DEPLOY_PM2_PROCESS)}
 DEPLOY_DOMAIN=${shellQuote(config.DEPLOY_DOMAIN || "")}
 AUTH_URL=${shellQuote(deploymentUrl(config))}
-REPO_URL="https://github.com/nitinkumawat9661/trustfirst-client-portal.git"
+RELEASE_ARCHIVE=${shellQuote(remoteArchive)}
 DB_NAME=${shellQuote(expectedSharedVps.dbName)}
 DB_USER=${shellQuote(expectedSharedVps.dbUser)}
 
@@ -57,13 +96,15 @@ if (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null || true) | grep -Eq "[:.]$AP
   fi
 fi
 
-if [ -d "$APP_DIR/.git" ]; then
-  git -C "$APP_DIR" fetch origin
-  git -C "$APP_DIR" reset --hard origin/main
-else
-  rm -rf "$APP_DIR"
-  git clone "$REPO_URL" "$APP_DIR"
+need_sudo mkdir -p "$APP_DIR"
+need_sudo chown -R "$(id -un):$(id -gn)" "$APP_DIR"
+if [ ! -f "$RELEASE_ARCHIVE" ]; then
+  echo "Missing uploaded TrustFirst release archive." >&2
+  exit 1
 fi
+find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name storage -exec rm -rf {} +
+tar -xf "$RELEASE_ARCHIVE" -C "$APP_DIR"
+rm -f "$RELEASE_ARCHIVE"
 
 cd "$APP_DIR"
 set -a
@@ -91,7 +132,7 @@ case "$DATABASE_URL" in
     ;;
 esac
 
-npm ci
+npm ci --include=dev
 npm run deploy:env
 npm run db:generate
 npm run deploy:migration-check

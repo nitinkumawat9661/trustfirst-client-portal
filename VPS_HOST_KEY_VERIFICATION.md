@@ -2,28 +2,30 @@
 
 ## Summary
 
-- Timestamp: 2026-07-02T18:15:24.609Z
+- Timestamp: 2026-07-03T01:02:19.108Z
 - .env.deploy.local created: yes
 - Host masked: 45.10.x.x
 - Port: 22
 - DNS/IP result: 45.10.21.141 (IPv4)
 - Key path exists: yes
-- Key path masked: %USERPROFILE%\.ssh\cafeluxe_vps_ed25519
+- Key path masked: %USERPROFILE%\.ssh\trustfirst_vps_ed25519
 - Key is public key: no
 - Key looks like OpenSSH private key: yes
-- Mismatch: yes
+- Mismatch: no
 - Required trusted fingerprint: SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0
-- Decision: trusted fingerprint matched; strict SSH authentication failed
+- Decision: verified by trusted fingerprint match
 - Known_hosts repaired: yes
-- Backup path: C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260702181522
-- Deployment attempted: no
+- Backup path: C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260703010214
+- Deployment attempted: yes
+- Deployment result: succeeded
+- SSH access passed: yes
+- App URL: http://45.10.21.141:3010
+- App port: 3010
 - CafeLuxe untouched: yes
 
 ## Existing known_hosts Fingerprints
 
-- ED25519: SHA256:WOrGpBngyEQismYclNOX1KU/Dfy2A+uwJDjCAXxM464
-- RSA: SHA256:GSfOPFTaILBNtEstYu0W5Zq0TdHG4Gtg3i/quLWHGks
-- ECDSA: SHA256:ZWwcfBYIFIMoCekQg5I2CGNsnSC1B41smvKn1d+84kA
+- ED25519: SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0
 
 ## Current ssh-keyscan Fingerprints
 
@@ -38,12 +40,8 @@ A host-key mismatch can mean the VPS was rebuilt, the provider rotated host keys
 ## Raw known_hosts Lookup
 
 ```text
-# Host 45.10.21.141 found: line 3
-45.10.21.141 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK1Jc4IY1ppuPjK9pnhIaVa71AszM/XX3YtJm6vr75EK
-# Host 45.10.21.141 found: line 4
-45.10.21.141 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCefDNQyAZhSNmCii6kJPYCATxfufP++/Wi99heto+fwEwVlMf89HA1BxFUeZTk7dxbipkH1xuAp3PW8QDE8DatXHzPFSeMWrqM/zRVCnnauLG2oI62tjVSE5pHg1zgaH0ipo7ir/Rtg5QvlFdw5ABXyttmYsngIFhvbRTcj7F1V0MeNsv1BV6IrwIZdjovRCo2hUUguuWkSSFxUthRAjWOSEQvYoq8Rrk9Gy4pMVSZj3qXy90X/VywStgL2K36IY/OdRKnVn+RtGpLoaE9hZ3+xDDnnOot6RwO0pz77e4xJPKsasayHKO5xPpWtaZA9Ulp5AAMAfi3IfiQeLB5HYgjTby54N7C1unftm27idk+Zz3Q+itz/eqMcPyuCMI64zhmQ/Fcjvn+arE2KwjNw5DBe4vAIERf7u6+0r72ahwcV9jfGh0VVa4kjUvm5D9uwnheOEWjKI1QOcVGgSiPIX1BpvQo6ngNH7t+efJ/lDmTS/z5I4KmWG1iZC1hsTe/p38=
-# Host 45.10.21.141 found: line 5
-45.10.21.141 ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBPZQZqVMbFABALxZ6jtNyUR/eEKxSMNpw/zqSlOfldYuLxi1bf2sJohFmMfwccAOMT+cxd9HxV/NF/9XomlmlWE=
+# Host 45.10.21.141 found: line 6
+45.10.21.141 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHfng3mX7BxZIM7llpJvK2jGZLyDRAOZ7w7kHLSSUTgi
 ```
 
 ## Raw ssh-keyscan Output
@@ -79,9 +77,10 @@ choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com
 ## Strict SSH Verification Output
 
 ```text
-root@45.10.21.141: Permission denied (publickey).
+zonetichosting
+Linux zonetichosting 5.15.0-181-generic #191-Ubuntu SMP Fri May 22 19:09:02 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
 ```
 
 ## Notes
 
-The trusted ED25519 fingerprint matched the current Git for Windows ssh-keyscan result. `known_hosts` was backed up, only the configured `45.10.21.141` entries were removed, and the verified ED25519 key was added. Strict SSH host checking then reached authentication but failed with `Permission denied (publickey)`, so VPS validation, bootstrap, deployment, smoke, and QA were not attempted. Backup path: C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260702181522.
+known_hosts was backed up, only the configured host entry was removed, the verified key was added, and strict SSH verification succeeded. Deployment later completed using deploy user `trustfirst`, app port `3010`, and isolated TrustFirst paths only.

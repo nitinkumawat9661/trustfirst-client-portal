@@ -113,6 +113,9 @@ fi
 need_sudo mkdir -p "$APP_DIR" "$UPLOAD_DIR"
 need_sudo chown -R "$(id -un):$(id -gn)" "$APP_DIR"
 chmod 750 "$UPLOAD_DIR"
+if command -v ufw >/dev/null 2>&1 && need_sudo ufw status | grep -qi active; then
+  need_sudo ufw allow "$APP_PORT/tcp" comment "TrustFirst Client Portal"
+fi
 
 DB_PASSWORD="$(node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))")"
 AUTH_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")"

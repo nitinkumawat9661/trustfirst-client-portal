@@ -4,232 +4,126 @@
 
 This runbook deploys TrustFirst Client Portal as a VPS-hosted Manglam demo environment. It does not use Vercel, Neon, production client data, or live payment gateways.
 
-For Sprint 28, the authorized old shared VPS may be used only as an isolated TrustFirst section. Do not overwrite, delete, restart, or modify any existing CafeLuxe app, database, Nginx/Caddy config, PM2 process, or files.
+The authorized old shared VPS may be used only as an isolated TrustFirst section. Do not overwrite, delete, restart, or modify any existing CafeLuxe app, database, Nginx/Caddy config, PM2 process, files, or port `3000`.
+
+## Current Deployment
+
+- Status: deployed
+- URL: `http://45.10.21.141:3010`
+- Deploy user: `trustfirst`
+- App path: `/var/www/trustfirst-client-portal`
+- Env file: `/etc/trustfirst-client-portal.env`
+- Database: `trustfirst_demo`
+- Database user: `trustfirst_demo`
+- PM2 process: `trustfirst-client-portal`
+- App port: `3010`
+- Host-key verified: yes
+- Known_hosts repaired: yes
+- External smoke: passed
+- Authenticated QA: passed
+- CafeLuxe untouched: yes
+
+## Standard Command Flow
+
+```bash
+npm run vps:host-key
+npm run vps:validate
+npm run vps:bootstrap
+npm run vps:deploy
+npm run vps:smoke
+npm run vps:report
+```
 
 ## Required Inputs
 
-- VPS host or IP.
-- SSH username.
-- SSH key or password access.
-- Optional demo domain/subdomain.
-- Clean SSH host-key verification for the VPS.
-- `.env.deploy.local` with `DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM=yes` and `DEPLOY_ALLOW_SHARED_OLD_VPS=yes`.
+- `.env.deploy.local` exists locally and is ignored by git.
+- `DEPLOY_HOST=45.10.21.141`
+- `DEPLOY_USER=trustfirst`
+- `DEPLOY_PORT=22`
+- `DEPLOY_KEY_PATH=%USERPROFILE%\.ssh\trustfirst_vps_ed25519`
+- `DEPLOY_APP_PORT=3010`
+- `DEPLOY_APP_DIR=/var/www/trustfirst-client-portal`
+- `DEPLOY_ENV_FILE=/etc/trustfirst-client-portal.env`
+- `DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM=yes`
+- `DEPLOY_ALLOW_SHARED_OLD_VPS=yes`
+- `DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256=SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0`
+
+Do not commit `.env.deploy.local` or private keys.
 
 ## Server Requirements
 
-Verify:
+Verified on the VPS:
 
-```bash
-node -v
-npm -v
-psql --version
-git --version
-nginx -v || caddy version
-pm2 -v || systemctl --version
-```
-
-Required:
-
-- Node.js `20.9+`
-- npm `10+`
-- PostgreSQL `14+`
-- Git
-- Nginx or Caddy
-- PM2 or systemd
-
-## App Directory
-
-```bash
-sudo mkdir -p /var/www/trustfirst-client-portal
-sudo chown -R "$USER":"$USER" /var/www/trustfirst-client-portal
-cd /var/www/trustfirst-client-portal
-git clone https://github.com/nitinkumawat9661/trustfirst-client-portal.git .
-npm ci
-```
-
-Do not use any CafeLuxe path. The only approved app directory is `/var/www/trustfirst-client-portal`.
-
-## PostgreSQL
-
-Create a VPS-only demo database:
-
-```bash
-sudo -u postgres psql
-```
-
-```sql
-CREATE DATABASE trustfirst_demo;
-CREATE USER trustfirst_demo WITH PASSWORD '<generated-strong-password>';
-GRANT ALL PRIVILEGES ON DATABASE trustfirst_demo TO trustfirst_demo;
-\q
-```
-
-Never reuse a production database.
-
-The only approved demo database and database user are both `trustfirst_demo`.
-
-## Environment File
-
-Create:
-
-```bash
-sudo install -m 600 -o "$USER" -g "$USER" /dev/null /etc/trustfirst-client-portal.env
-```
-
-Required values:
-
-```bash
-DATABASE_URL="postgresql://trustfirst_demo:<generated-password>@127.0.0.1:5432/trustfirst_demo?schema=public"
-AUTH_SECRET="<generated-by-node-crypto>"
-AUTH_URL="https://<demo-domain-or-ip>"
-NODE_ENV="production"
-STORAGE_DRIVER="local"
-UPLOAD_DIR="/var/www/trustfirst-client-portal/storage/uploads"
-MANGLAM_DEMO_ADMIN_EMAIL="manglam-demo-admin@trustfirst.example.com"
-MANGLAM_DEMO_ADMIN_PASSWORD="<generated-local-demo-password>"
-```
-
-Generate `AUTH_SECRET`:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-```
-
-## Storage
-
-```bash
-mkdir -p /var/www/trustfirst-client-portal/storage/uploads
-chmod 750 /var/www/trustfirst-client-portal/storage/uploads
-```
-
-The current platform has storage provider contracts. If a module does not yet persist files to local disk, document that in the deployment report.
+- Node.js v22.23.0
+- npm 10.9.8
+- PostgreSQL 14.23
+- Git 2.34.1
+- Nginx installed, not modified for TrustFirst because no domain is configured
+- PM2 installed for user `trustfirst`
+- UFW active with `3010/tcp` allowed for TrustFirst
 
 ## Migrations And Seed
 
-Load env without printing values:
+Completed:
 
-```bash
-set -a
-. /etc/trustfirst-client-portal.env
-set +a
-```
+- `npm run deploy:env`
+- `npm run db:generate`
+- `npm run deploy:migration-check`
+- `npm run deploy:migration-check -- --apply`
+- `npm run seed:manglam-demo`
 
-Run:
+Applied migrations:
 
-```bash
-npm run deploy:env
-npm run db:generate
-npm run deploy:migration-check
-npm run deploy:migration-check -- --apply
-npm run seed:manglam-demo
-```
+- `20260701172500_auth_multi_tenant_core`
+- `20260701193000_crm_client_workspace`
+- `20260702093000_requirement_engine`
+- `20260702113000_project_engine`
+- `20260702143000_commercial_document_engine`
+- `20260702160000_billing_invoice_payment_foundation`
+- `20260702173000_hardware_erp_plugin_foundation`
+- `20260702190000_hardware_sales_purchase_flow`
+- `20260702203000_hardware_demo_readiness`
 
-Verify:
+Seed verification:
 
-- Tenant slug `manglam-trading-demo`.
-- Admin user exists.
-- Hardware settings exist.
-- Products and stock exist.
-- Customers/suppliers exist.
-- Demo trade documents exist.
-
-## Build
-
-```bash
-npm run build
-```
-
-## PM2 Start
-
-```bash
-npm install -g pm2
-PORT=3010 pm2 start "npm run start --workspace @trustfirst/web" --name trustfirst-client-portal --env production
-pm2 save
-pm2 startup
-```
-
-Ensure the PM2 process receives `/etc/trustfirst-client-portal.env`. Do not restart CafeLuxe PM2 processes.
-
-## Reverse Proxy
-
-Nginx example:
-
-```nginx
-server {
-  listen 80;
-  server_name demo.example.com;
-
-  client_max_body_size 25m;
-
-  location / {
-    proxy_pass http://127.0.0.1:3010;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-  }
-}
-```
-
-Enable HTTPS if a domain is available:
-
-```bash
-sudo certbot --nginx -d demo.example.com
-```
-
-If no domain exists, use the VPS IP and document the lack of HTTPS/domain in `VPS_DEPLOYMENT_REPORT.md`.
-
-If no domain exists, the temporary app URL is:
-
-```text
-http://<vps-ip>:3010
-```
-
-## Shared Old VPS Deployment
-
-- Old VPS used: no, currently blocked by SSH public-key authentication failure.
-- Host masked: `45.10.x.x`.
-- Host-key status: trusted ED25519 fingerprint matched.
-- Trusted fingerprint used: `SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0`.
-- Known_hosts repaired: yes.
-- Known_hosts backup: `C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260702181522`.
-- Strict SSH validation passed: no, `root@45.10.21.141` rejected the available private keys.
-- App path: `/var/www/trustfirst-client-portal`.
-- Env path: `/etc/trustfirst-client-portal.env`.
-- DB name: `trustfirst_demo`.
-- DB user: `trustfirst_demo`.
-- App port: `3010`.
-- PM2 process: `trustfirst-client-portal`.
-- CafeLuxe untouched: yes.
-- Migrations applied: no.
-- Seed completed: no.
-- Smoke passed: no.
-- Authenticated QA passed: no.
-- Final demo readiness: blocked.
-
-Safe host-key repair after out-of-band fingerprint verification:
-
-```bash
-ssh-keygen -F 45.10.21.141
-ssh-keygen -R 45.10.21.141
-ssh-keyscan -p 22 45.10.21.141 >> ~/.ssh/known_hosts
-ssh -p 22 -i ~/.ssh/cafeluxe_vps_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes root@45.10.21.141 "hostname && uname -a"
-```
-
-Do not run bootstrap or deploy until the VPS owner provides an authorized SSH user/key pair and the strict SSH command succeeds.
+- Tenant slug: `manglam-trading-demo`
+- Products: 8
+- Stock locations: 2
+- Clients: 6
+- Hardware trade documents: 3
+- Invoices: 0
 
 ## Smoke Test
 
-From local or VPS:
+External smoke passed:
 
 ```bash
-SMOKE_BASE_URL=<vps-demo-url> npm run deploy:smoke
+npm run vps:smoke
 ```
 
-## Demo QA
+Checked:
+
+- `/api/auth/session`
+- `/manifest.webmanifest`
+- `/offline`
+- `/admin/hardware/demo`
+- `/admin/billing`
+- `/admin/hardware/inventory`
+- `/admin/hardware/print/sample`
+
+## Authenticated QA
+
+Authenticated QA passed using the generated Manglam demo admin credentials from the VPS env file without printing the password.
+
+Protected pages returned `200`:
+
+- `/admin/hardware/demo/manglam`
+- `/admin/hardware/products`
+- `/admin/hardware/inventory`
+- `/admin/billing`
+- `/admin/release-checklist`
+
+## Demo QA Walkthrough
 
 Open:
 
@@ -243,7 +137,7 @@ Open:
 - `/offline`
 - `/manifest.webmanifest`
 
-Then verify the Manglam flow:
+Then verify:
 
 1. Settings ready.
 2. Catalog ready.
@@ -256,3 +150,7 @@ Then verify the Manglam flow:
 9. Manual payment records.
 10. Outstanding updates.
 11. Offline queue panel visible.
+
+## HTTPS Note
+
+The current direct staging URL is HTTP on an IP/port. Configure a TrustFirst domain with HTTPS before a polished client-facing browser login demo. Do not reuse or overwrite the existing CafeLuxe Nginx site.

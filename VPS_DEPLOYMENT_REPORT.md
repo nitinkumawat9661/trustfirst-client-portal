@@ -2,90 +2,69 @@
 
 ## Status
 
-Sprint 33 attempted safe SSH authorization discovery after host-key verification. No existing user/key combination authorized successfully. A dedicated TrustFirst deploy key was generated locally and `VPS_SSH_ACCESS_REQUEST.md` was created for the VPS owner/provider.
+TrustFirst Client Portal was deployed successfully to the authorized shared VPS as an isolated Manglam demo environment.
 
-## Shared Old VPS Deployment
+## Deployment Target
 
-- Old VPS used: no
-- `.env.deploy.local` created: yes
-- Host masked: 45.10.x.x
-- Host-key status: trusted fingerprint matched
-- Key path exists: yes
-- Current fingerprint collected: yes
-- Trusted fingerprint configured: yes
-- Trusted fingerprint used: `SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0`
-- Known_hosts repaired: yes
-- Backup path: `C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260702181522`
-- Strict SSH validation passed: no
-- SSH auth probes attempted: yes
-- Working user/key found: no
-- Deploy key generated: yes
-- Public key request created: yes
-- App path: `/var/www/trustfirst-client-portal`
-- Env path: `/etc/trustfirst-client-portal.env`
-- DB name: `trustfirst_demo`
-- DB user: `trustfirst_demo`
-- App port: `3010`
-- PM2 process: `trustfirst-client-portal`
-- URL: not available
-- CafeLuxe untouched: yes
-- Deployment attempted: no
-- Migrations applied: no
-- Seed completed: no
-- Smoke passed: no
-- Authenticated QA passed: no
-- Final demo readiness: NOT READY FOR CLIENT DEMO
-
-## Validation Result
-
-Host-key verification command:
-
-```bash
-npm run vps:host-key
-```
-
-Result: trusted fingerprint matched and `known_hosts` was repaired, but no existing local key authorized any tested user.
-
-Evidence:
-
-- DNS/IP result: `45.10.21.141 (IPv4)`
-- Existing known_hosts fingerprints collected: yes
-- Current ssh-keyscan fingerprints collected: yes
-- Current ED25519 fingerprint: `SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0`
-- Current RSA fingerprint: `SHA256:U/yYcVMljDyvORobFkagh5xyj+XmVLeed8MQt/MlwmY`
-- Current ECDSA fingerprint: `SHA256:xTzBtiL+q/EsSR3/2buZioRuZl/z64QeXJJjvJe86vA`
-- Windows ssh-keyscan error: `choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com`
-- Git for Windows ssh-keyscan: succeeded once; later repeat scans timed out
-- Strict SSH validation: not passed; existing keys were rejected or timed out for tested users
-
-Because strict SSH validation failed, no VPS validation, bootstrap, database provisioning, deployment, migration, seed, smoke, or authenticated QA was attempted.
+- VPS URL: `http://45.10.21.141:3010`
+- Host: `45.10.x.x`
+- Shared old VPS used: yes
+- Deploy user: `trustfirst`
+- Host-key status: verified by trusted ED25519 fingerprint
+- SSH access status: passed
+- Server OS: Ubuntu 22.04.5 LTS
+- Node version: v22.23.0
+- npm version: 10.9.8
+- PostgreSQL version: 14.23
+- Git version: 2.34.1
+- Reverse proxy: not changed; no TrustFirst domain configured
+- Domain/subdomain: not configured
 
 ## Environment
 
-- `.env.deploy.local`: created locally and ignored by git
-- `DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM`: required
-- `DEPLOY_ALLOW_SHARED_OLD_VPS`: required
-- `DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256`: configured locally, not committed
-- `DEPLOY_APP_PORT`: must be `3010`
-- Deployment env file on VPS: not created
-- Storage directory on VPS: not created
-- Access request: `VPS_SSH_ACCESS_REQUEST.md`
+- Env configured: yes
+- Env file: `/etc/trustfirst-client-portal.env`
+- Storage status: configured
+- Upload directory: `/var/www/trustfirst-client-portal/storage/uploads`
+- App path: `/var/www/trustfirst-client-portal`
+- App port: `3010`
+- PM2 process: `trustfirst-client-portal`
+- UFW: `3010/tcp` allowed for TrustFirst
 
 ## Database
 
-- PostgreSQL setup: not performed
-- Database `trustfirst_demo`: not created
-- User `trustfirst_demo`: not created
-- Migration status: not applied
-- Seed status: not completed
+- PostgreSQL setup: completed
+- Database: `trustfirst_demo`
+- User: `trustfirst_demo`
+- Migration status: all 9 migrations applied successfully
+- Seed status: `seed:manglam-demo` completed
+- Tenant slug: `manglam-trading-demo`
+- Seed verification: 8 products, 2 stock locations, 6 clients, 3 hardware trade documents, 0 invoices
 
 ## QA
 
-- Smoke passed: no
-- Authenticated QA passed: no
-- Manglam demo QA passed: no
-- Final demo readiness: BLOCKED
+- External smoke: passed against `http://45.10.21.141:3010`
+- Auth route: 200
+- Manifest: 200
+- Offline page: 200
+- Protected admin routes: redirected when unauthenticated
+- Authenticated QA: passed with generated Manglam demo admin credentials without printing the password
+- Authenticated pages checked: `/admin/hardware/demo/manglam`, `/admin/hardware/products`, `/admin/hardware/inventory`, `/admin/billing`, `/admin/release-checklist`
+- CafeLuxe files untouched: yes
+- CafeLuxe database untouched: yes
+- CafeLuxe PM2 process untouched: yes
+- CafeLuxe Nginx/Caddy config not overwritten: yes
+- CafeLuxe port 3000 untouched: yes
+- TrustFirst port: `3010`
 
-## Blocker
+## Demo Readiness
 
-See `VPS_BLOCKER_REPORT.md` and `VPS_HOST_KEY_VERIFICATION.md`.
+Final demo readiness: deployed and ready for staging QA on the shared VPS.
+
+For a polished browser-based client demo, configure a real HTTPS domain or reverse proxy for TrustFirst. The app intentionally uses secure production cookies, so direct HTTP on an IP/port is acceptable for smoke checks but is not the preferred final login experience.
+
+## Notes
+
+- Deployment used a tracked-source archive over verified SSH because the GitHub remote currently exposes no `main` branch heads to clone from.
+- Secrets were generated on the VPS and written only to `/etc/trustfirst-client-portal.env`.
+- No `.env.deploy.local`, private SSH key, database password, `AUTH_SECRET`, or demo password was committed.

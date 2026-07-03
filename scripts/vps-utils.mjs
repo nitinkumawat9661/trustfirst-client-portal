@@ -169,7 +169,7 @@ export function runSsh(config, remoteCommand, options = {}) {
   return spawnSync("ssh", [...sshBaseArgs(config, options), remoteCommand], {
     cwd: repoRoot,
     encoding: "utf8",
-    shell: process.platform === "win32",
+    shell: false,
     stdio: options.stdio ?? "pipe",
   });
 }

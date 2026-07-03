@@ -1,46 +1,48 @@
 # VPS Access Requirements
 
-Codex cannot deploy until the authorized old shared VPS host/user/key are configured and strict SSH host-key verification succeeds.
+## Status
 
-Sprint 33 generated a dedicated TrustFirst deploy key locally. The public key request is documented in `VPS_SSH_ACCESS_REQUEST.md`; the private key is not committed.
+Access is now configured and verified for the authorized shared VPS.
 
-## Required Access
+## Verified Access
 
-Provide a `.env.deploy.local` file using `.env.deploy.example` with:
+- Host: `45.10.x.x`
+- SSH user: `trustfirst`
+- Sudo: passwordless sudo available for deployment tasks
+- Key: dedicated TrustFirst deploy private key on the developer machine
+- Host-key verification: passed
+- Trusted fingerprint: `SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0`
+- Strict SSH: passed
+- `.env.deploy.local`: exists locally and remains uncommitted
 
-- `DEPLOY_HOST`: authorized TrustFirst/Manglam VPS host or IP.
-- `DEPLOY_USER`: SSH user with sudo permissions.
-- `DEPLOY_PORT`: SSH port, default `22`.
-- `DEPLOY_KEY_PATH`: local path to the private SSH key.
-- `DEPLOY_DOMAIN`: optional demo domain/subdomain.
-- `DEPLOY_APP_PORT`: must be `3010`.
-- `DEPLOY_APP_DIR`: `/var/www/trustfirst-client-portal`.
-- `DEPLOY_ENV_FILE`: `/etc/trustfirst-client-portal.env`.
-- `DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM`: must be `yes`.
-- `DEPLOY_ALLOW_SHARED_OLD_VPS`: must be `yes`.
+## Required Local Values
 
-## Server Permissions Needed
+The ignored `.env.deploy.local` must contain:
 
-The SSH user must be able to:
+- `DEPLOY_HOST=45.10.21.141`
+- `DEPLOY_USER=trustfirst`
+- `DEPLOY_PORT=22`
+- `DEPLOY_KEY_PATH=%USERPROFILE%\.ssh\trustfirst_vps_ed25519`
+- `DEPLOY_DOMAIN=`
+- `DEPLOY_APP_PORT=3010`
+- `DEPLOY_APP_DIR=/var/www/trustfirst-client-portal`
+- `DEPLOY_ENV_FILE=/etc/trustfirst-client-portal.env`
+- `DEPLOY_CONFIRM_TRUSTFIRST_MANGLAM=yes`
+- `DEPLOY_ALLOW_SHARED_OLD_VPS=yes`
+- `DEPLOY_TRUSTED_HOST_FINGERPRINT_SHA256=SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0`
 
-- Install packages with `sudo`.
+Do not commit `.env.deploy.local`, private keys, generated passwords, `AUTH_SECRET`, or VPS env files.
+
+## Server Permissions Used
+
+The `trustfirst` user can:
+
+- Install/check packages with `sudo`.
 - Create `/var/www/trustfirst-client-portal`.
 - Create `/etc/trustfirst-client-portal.env`.
 - Create PostgreSQL database/user `trustfirst_demo`.
-- Start/restart only PM2 process `trustfirst-client-portal` or its systemd service.
-- Configure a separate TrustFirst Nginx or Caddy site if reverse proxy is required.
-
-## Server Requirements
-
-The bootstrap script checks or installs:
-
-- Node.js `20.9+`
-- npm `10+`
-- PostgreSQL `14+`
-- Git
-- Nginx
-- PM2
-- Build tooling
+- Start/restart only PM2 process `trustfirst-client-portal`.
+- Add UFW allow rule for `3010/tcp`.
 
 ## Explicitly Forbidden
 
@@ -53,25 +55,13 @@ The bootstrap script checks or installs:
 - Do not commit `.env.deploy.local` or `/etc/trustfirst-client-portal.env`.
 - Do not commit private SSH keys.
 
-## Shared Old VPS Deployment
+## Current Deployment Result
 
-- Old VPS used: no, currently blocked.
-- Host masked: `45.10.x.x`.
-- Host-key status: blocked by `REMOTE HOST IDENTIFICATION HAS CHANGED`.
-- App path: `/var/www/trustfirst-client-portal`.
-- Env path: `/etc/trustfirst-client-portal.env`.
-- DB name: `trustfirst_demo`.
-- DB user: `trustfirst_demo`.
-- App port: `3010`.
-- PM2 process: `trustfirst-client-portal`.
-- CafeLuxe untouched: yes.
-- Final demo readiness: blocked until the host key is verified and `.env.deploy.local` exists.
-- SSH access request: see `VPS_SSH_ACCESS_REQUEST.md`.
-
-## First Command After Access Is Added
-
-```bash
-npm run vps:validate
-```
-
-Only continue to bootstrap/deploy after validation succeeds.
+- App URL: `http://45.10.21.141:3010`
+- DB status: `trustfirst_demo` configured
+- Migration status: applied
+- Seed status: completed
+- Smoke status: passed
+- Authenticated QA status: passed
+- CafeLuxe untouched: yes
+- Final demo readiness: deployed and ready for staging QA

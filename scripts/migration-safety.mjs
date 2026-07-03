@@ -5,11 +5,18 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const schema = "packages/database/prisma/schema.prisma";
-const args = ["prisma", "migrate", "status", "--schema", schema];
-const status = spawnSync("npx", args, { shell: process.platform === "win32", stdio: "inherit" });
+const schema = "prisma/schema.prisma";
+const prismaArgs = ["--workspace", "@trustfirst/database", "--", "prisma"];
+const status = spawnSync("npm", ["exec", ...prismaArgs, "migrate", "status", "--schema", schema], {
+  encoding: "utf8",
+  shell: process.platform === "win32",
+  stdio: "pipe",
+});
+const statusOutput = `${status.stdout ?? ""}${status.stderr ?? ""}`;
+process.stdout.write(statusOutput);
 
-if (status.status !== 0) {
+const hasPendingMigrations = /Following migrations have not yet been applied/i.test(statusOutput);
+if (status.status !== 0 && !hasPendingMigrations) {
   console.error("Prisma migration status failed. Review the database before deploying.");
   process.exit(status.status ?? 1);
 }
@@ -17,8 +24,8 @@ if (status.status !== 0) {
 if (process.argv.includes("--apply")) {
   console.log("Applying migrations with prisma migrate deploy.");
   const deploy = spawnSync(
-    "npx",
-    ["prisma", "migrate", "deploy", "--schema", schema],
+    "npm",
+    ["exec", ...prismaArgs, "migrate", "deploy", "--schema", schema],
     { shell: process.platform === "win32", stdio: "inherit" },
   );
   process.exit(deploy.status ?? 1);
