@@ -43,11 +43,30 @@ Stored metadata includes:
 
 - `source: public-intake`
 - public submission number
+- submitted status
+- possible duplicate marker when a recent same firm/mobile submission exists
 - review status
 - hashed IP address when available
 - truncated user agent when available
 
 No secrets, passwords, or private deployment values are stored in the intake payload.
+
+## Confirmation Contract
+
+The thank-you page is shown only after the backend confirms:
+
+- a database `Requirement` record was created
+- the public Submission ID was generated
+- status was saved
+- `clientSlug` is `manglam-trading-demo`
+
+If saving fails, the intake route shows:
+
+```text
+Submission failed. Please retry or send details on WhatsApp.
+```
+
+The page does not show fake success from frontend-only state.
 
 ## Admin Review
 
@@ -74,3 +93,7 @@ until a proper HTTPS demo domain is configured. The HTTPS domain remains require
 The public intake page no longer depends on the root streaming loading fallback or client-side hydration to show the form. It now renders a native server-side form and posts directly to the public intake API.
 
 This keeps anonymous access limited to the public intake route and submit endpoint while preventing the browser from staying on a spinner if inline streaming reveal scripts are blocked by CSP.
+
+## Receipt Verification
+
+Every successful public intake submission creates an internal receipt timeline entry with submission ID, client slug, timestamp, status, source, and safely captured request metadata. This receipt is visible only through protected admin/internal access.

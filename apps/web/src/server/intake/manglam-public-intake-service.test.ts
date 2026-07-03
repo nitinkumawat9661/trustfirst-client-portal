@@ -44,6 +44,7 @@ function validInput() {
 describe("ManglamPublicIntakeService", () => {
   it("stores public intake as a tenant-scoped submitted requirement", async () => {
     const createdRequirements: Array<Record<string, unknown>> = [];
+    const timelineEvents: Array<Record<string, unknown>> = [];
     const service = new ManglamPublicIntakeService({
       $transaction: async (
         callback: (tx: {
@@ -59,7 +60,12 @@ describe("ManglamPublicIntakeService", () => {
               return { id: "req_1", ...data };
             },
           },
-          requirementTimelineEvent: { create: async () => ({}) },
+          requirementTimelineEvent: {
+            create: async ({ data }) => {
+              timelineEvents.push(data);
+              return {};
+            },
+          },
           requirementVersion: { create: async () => ({}) },
         }),
       clientOrganization: {
@@ -70,6 +76,7 @@ describe("ManglamPublicIntakeService", () => {
       },
       requirement: {
         count: async () => 0,
+        findMany: async () => [],
       },
       tenant: {
         findUnique: async () => ({ id: "tenant_1" }),
@@ -81,7 +88,14 @@ describe("ManglamPublicIntakeService", () => {
       userAgent: "vitest",
     });
 
-    expect(result).toEqual({ submissionNumber: `PUB-REQ-${new Date().getFullYear()}-0001` });
+    expect(result).toMatchObject({
+      businessName: "Demo Hardware Store",
+      clientSlug: MANGLAM_PUBLIC_INTAKE_CLIENT_SLUG,
+      possibleDuplicate: false,
+      status: RequirementStatus.PENDING,
+      submissionNumber: `PUB-REQ-${new Date().getFullYear()}-0001`,
+    });
+    expect(result.submittedAt).toBeInstanceOf(Date);
     expect(createdRequirements[0]).toMatchObject({
       clientId: "client_1",
       priority: "HIGH",
@@ -92,9 +106,53 @@ describe("ManglamPublicIntakeService", () => {
     expect(createdRequirements[0]?.metadata).toMatchObject({
       clientSlug: MANGLAM_PUBLIC_INTAKE_CLIENT_SLUG,
       publicIntake: true,
+      possibleDuplicate: false,
       reviewed: false,
       source: PUBLIC_INTAKE_SOURCE,
       statusLabel: "New Requirement Submitted",
+    });
+    expect(timelineEvents[0]?.metadata).toMatchObject({
+      clientSlug: MANGLAM_PUBLIC_INTAKE_CLIENT_SLUG,
+      receiptLog: true,
+      source: PUBLIC_INTAKE_SOURCE,
+      status: RequirementStatus.PENDING,
+    });
+  });
+
+  it("marks obvious recent duplicate submissions without blocking a receipt", async () => {
+    const service = new ManglamPublicIntakeService({
+      $transaction: async (
+        callback: (tx: {
+          requirement: { create: (input: { data: Record<string, unknown> }) => Promise<Record<string, unknown>> };
+          requirementTimelineEvent: { create: () => Promise<unknown> };
+          requirementVersion: { create: () => Promise<unknown> };
+        }) => Promise<unknown>,
+      ) =>
+        callback({
+          requirement: { create: async ({ data }) => ({ id: "req_2", ...data }) },
+          requirementTimelineEvent: { create: async () => ({}) },
+          requirementVersion: { create: async () => ({}) },
+        }),
+      clientOrganization: {
+        upsert: async () => ({ id: "client_1" }),
+      },
+      requirement: {
+        count: async () => 1,
+        findMany: async () => [
+          {
+            metadata: { submissionNumber: "PUB-REQ-2026-0001" },
+            submittedData: validInput(),
+          },
+        ],
+      },
+      tenant: {
+        findUnique: async () => ({ id: "tenant_1" }),
+      },
+    } as unknown as PrismaClient);
+
+    await expect(service.submit(validInput())).resolves.toMatchObject({
+      possibleDuplicate: true,
+      submissionNumber: `PUB-REQ-${new Date().getFullYear()}-0002`,
     });
   });
 

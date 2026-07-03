@@ -1,5 +1,6 @@
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Textarea } from "@trustfirst/ui";
 import { ShieldCheck } from "lucide-react";
+import { PublicIntakeSubmitGuard } from "./public-intake-submit-guard";
 
 const productCategoryOptions = [
   "Pipes",
@@ -28,7 +29,8 @@ const reportOptions = [
 
 export function ManglamPublicIntakeServerForm() {
   return (
-    <form action="/api/public/intake/manglam-trading-demo" className="space-y-5" method="post">
+    <form action="/api/public/intake/manglam-trading-demo" className="space-y-5" id="manglam-public-intake-form" method="post">
+      <PublicIntakeSubmitGuard formId="manglam-public-intake-form" />
       <Card>
         <CardHeader>
           <Badge>Public requirement intake</Badge>
@@ -116,7 +118,7 @@ export function ManglamPublicIntakeServerForm() {
             <ShieldCheck className="size-4" />
             Public users can submit requirements only. Admin routes remain protected.
           </p>
-          <Button className="w-full sm:w-auto" type="submit">Submit</Button>
+          <Button className="w-full sm:w-auto" data-public-intake-submit type="submit">Submit</Button>
         </div>
       </div>
     </form>

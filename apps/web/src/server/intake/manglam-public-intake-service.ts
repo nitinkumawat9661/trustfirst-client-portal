@@ -22,20 +22,40 @@ export type PublicIntakeSubmitMetadata = {
 };
 
 export type PublicIntakeSubmissionResult = {
+  businessName: string;
+  clientSlug: string;
+  possibleDuplicate: boolean;
+  status: RequirementStatus;
+  submittedAt: Date;
   submissionNumber: string;
 };
 
 export type PublicIntakeQueueItem = {
+  businessName: string;
+  clientSlug: string;
   clientName: string | null;
   contactName: string;
   createdAt: Date;
   id: string;
+  mobile: string;
+  possibleDuplicate: boolean;
   priority: string;
   reviewed: boolean;
+  source: string;
   status: string;
+  submittedAt: Date | null;
   submissionNumber: string;
   title: string;
   updatedAt: Date;
+};
+
+export type PublicIntakeReceipt = {
+  businessName: string;
+  clientSlug: string;
+  possibleDuplicate: boolean;
+  status: string;
+  submittedAt: Date;
+  submissionNumber: string;
 };
 
 export class ManglamPublicIntakeService {
@@ -92,12 +112,17 @@ export class ManglamPublicIntakeService {
       },
     });
 
-    const submissionNumber = await this.nextSubmissionNumber(tenant.id);
+    const [submissionNumber, duplicate] = await Promise.all([
+      this.nextSubmissionNumber(tenant.id),
+      this.findPossibleDuplicate(tenant.id, input),
+    ]);
     const submittedAt = new Date();
     const submittedData = input as unknown as Prisma.InputJsonValue;
     const intakeMetadata = {
       clientSlug: MANGLAM_PUBLIC_INTAKE_CLIENT_SLUG,
+      duplicateOfSubmission: duplicate?.submissionNumber ?? null,
       ipHash: metadata.ipAddress ? hashValue(metadata.ipAddress) : null,
+      possibleDuplicate: Boolean(duplicate),
       publicIntake: true,
       reviewed: false,
       source: PUBLIC_INTAKE_SOURCE,
@@ -141,18 +166,31 @@ export class ManglamPublicIntakeService {
       await tx.requirementTimelineEvent.create({
         data: {
           metadata: {
+            clientSlug: MANGLAM_PUBLIC_INTAKE_CLIENT_SLUG,
+            ipHash: metadata.ipAddress ? hashValue(metadata.ipAddress) : null,
+            possibleDuplicate: Boolean(duplicate),
+            receiptLog: true,
             source: PUBLIC_INTAKE_SOURCE,
+            status: RequirementStatus.PENDING,
             submissionNumber,
+            userAgent: metadata.userAgent?.slice(0, 300) ?? null,
           },
           requirementId: requirement.id,
-          summary: "New requirement submitted from public intake",
+          summary: `Receipt logged for public intake ${submissionNumber}`,
           tenantId: tenant.id,
           verb: RequirementTimelineVerb.SUBMITTED,
         },
       });
     });
 
-    return { submissionNumber };
+    return {
+      businessName: input.company.firmName,
+      clientSlug: MANGLAM_PUBLIC_INTAKE_CLIENT_SLUG,
+      possibleDuplicate: Boolean(duplicate),
+      status: RequirementStatus.PENDING,
+      submittedAt,
+      submissionNumber,
+    };
   }
 
   async listQueue(tenantId: string): Promise<PublicIntakeQueueItem[]> {
@@ -173,18 +211,65 @@ export class ManglamPublicIntakeService {
       const metadata = record.metadata as Record<string, unknown>;
 
       return {
+        businessName: data?.company?.firmName ?? record.client?.name ?? "Not provided",
+        clientSlug: String(metadata.clientSlug ?? MANGLAM_PUBLIC_INTAKE_CLIENT_SLUG),
         clientName: record.client?.name ?? null,
         contactName: data?.company?.contactName ?? "Not provided",
         createdAt: record.createdAt,
         id: record.id,
+        mobile: data?.company?.phone ?? "Not provided",
+        possibleDuplicate: metadata.possibleDuplicate === true,
         priority: record.priority,
         reviewed: metadata.reviewed === true,
+        source: String(metadata.source ?? PUBLIC_INTAKE_SOURCE),
         status: record.status,
+        submittedAt: record.submittedAt,
         submissionNumber: String(metadata.submissionNumber ?? record.id),
         title: record.title,
         updatedAt: record.updatedAt,
       };
     });
+  }
+
+  async getReceiptBySubmissionNumber(submissionNumber: string): Promise<PublicIntakeReceipt | null> {
+    const tenant = await this.prisma.tenant.findUnique({
+      select: { id: true },
+      where: { slug: MANGLAM_PUBLIC_INTAKE_TENANT_SLUG },
+    });
+    if (!tenant) return null;
+
+    const record = await this.prisma.requirement.findFirst({
+      select: {
+        metadata: true,
+        status: true,
+        submittedAt: true,
+        submittedData: true,
+      },
+      where: {
+        metadata: {
+          path: ["submissionNumber"],
+          equals: submissionNumber,
+        },
+        tenantId: tenant.id,
+      },
+    });
+
+    if (!record?.submittedAt) return null;
+
+    const data = record.submittedData as Partial<ManglamPublicIntakeInput> | null;
+    const metadata = record.metadata as Record<string, unknown>;
+
+    if (metadata.source !== PUBLIC_INTAKE_SOURCE) return null;
+    if (metadata.clientSlug !== MANGLAM_PUBLIC_INTAKE_CLIENT_SLUG) return null;
+
+    return {
+      businessName: data?.company?.firmName ?? "Manglam Trading Company",
+      clientSlug: MANGLAM_PUBLIC_INTAKE_CLIENT_SLUG,
+      possibleDuplicate: metadata.possibleDuplicate === true,
+      status: record.status,
+      submittedAt: record.submittedAt,
+      submissionNumber,
+    };
   }
 
   async getQueueItem(tenantId: string, requirementId: string) {
@@ -258,8 +343,48 @@ export class ManglamPublicIntakeService {
 
     return `PUB-REQ-${year}-${String(count + 1).padStart(4, "0")}`;
   }
+
+  private async findPossibleDuplicate(tenantId: string, input: ManglamPublicIntakeInput) {
+    const recent = await this.prisma.requirement.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        metadata: true,
+        submittedData: true,
+      },
+      take: 25,
+      where: {
+        createdAt: {
+          gte: new Date(Date.now() - 30 * 60 * 1000),
+        },
+        metadata: { path: ["source"], equals: PUBLIC_INTAKE_SOURCE },
+        tenantId,
+      },
+    });
+
+    const normalizedFirm = normalizeDuplicateValue(input.company.firmName);
+    const normalizedPhone = normalizeDuplicateValue(input.company.phone);
+
+    for (const record of recent) {
+      const data = record.submittedData as Partial<ManglamPublicIntakeInput> | null;
+      const metadata = record.metadata as Record<string, unknown>;
+      if (
+        normalizeDuplicateValue(data?.company?.firmName) === normalizedFirm &&
+        normalizeDuplicateValue(data?.company?.phone) === normalizedPhone
+      ) {
+        return {
+          submissionNumber: String(metadata.submissionNumber ?? ""),
+        };
+      }
+    }
+
+    return null;
+  }
 }
 
 function hashValue(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function normalizeDuplicateValue(value: string | undefined) {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }

@@ -35,6 +35,14 @@ After submit, the public user sees only a submission number such as:
 PUB-REQ-2026-0001
 ```
 
+The thank-you page appears only after the server saves the intake in the database. It shows:
+
+- Submission ID
+- submitted date/time
+- business name
+- `Your details have been received by TrustFirst.`
+- `Please send this Submission ID to TrustFirst on WhatsApp.`
+
 Public users cannot view or list submissions.
 
 ## Admin Review
@@ -55,21 +63,25 @@ Each item is stored in the existing Requirement Engine with:
 
 Admins can mark a submission as reviewed. Conversion into deeper business workflows remains an authenticated admin action.
 
+The admin queue shows the same Submission ID, submitted time, business name, owner/mobile summary, status, source `public-intake`, and client slug `manglam-trading-demo`.
+
 ## Demo Script
 
 1. Open the public intake link and confirm the form title is visible.
 2. Fill the required firm, business, catalog, payment, report, and pain-point fields.
 3. Submit the form.
-4. Confirm the thank-you page shows a public submission number.
-5. Open `/admin/requirements/intake` as an authenticated TrustFirst admin.
-6. Verify the new submission appears in the protected queue.
-7. Mark the item reviewed.
-8. Confirm anonymous browser access to `/admin`, `/client`, and protected APIs is blocked.
-9. Run `SMOKE_BASE_URL=http://45.10.21.141:3010 npm run intake:smoke` after deployment.
+4. Confirm the thank-you page shows a public Submission ID, submitted time, and business name.
+5. Ask the client to send the Submission ID to TrustFirst on WhatsApp.
+6. Open `/admin/requirements/intake` as an authenticated TrustFirst admin.
+7. Verify the same Submission ID appears in the protected queue.
+8. Mark the item reviewed.
+9. Confirm anonymous browser access to `/admin`, `/client`, and protected APIs is blocked.
+10. Run `SMOKE_BASE_URL=http://45.10.21.141:3010 npm run intake:smoke` after deployment.
 
 ## Limitations
 
 - This is an intake foundation, not a public portal.
 - Public users cannot upload files in this intake path.
 - Public users cannot edit a submitted requirement after final submit.
+- A failed backend save shows an error state instead of a thank-you page.
 - Final production client usage still requires HTTPS/domain setup.

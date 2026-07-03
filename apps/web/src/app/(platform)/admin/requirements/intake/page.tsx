@@ -53,13 +53,16 @@ export default async function AdminRequirementIntakePage() {
                     <div>
                       <CardTitle>{submission.title}</CardTitle>
                       <CardDescription>
-                        {submission.submissionNumber} · {submission.contactName} · {submission.clientName ?? "No client linked"}
+                        {submission.submissionNumber} · {formatAdminDate(submission.submittedAt ?? submission.createdAt)} · {submission.businessName}
                       </CardDescription>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Badge>{submission.status}</Badge>
                       <Badge>{submission.priority}</Badge>
+                      <Badge>{submission.source}</Badge>
+                      <Badge>{submission.clientSlug}</Badge>
                       <Badge>{submission.reviewed ? "Reviewed" : "New Requirement Submitted"}</Badge>
+                      {submission.possibleDuplicate ? <Badge>Possible duplicate</Badge> : null}
                     </div>
                   </div>
                 </CardHeader>
@@ -97,7 +100,13 @@ async function IntakeSubmissionDetails({
   }
 
   const groups = [
-    ["Firm", [data.company.firmName, data.company.contactName, data.company.phone, data.company.email].filter(Boolean).join(" · ")],
+    ["Submission ID", String((record.metadata as Record<string, unknown>).submissionNumber ?? record.id)],
+    ["Submitted time", record.submittedAt ? formatAdminDate(record.submittedAt) : "Not submitted"],
+    ["Business name", data.company.firmName],
+    ["Owner/mobile summary", [data.company.contactName, data.company.phone, data.company.email].filter(Boolean).join(" · ")],
+    ["Status", record.status],
+    ["Source", String((record.metadata as Record<string, unknown>).source ?? PUBLIC_INTAKE_SOURCE)],
+    ["Client slug", record.client?.slug ?? "manglam-trading-demo"],
     ["Business", [data.business.businessType, data.business.address, data.business.teamSize].filter(Boolean).join(" · ")],
     ["Catalog", [...data.catalog.productCategories, ...data.catalog.unitTypes].join(", ")],
     ["Inventory", [data.inventory.godowns, data.inventory.stockTracking, data.inventory.lowStockAlerts].filter(Boolean).join(" · ")],
@@ -119,4 +128,12 @@ async function IntakeSubmissionDetails({
       ))}
     </dl>
   );
+}
+
+function formatAdminDate(value: Date) {
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Kolkata",
+  }).format(value);
 }

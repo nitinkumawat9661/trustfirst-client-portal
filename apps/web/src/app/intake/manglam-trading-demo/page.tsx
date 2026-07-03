@@ -10,7 +10,14 @@ export const metadata: Metadata = {
   },
 };
 
-export default function ManglamRequirementIntakePage() {
+export default async function ManglamRequirementIntakePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const params = await searchParams;
+  const error = params.error;
+
   return (
     <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl">
@@ -23,6 +30,11 @@ export default function ManglamRequirementIntakePage() {
             Please complete the public intake below. The submission goes directly to the protected TrustFirst admin intake queue.
           </p>
         </div>
+        {error ? (
+          <div className="mb-5 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">
+            Submission failed. Please retry or send details on WhatsApp.
+          </div>
+        ) : null}
         <ManglamPublicIntakeServerForm />
       </div>
     </main>
