@@ -1,9 +1,13 @@
 import type { ReactNode } from "react";
 import { AdminDashboardShell } from "@/components/admin/admin-dashboard-shell";
 import { requireCurrentUser } from "@/server/auth/session";
+import { isHttpStagingAuthBypassActive } from "@/server/auth/staging-auth-bypass";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const user = await requireCurrentUser();
+  const [user, stagingAuthBypass] = await Promise.all([
+    requireCurrentUser(),
+    isHttpStagingAuthBypassActive(),
+  ]);
 
   return (
     <AdminDashboardShell
@@ -11,6 +15,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         tenantId: user.activeTenantId ?? "public",
         userId: user.id,
       }}
+      stagingAuthBypass={stagingAuthBypass}
     >
       {children}
     </AdminDashboardShell>

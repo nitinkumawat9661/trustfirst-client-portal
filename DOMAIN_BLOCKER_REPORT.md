@@ -33,10 +33,14 @@ Do not commit `.env.deploy.local`.
 - HTTPS smoke passed: no
 - HTTP staging smoke passed: yes, `http://45.10.21.141:3010`
 - HTTP staging login enabled: yes, temporary env-gated workaround
+- HTTP staging auth bypass enabled: yes, temporary env-gated workaround
+- Sign-in removed for HTTP staging: yes
 - Login status: passed on HTTP staging after enabling the explicit gate
+- Admin pages open without login: yes
 - Authenticated QA over HTTPS: no
 - Manglam full demo QA over HTTPS: no
 - Manglam full demo QA over HTTP staging: passed
+- Rollback note created: yes, `HTTP_STAGING_AUTH_BYPASS_NOTE.md`
 - CafeLuxe untouched: yes
 - Final demo readiness: READY FOR HTTP STAGING QA ONLY
 

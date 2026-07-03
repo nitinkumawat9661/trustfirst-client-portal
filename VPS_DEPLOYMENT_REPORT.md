@@ -37,6 +37,8 @@ Sprint 35 HTTPS domain setup is blocked because `DEPLOY_DOMAIN` is empty in `.en
 - AUTH_URL updated to HTTPS domain: no
 - AUTH_URL status: `http://45.10.21.141:3010`
 - HTTP staging login enabled: yes
+- HTTP staging auth bypass enabled: yes
+- Sign-in removed for HTTP staging: yes
 - PM2 restarted for HTTPS domain: no
 
 ## Database
@@ -58,6 +60,7 @@ Sprint 35 HTTPS domain setup is blocked because `DEPLOY_DOMAIN` is empty in `.en
 - Offline page: 200
 - Protected admin routes: redirected when unauthenticated
 - Authenticated QA: passed on current HTTP staging environment with generated Manglam demo admin credentials without printing the password
+- No-login admin QA: passed on current HTTP staging environment
 - Authenticated QA over HTTPS: not run, blocked by missing domain
 - Manglam full demo QA over HTTP staging: passed
 - Manglam flow checked: settings, catalog, opening stock, quotation, quotation-to-sale, stock deduction, invoice draft, A4 print preview, manual payment, outstanding dashboard, offline page
@@ -82,3 +85,4 @@ For a polished browser-based client demo, configure a real HTTPS domain or rever
 - No `.env.deploy.local`, private SSH key, database password, `AUTH_SECRET`, or demo password was committed.
 - Domain blocker details are documented in `DOMAIN_BLOCKER_REPORT.md`.
 - Temporary HTTP login rollback is documented in `HTTP_STAGING_LOGIN_NOTE.md`.
+- Temporary HTTP auth bypass rollback is documented in `HTTP_STAGING_AUTH_BYPASS_NOTE.md`.

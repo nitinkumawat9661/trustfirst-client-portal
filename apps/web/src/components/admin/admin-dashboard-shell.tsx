@@ -24,9 +24,10 @@ import type { OfflineQueueScope } from "@/lib/offline-queue";
 type AdminDashboardShellProps = {
   children: ReactNode;
   offlineScope: OfflineQueueScope;
+  stagingAuthBypass?: boolean;
 };
 
-export function AdminDashboardShell({ children, offlineScope }: AdminDashboardShellProps) {
+export function AdminDashboardShell({ children, offlineScope, stagingAuthBypass = false }: AdminDashboardShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -120,6 +121,11 @@ export function AdminDashboardShell({ children, offlineScope }: AdminDashboardSh
             <UserMenu open={userMenuOpen} onOpenChange={setUserMenuOpen} />
           </div>
         </header>
+        {stagingAuthBypass ? (
+          <div className="border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950 sm:px-6 lg:px-8" role="status">
+            HTTP staging auth bypass is enabled. This is for staging QA only. Do not use for production clients.
+          </div>
+        ) : null}
         <main className="px-4 py-6 sm:px-6 lg:px-8">
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>

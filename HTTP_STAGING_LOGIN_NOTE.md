@@ -35,3 +35,5 @@ After HTTPS domain setup:
 4. Re-run smoke and authenticated QA over HTTPS.
 
 Do not use this setting for production clients.
+
+For the temporary no-login demo path, see `HTTP_STAGING_AUTH_BYPASS_NOTE.md`. Remove both HTTP staging env gates after HTTPS is configured.

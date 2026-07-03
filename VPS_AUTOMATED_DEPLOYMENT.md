@@ -15,6 +15,7 @@ Do not overwrite, delete, restart, or modify the existing CafeLuxe app, database
 - App URL: `http://45.10.21.141:3010`
 - HTTPS demo URL: blocked, no domain configured
 - HTTP staging login: enabled by `TRUSTFIRST_HTTP_STAGING_LOGIN=yes`
+- HTTP staging auth bypass: enabled by `TRUSTFIRST_HTTP_STAGING_AUTH_BYPASS=yes`
 - App path: `/var/www/trustfirst-client-portal`
 - Env file: `/etc/trustfirst-client-portal.env`
 - DB name: `trustfirst_demo`
@@ -121,6 +122,7 @@ Secrets are written only to the VPS env file and are never printed by the script
 - PM2 restarted for domain: no
 - HTTPS smoke passed: no
 - Login status: passed on HTTP staging
+- Admin pages open without login: yes
 - Manglam full demo QA: passed on HTTP staging
 - Final demo readiness: READY FOR HTTP STAGING QA ONLY
 

@@ -1,8 +1,18 @@
 import { auth } from "@/auth";
 import { AppError } from "../domain/errors";
+import { getHttpStagingBypassUser, isHttpStagingAuthBypassActive } from "./staging-auth-bypass";
 
 export async function requireCurrentUser() {
   const session = await auth();
+
+  if (session?.user?.id) {
+    return session.user;
+  }
+
+  if (await isHttpStagingAuthBypassActive()) {
+    const bypassUser = await getHttpStagingBypassUser();
+    if (bypassUser?.id) return bypassUser;
+  }
 
   if (!session?.user?.id) {
     throw new AppError({
@@ -26,4 +36,3 @@ export function readSessionToken(request: Request) {
 
   return sessionCookie?.split("=").slice(1).join("=");
 }
-
