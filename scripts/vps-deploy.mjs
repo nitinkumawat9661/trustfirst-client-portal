@@ -88,7 +88,7 @@ if [ "$APP_PORT" != "3010" ] || [ "$DB_NAME" != "trustfirst_demo" ] || [ "$DB_US
   exit 1
 fi
 if (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null || true) | grep -Eq "[:.]$APP_PORT[[:space:]]"; then
-  if command -v pm2 >/dev/null 2>&1 && pm2 jlist 2>/dev/null | grep -q "\"name\":\"$PM2_PROCESS\""; then
+  if command -v pm2 >/dev/null 2>&1 && pm2 describe "$PM2_PROCESS" >/dev/null 2>&1; then
     echo "Port $APP_PORT is currently owned by TrustFirst; deploy will restart only $PM2_PROCESS."
   else
     echo "Refusing deployment because port $APP_PORT is already used by another service." >&2

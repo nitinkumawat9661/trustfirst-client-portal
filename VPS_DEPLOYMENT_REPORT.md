@@ -4,7 +4,7 @@
 
 TrustFirst Client Portal is deployed successfully to the authorized shared VPS as an isolated Manglam demo environment.
 
-Sprint 35 HTTPS domain setup is blocked because `DEPLOY_DOMAIN` is empty in `.env.deploy.local`. The app remains available for staging QA at the direct HTTP port URL.
+Sprint 35 HTTPS domain setup is blocked because `DEPLOY_DOMAIN` is empty in `.env.deploy.local`. The app remains available for staging QA at the direct HTTP port URL, with temporary HTTP staging login enabled by an explicit env gate.
 
 ## Deployment Target
 
@@ -35,6 +35,8 @@ Sprint 35 HTTPS domain setup is blocked because `DEPLOY_DOMAIN` is empty in `.en
 - PM2 process: `trustfirst-client-portal`
 - UFW: `3010/tcp` allowed for TrustFirst
 - AUTH_URL updated to HTTPS domain: no
+- AUTH_URL status: `http://45.10.21.141:3010`
+- HTTP staging login enabled: yes
 - PM2 restarted for HTTPS domain: no
 
 ## Database
@@ -55,8 +57,10 @@ Sprint 35 HTTPS domain setup is blocked because `DEPLOY_DOMAIN` is empty in `.en
 - Manifest: 200
 - Offline page: 200
 - Protected admin routes: redirected when unauthenticated
-- Authenticated QA: passed on current staging environment with generated Manglam demo admin credentials without printing the password
+- Authenticated QA: passed on current HTTP staging environment with generated Manglam demo admin credentials without printing the password
 - Authenticated QA over HTTPS: not run, blocked by missing domain
+- Manglam full demo QA over HTTP staging: passed
+- Manglam flow checked: settings, catalog, opening stock, quotation, quotation-to-sale, stock deduction, invoice draft, A4 print preview, manual payment, outstanding dashboard, offline page
 - Authenticated pages checked: `/admin/hardware/demo/manglam`, `/admin/hardware/products`, `/admin/hardware/inventory`, `/admin/billing`, `/admin/release-checklist`
 - CafeLuxe files untouched: yes
 - CafeLuxe database untouched: yes
@@ -67,7 +71,7 @@ Sprint 35 HTTPS domain setup is blocked because `DEPLOY_DOMAIN` is empty in `.en
 
 ## Demo Readiness
 
-Final demo readiness: READY FOR STAGING QA ONLY.
+Final demo readiness: READY FOR HTTP STAGING QA ONLY.
 
 For a polished browser-based client demo, configure a real HTTPS domain or reverse proxy for TrustFirst. The app intentionally uses secure production cookies, so direct HTTP on an IP/port is acceptable for smoke checks but is not the preferred final login experience.
 
@@ -77,3 +81,4 @@ For a polished browser-based client demo, configure a real HTTPS domain or rever
 - Secrets were generated on the VPS and written only to `/etc/trustfirst-client-portal.env`.
 - No `.env.deploy.local`, private SSH key, database password, `AUTH_SECRET`, or demo password was committed.
 - Domain blocker details are documented in `DOMAIN_BLOCKER_REPORT.md`.
+- Temporary HTTP login rollback is documented in `HTTP_STAGING_LOGIN_NOTE.md`.

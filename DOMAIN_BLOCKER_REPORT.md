@@ -32,10 +32,13 @@ Do not commit `.env.deploy.local`.
 - PM2 restarted after AUTH_URL update: no
 - HTTPS smoke passed: no
 - HTTP staging smoke passed: yes, `http://45.10.21.141:3010`
+- HTTP staging login enabled: yes, temporary env-gated workaround
+- Login status: passed on HTTP staging after enabling the explicit gate
 - Authenticated QA over HTTPS: no
 - Manglam full demo QA over HTTPS: no
+- Manglam full demo QA over HTTP staging: passed
 - CafeLuxe untouched: yes
-- Final demo readiness: READY FOR STAGING QA ONLY
+- Final demo readiness: READY FOR HTTP STAGING QA ONLY
 
 ## Current Working URL
 
@@ -44,6 +47,8 @@ http://45.10.21.141:3010
 ```
 
 This URL remains available for staging QA. It is not the polished final client demo URL because production Auth.js cookies are intentionally secure and should be used behind HTTPS.
+
+Temporary HTTP staging login is documented in `HTTP_STAGING_LOGIN_NOTE.md`. Remove `TRUSTFIRST_HTTP_STAGING_LOGIN=yes` after HTTPS domain setup.
 
 ## Safety Confirmation
 

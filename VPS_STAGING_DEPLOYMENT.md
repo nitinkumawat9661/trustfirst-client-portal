@@ -11,6 +11,7 @@ The authorized old shared VPS may be used only as an isolated TrustFirst section
 - Status: deployed
 - URL: `http://45.10.21.141:3010`
 - HTTPS demo URL: blocked, no domain configured
+- HTTP staging login: enabled by explicit env gate
 - Deploy user: `trustfirst`
 - App path: `/var/www/trustfirst-client-portal`
 - Env file: `/etc/trustfirst-client-portal.env`
@@ -23,7 +24,7 @@ The authorized old shared VPS may be used only as an isolated TrustFirst section
 - External smoke: passed
 - Authenticated QA: passed
 - CafeLuxe untouched: yes
-- Final demo readiness: READY FOR STAGING QA ONLY
+- Final demo readiness: READY FOR HTTP STAGING QA ONLY
 
 ## Standard Command Flow
 
@@ -123,8 +124,11 @@ Checked:
 - PM2 restarted for HTTPS domain: no
 - HTTPS smoke passed: no
 - HTTP staging smoke passed: yes
+- HTTP staging login enabled: yes
+- Login status: passed
 - Authenticated QA over HTTPS: no
 - Manglam full demo QA over HTTPS: no
+- Manglam full demo QA over HTTP staging: passed
 - CafeLuxe untouched: yes
 
 Required DNS record:
@@ -176,3 +180,5 @@ Then verify:
 ## HTTPS Note
 
 The current direct staging URL is HTTP on an IP/port. Configure a TrustFirst domain with HTTPS before a polished client-facing browser login demo. Do not reuse or overwrite the existing CafeLuxe Nginx site.
+
+Temporary HTTP login rollback is documented in `HTTP_STAGING_LOGIN_NOTE.md`.

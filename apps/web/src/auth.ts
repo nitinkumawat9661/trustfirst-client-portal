@@ -3,8 +3,11 @@ import Credentials from "next-auth/providers/credentials";
 import { getPrisma } from "@trustfirst/database";
 import { AuthenticationService } from "@/server/auth/auth-service";
 import { credentialsLoginSchema } from "@/server/auth/schemas";
+import { authSessionCookieName, shouldUseSecureAuthCookies } from "@/server/auth/cookie-policy";
 import type { Permission } from "@/server/authorization/authorization";
 import { readRequestMetadata } from "@/server/security/request-metadata";
+
+const secureAuthCookies = shouldUseSecureAuthCookies();
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
@@ -16,18 +19,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/sign-in",
   },
   trustHost: true,
-  useSecureCookies: process.env.NODE_ENV === "production",
+  useSecureCookies: secureAuthCookies,
   cookies: {
     sessionToken: {
-      name:
-        process.env.NODE_ENV === "production"
-          ? "__Secure-authjs.session-token"
-          : "authjs.session-token",
+      name: authSessionCookieName(),
       options: {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
-        secure: process.env.NODE_ENV === "production",
+        secure: secureAuthCookies,
       },
     },
   },
