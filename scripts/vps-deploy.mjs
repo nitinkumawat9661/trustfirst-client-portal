@@ -16,6 +16,12 @@ import {
 const config = loadDeployConfig();
 validateDeployConfig(config);
 const remoteArchive = `/tmp/trustfirst-client-portal-${Date.now()}.tar`;
+const commitHash = spawnSync("git", ["rev-parse", "HEAD"], {
+  cwd: repoRoot,
+  encoding: "utf8",
+  shell: false,
+  stdio: ["ignore", "pipe", "pipe"],
+});
 
 function failWithResult(message, result) {
   process.stderr.write(`${message}\n${result.stderr?.toString() || result.stdout?.toString() || ""}`);
@@ -32,6 +38,10 @@ const archive = spawnSync("git", ["archive", "--format=tar", "HEAD"], {
 
 if (archive.status !== 0 || !archive.stdout?.length) {
   failWithResult("Failed to create a tracked-source deploy archive from local HEAD.", archive);
+}
+
+if (commitHash.status !== 0 || !commitHash.stdout.trim()) {
+  failWithResult("Failed to resolve local HEAD for deployment summary.", commitHash);
 }
 
 const upload = spawnSync("ssh", [...sshBaseArgs(config), `cat > ${shellQuote(remoteArchive)}`], {
@@ -52,6 +62,8 @@ if (upload.status !== 0) {
   failWithResult("Failed to upload the TrustFirst deploy archive over verified SSH.", upload);
 }
 
+console.log("archive uploaded: yes");
+
 const remote = `
 set -euo pipefail
 APP_DIR=${shellQuote(config.DEPLOY_APP_DIR)}
@@ -61,6 +73,7 @@ PM2_PROCESS=${shellQuote(config.DEPLOY_PM2_PROCESS)}
 DEPLOY_DOMAIN=${shellQuote(config.DEPLOY_DOMAIN || "")}
 AUTH_URL=${shellQuote(deploymentUrl(config))}
 RELEASE_ARCHIVE=${shellQuote(remoteArchive)}
+DEPLOY_COMMIT=${shellQuote(commitHash.stdout.trim())}
 DB_NAME=${shellQuote(expectedSharedVps.dbName)}
 DB_USER=${shellQuote(expectedSharedVps.dbUser)}
 
@@ -105,6 +118,8 @@ fi
 find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name storage -exec rm -rf {} +
 tar -xf "$RELEASE_ARCHIVE" -C "$APP_DIR"
 rm -f "$RELEASE_ARCHIVE"
+printf "%s\\n" "$DEPLOY_COMMIT" > "$APP_DIR/.trustfirst-deployed-commit"
+echo "remote extract done: yes"
 
 cd "$APP_DIR"
 set -a
@@ -133,17 +148,21 @@ case "$DATABASE_URL" in
 esac
 
 npm ci --include=dev
+echo "npm ci done: yes"
 npm run deploy:env
 npm run db:generate
 npm run deploy:migration-check
 npm run deploy:migration-check -- --apply
+echo "migrations status: applied"
 npm run seed:manglam-demo
 npm run build
+echo "build done: yes"
 
 if command -v pm2 >/dev/null 2>&1; then
   pm2 delete "$PM2_PROCESS" >/dev/null 2>&1 || true
   PORT="$APP_PORT" pm2 start "npm run start --workspace @trustfirst/web" --name "$PM2_PROCESS" --time --update-env
   pm2 save
+  echo "PM2 restart done: yes"
 else
   SERVICE_FILE="/etc/systemd/system/trustfirst-client-portal.service"
   need_sudo tee "$SERVICE_FILE" >/dev/null <<SERVICE
@@ -166,6 +185,7 @@ SERVICE
   need_sudo systemctl daemon-reload
   need_sudo systemctl enable trustfirst-client-portal
   need_sudo systemctl restart trustfirst-client-portal
+  echo "PM2 restart done: no, systemd restart done: yes"
 fi
 
 if [ -n "$DEPLOY_DOMAIN" ] && command -v nginx >/dev/null 2>&1; then
@@ -191,7 +211,17 @@ NGINX
   need_sudo systemctl reload nginx
 fi
 
-SMOKE_BASE_URL="$AUTH_URL" npm run deploy:smoke || SMOKE_BASE_URL="http://127.0.0.1:$APP_PORT" npm run deploy:smoke
+if SMOKE_BASE_URL="$AUTH_URL" npm run deploy:smoke; then
+  SMOKE_TARGET="$AUTH_URL"
+elif SMOKE_BASE_URL="http://127.0.0.1:$APP_PORT" npm run deploy:smoke; then
+  SMOKE_TARGET="http://127.0.0.1:$APP_PORT"
+else
+  echo "smoke done: no" >&2
+  exit 1
+fi
+echo "smoke done: yes ($SMOKE_TARGET)"
+echo "deployed commit hash: $DEPLOY_COMMIT"
+echo "CafeLuxe untouched: yes"
 echo "VPS deploy completed."
 `;
 

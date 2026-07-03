@@ -18,6 +18,8 @@ Do not overwrite, delete, restart, or modify the existing CafeLuxe app, database
 - HTTP staging auth bypass: enabled by `TRUSTFIRST_HTTP_STAGING_AUTH_BYPASS=yes` only when `x-trustfirst-internal-qa: yes` is sent
 - Public intake URL: `http://45.10.21.141:3010/intake/manglam-trading-demo`
 - Public intake browser loading fix: Sprint 38 native server form deployed and verified
+- Public intake receipt confirmation: Sprint 39C deployed and verified
+- Deployed commit: `a84cfd0e30b39d63d0e9f3f02c63dacc17f280ec`
 - App path: `/var/www/trustfirst-client-portal`
 - Env file: `/etc/trustfirst-client-portal.env`
 - DB name: `trustfirst_demo`
@@ -40,6 +42,8 @@ Validate read-only SSH access:
 npm run vps:validate
 ```
 
+Validation output is redacted. It reports TrustFirst PM2 env key presence only and does not print values for `DATABASE_URL`, `AUTH_SECRET`, passwords, tokens, or keys.
+
 Bootstrap server runtime, PostgreSQL, app directory, local storage, env file, and the isolated UFW rule for `3010/tcp`:
 
 ```bash
@@ -51,6 +55,8 @@ Deploy application, apply migrations, seed Manglam demo, build, start PM2, and r
 ```bash
 npm run vps:deploy
 ```
+
+The deploy command prints a final step summary including archive upload, remote extract, `npm ci`, migrations, build, PM2 restart, smoke result, deployed commit hash, and CafeLuxe untouched status.
 
 Run smoke only:
 
@@ -108,18 +114,22 @@ This avoids relying on `origin/main`, which currently has no visible remote bran
 - Generated local demo admin password
 - UFW allow rule for `3010/tcp`
 
-Secrets are written only to the VPS env file and are never printed by the scripts.
+Secrets are written only to the VPS env file and are not printed by validation or deployment scripts. If older local validation logs exposed staging values, follow `STAGING_SECRET_ROTATION_NOTE.md`.
 
 ## Latest Deployment Output
 
 - Host-key verification: passed
 - SSH validation: passed
+- Validation secret redaction: passed
 - Bootstrap: passed
 - Migrations: all 9 applied
 - Seed: `manglam-trading-demo` completed
 - Build: passed
 - PM2: `trustfirst-client-portal` online
 - External smoke: passed
+- Public intake smoke: passed, `PUB-REQ-2026-0010`
+- Thank-you shows submitted business name: yes
+- Admin queue verifies same Submission ID: yes
 - Authenticated QA: passed
 - CafeLuxe untouched: yes
 - Domain configured: no
@@ -131,7 +141,7 @@ Secrets are written only to the VPS env file and are never printed by the script
 - HTTPS smoke passed: no
 - Login status: passed on HTTP staging
 - Admin pages open without login: no for public browser traffic; internal QA header required for bypass
-- Public intake deployment QA: passed after Sprint 38 browser-loading fix
+- Public intake deployment QA: passed after Sprint 39C receipt confirmation fix
 - Manglam full demo QA: passed on HTTP staging
 - Final demo readiness: READY FOR HTTP STAGING QA ONLY
 

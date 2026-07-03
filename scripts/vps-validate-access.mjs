@@ -44,8 +44,64 @@ echo "__PORTS__"
 (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null || true)
 echo "__VAR_WWW__"
 ls -la /var/www 2>/dev/null || true
-echo "__PM2_LIST__"
-(pm2 jlist 2>/dev/null || pm2 list 2>/dev/null || true)
+echo "__PM2_PROCESS__"
+pm2 jlist 2>/dev/null | node -e '
+let input = "";
+process.stdin.on("data", (chunk) => {
+  input += chunk;
+});
+process.stdin.on("end", () => {
+  const sensitivePattern = /(^|_)(PASSWORD|SECRET|TOKEN|KEY)$|DATABASE_URL|AUTH_SECRET/i;
+  const trackedKeys = [
+    "AUTH_SECRET",
+    "AUTH_URL",
+    "DATABASE_URL",
+    "MANGLAM_DEMO_ADMIN_EMAIL",
+    "MANGLAM_DEMO_ADMIN_PASSWORD",
+    "NEXTAUTH_URL",
+    "NODE_ENV",
+    "PORT",
+    "STORAGE_DRIVER",
+    "TRUSTFIRST_HTTP_STAGING_AUTH_BYPASS",
+    "TRUSTFIRST_HTTP_STAGING_LOGIN",
+    "UPLOAD_DIR",
+  ];
+
+  try {
+    const processes = JSON.parse(input || "[]");
+    for (const processInfo of processes.filter((item) => item.name === "trustfirst-client-portal")) {
+      const env = processInfo.pm2_env?.env ?? processInfo.pm2_env ?? {};
+      const envStatus = Object.fromEntries(
+        trackedKeys.map((key) => [
+          key,
+          Object.prototype.hasOwnProperty.call(env, key)
+            ? sensitivePattern.test(key)
+              ? "redacted-present"
+              : "present"
+            : "missing",
+        ]),
+      );
+
+      console.log(JSON.stringify(
+        {
+          envStatus,
+          name: processInfo.name,
+          pm_cwd: processInfo.pm2_env?.pm_cwd ?? null,
+          pm_exec_path: processInfo.pm2_env?.pm_exec_path ?? null,
+          pm_uptime: processInfo.pm2_env?.pm_uptime ?? null,
+          restart_time: processInfo.pm2_env?.restart_time ?? null,
+          sensitiveValuesRedacted: true,
+          status: processInfo.pm2_env?.status ?? null,
+        },
+        null,
+        2,
+      ));
+    }
+  } catch (error) {
+    console.log(JSON.stringify({ error: "Unable to parse PM2 process list safely.", sensitiveValuesRedacted: true }));
+  }
+});
+' || true
 echo "__POSTGRES_DATABASES__"
 (psql -Atqc "SELECT datname FROM pg_database ORDER BY datname" postgres 2>/dev/null || sudo -u postgres psql -Atqc "SELECT datname FROM pg_database ORDER BY datname" postgres 2>/dev/null || true)
 echo "__NGINX_SITES__"

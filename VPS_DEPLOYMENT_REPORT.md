@@ -2,11 +2,9 @@
 
 ## Status
 
-TrustFirst Client Portal is deployed to the authorized shared VPS as an isolated Manglam demo environment. Sprint 39 code is committed locally but was not deployed because SSH access timed out during the verified deploy archive upload.
+TrustFirst Client Portal is deployed to the authorized shared VPS as an isolated Manglam demo environment.
 
-Sprint 38 fixed the public intake browser loading issue. The public intake page now renders a native server-side form directly instead of relying on a global loading fallback and client-side streaming reveal scripts.
-
-Sprint 39 hardens submission confirmation so the thank-you page is rendered only from a saved database receipt. Local validation passed, but VPS deployment is blocked until port 22/SSH is reachable again from this workstation.
+Sprint 39C verified that the public intake API was saving submissions, but the live thank-you page was still rendering the older built page. The VPS source contained Sprint 39, while the active runtime build did not show the receipt fields. The hardened deploy script rebuilt and restarted only `trustfirst-client-portal`, and live intake smoke now passes.
 
 Sprint 35 HTTPS domain setup remains blocked because `DEPLOY_DOMAIN` is empty in `.env.deploy.local`.
 
@@ -19,15 +17,15 @@ Sprint 35 HTTPS domain setup remains blocked because `DEPLOY_DOMAIN` is empty in
 - Host: `45.10.x.x`
 - Shared old VPS used: yes
 - Deploy user: `trustfirst`
-- Host-key status: trusted fingerprint is configured; latest `ssh-keyscan` retry could not collect a key because SSH timed out
-- SSH access status: blocked during Sprint 39 retry, `ssh: connect to host 45.10.21.141 port 22: Connection timed out`
+- Host-key status: verified by trusted ED25519 fingerprint
+- SSH access status: passed after intermittent port 22 reachability recovered
+- Deployed commit hash: `a84cfd0e30b39d63d0e9f3f02c63dacc17f280ec`
 - Server OS: Ubuntu 22.04.5 LTS
 - Node version: v22.23.0
 - npm version: 10.9.8
 - PostgreSQL version: 14.23
 - Git version: 2.34.1
 - Reverse proxy: not changed; no TrustFirst domain configured
-- Required DNS record: `demo.trustfirstsolutions.in A 45.10.21.141`
 
 ## Environment
 
@@ -41,8 +39,8 @@ Sprint 35 HTTPS domain setup remains blocked because `DEPLOY_DOMAIN` is empty in
 - AUTH_URL status: `http://45.10.21.141:3010`
 - HTTP staging login enabled: yes
 - HTTP staging auth bypass enabled: yes, internal QA header required
-- Sign-in removed for ordinary HTTP staging traffic: no
-- PM2 restarted by Sprint 39 deploy: no, deploy archive upload failed before remote changes
+- Validation secret redaction: yes, `npm run vps:validate` reports key presence only
+- Secret rotation note created: yes, see `STAGING_SECRET_ROTATION_NOTE.md`
 
 ## Database
 
@@ -53,22 +51,23 @@ Sprint 35 HTTPS domain setup remains blocked because `DEPLOY_DOMAIN` is empty in
 - Seed status: `seed:manglam-demo` completed
 - Tenant slug: `manglam-trading-demo`
 - Public intake DB verification: passed
-- Native browser-style form submission: `PUB-REQ-2026-0002`
-- JSON confirmation submission: `PUB-REQ-2026-0003`
-- Thank-you requires saved DB receipt: implemented and locally validated, pending VPS deployment verification
+- Latest public intake smoke submission: `PUB-REQ-2026-0010`
 
 ## QA
 
-- External smoke: passed against the existing deployment after the blocked Sprint 39 deploy
-- Intake marker smoke: failed after blocked Sprint 39 deployment because the live VPS still serves the previous thank-you implementation
+- External smoke after warm-up: passed against `http://45.10.21.141:3010`
+- `npm run vps:smoke`: passed
+- `SMOKE_BASE_URL=http://45.10.21.141:3010 npm run deploy:smoke`: passed
+- `SMOKE_BASE_URL=http://45.10.21.141:3010 npm run intake:smoke`: passed
 - Public intake page: 200
 - Public intake loading marker present: no
 - Public form visible markers: passed
-- Public intake native form submit: passed, `303` to thank-you flow
-- Public intake JSON submit: passed, `PUB-REQ-2026-0003`
-- Thank-you page: available
-- Failed submit behavior: implemented locally; shows retry/WhatsApp error instead of fake success
-- Admin intake queue with internal QA header: 200 and shows `PUB-REQ-2026-0002` and `PUB-REQ-2026-0003`
+- Public intake JSON submit: passed, `PUB-REQ-2026-0010`
+- Thank-you page shows Submission ID: yes
+- Thank-you page shows submitted business name: yes
+- Thank-you appears only after saved DB receipt lookup: yes
+- Admin intake queue verifies same Submission ID: yes
+- Public cannot list/read submissions: yes
 - Protected admin routes without login: 307 redirect
 - Protected client routes without login: 307 redirect
 - Protected master/API routes without login: 307 redirect
@@ -82,18 +81,14 @@ Sprint 35 HTTPS domain setup remains blocked because `DEPLOY_DOMAIN` is empty in
 
 ## Demo Readiness
 
-Final readiness: NOT READY FOR SPRINT 39 PUBLIC INTAKE CONFIRMATION QA ON VPS.
+Final readiness: READY FOR PUBLIC HTTP STAGING INTAKE QA ONLY.
 
-The previously deployed public intake link remains reachable, but the Sprint 39 reliability hardening is not live on the VPS yet. Retry `npm run vps:host-key`, `npm run vps:validate`, `npm run vps:deploy`, `npm run vps:smoke`, and `SMOKE_BASE_URL=http://45.10.21.141:3010 npm run intake:smoke` after SSH port 22 is reachable again.
+The public intake link is safe for HTTP staging QA. A polished production-style client demo still requires a real HTTPS domain, staging secret rotation, and removal of temporary HTTP staging env gates.
 
 ## Notes
 
-- Root cause: the previous page showed a global loading fallback first and hid the form in a streamed segment that required inline reveal scripts. Browser CSP could block those inline scripts, leaving the spinner visible.
-- Fix: native server-rendered public intake form plus form-data parsing on the public submit API.
-- Playwright is not installed, so automated browser QA used HTML marker and route-lockdown smoke checks.
-- `npm ci` on the VPS reported three moderate npm audit findings. They were not changed in Sprint 38 because remediation may require dependency upgrades outside the public intake scope.
-- `npm run vps:validate` currently prints PM2 environment details and should be redacted in a future deployment tooling hardening pass.
-- Sprint 39 deploy attempt timestamp: `2026-07-03T12:21:48+05:30`.
-- Sprint 39 intake smoke result: failed on live VPS with missing business-name marker on thank-you page, confirming Sprint 39 is not deployed.
-- Sprint 39 deploy smoke result: passed against the existing deployment, confirming the old staging app is still reachable.
-- CafeLuxe remains untouched; no Sprint 39 remote command progressed past SSH archive upload.
+- Root cause: the live runtime still served the older built thank-you page even though the VPS source tree contained Sprint 39 receipt-loading code.
+- Fix: hardened VPS deploy output, tracked deployed commit stamp, rebuilt app, restarted only `trustfirst-client-portal`, and reran live smoke.
+- `npm ci` on the VPS reported three moderate npm audit findings. They were not changed in Sprint 39C because remediation may require dependency upgrades outside this focused deployment/intake scope.
+- `npm run vps:validate` no longer prints PM2 env values.
+- Initial deploy external smoke failed immediately after restart, then local loopback smoke passed. Follow-up external `vps:smoke` and `deploy:smoke` passed after warm-up.

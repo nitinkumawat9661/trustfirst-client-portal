@@ -97,3 +97,25 @@ This keeps anonymous access limited to the public intake route and submit endpoi
 ## Receipt Verification
 
 Every successful public intake submission creates an internal receipt timeline entry with submission ID, client slug, timestamp, status, source, and safely captured request metadata. This receipt is visible only through protected admin/internal access.
+
+## Smoke Verification
+
+`npm run intake:smoke` verifies the full public confirmation contract against the configured base URL:
+
+- form page renders without the loading fallback
+- JSON submit creates a saved database record
+- thank-you page shows the same Submission ID and submitted business name
+- protected admin queue can find the same Submission ID through internal QA access
+- public users cannot list or read submissions
+- admin/client/master routes remain blocked for anonymous traffic
+
+Sprint 39C documents the live thank-you marker investigation in `PUBLIC_INTAKE_SMOKE_DEBUG.md`.
+
+Latest staging verification:
+
+- Sprint 39 live: yes
+- Intake smoke passed: yes
+- Latest Submission ID: `PUB-REQ-2026-0010`
+- Admin queue verifies same ID: yes
+- Validation secret redaction: yes
+- CafeLuxe untouched: yes

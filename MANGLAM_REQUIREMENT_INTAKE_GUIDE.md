@@ -78,6 +78,12 @@ The admin queue shows the same Submission ID, submitted time, business name, own
 9. Confirm anonymous browser access to `/admin`, `/client`, and protected APIs is blocked.
 10. Run `SMOKE_BASE_URL=http://45.10.21.141:3010 npm run intake:smoke` after deployment.
 
+## Smoke Debug
+
+If the smoke test reports a missing thank-you marker, check `PUBLIC_INTAKE_SMOKE_DEBUG.md`. The Sprint 39C investigation found that the API could create a Submission ID while the live runtime still served an older thank-you build. The fix is to redeploy with the hardened VPS deploy script and confirm the deployed commit hash.
+
+Latest staging verification passed with Submission ID `PUB-REQ-2026-0010`; the thank-you page showed the submitted business name and the protected admin queue verified the same ID.
+
 ## Limitations
 
 - This is an intake foundation, not a public portal.
