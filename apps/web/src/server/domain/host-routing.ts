@@ -1,5 +1,11 @@
 export const MANGALAM_TENANT_SLUG = "manglam-trading-demo" as const;
 
+export const CANONICAL_ORIGINS = {
+  mangalamPublic: "https://mangalamsanitary.in",
+  mangalamErp: "https://app.mangalamsanitary.in",
+  trustFirstPortal: "https://client.trustfirstsolutions.in",
+} as const;
+
 export type AppSurface =
   | "MANGALAM_PUBLIC"
   | "MANGALAM_ERP"
