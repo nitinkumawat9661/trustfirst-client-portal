@@ -1,8 +1,8 @@
 import { getPrisma } from "@trustfirst/database";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { requireCurrentUser } from "@/server/auth/session";
+import { resolveStorageAssetPath } from "@/server/storage/local-storage-path";
 
 export const dynamic = "force-dynamic";
 
@@ -24,18 +24,21 @@ export async function GET() {
     return NextResponse.json({ error: "Tenant logo is not configured." }, { status: 404 });
   }
 
-  const storageRoot = path.resolve(process.cwd(), "storage");
-  const assetPath = path.resolve(storageRoot, assetKey);
-  if (!assetPath.startsWith(`${storageRoot}${path.sep}`)) {
+  const assetPath = resolveStorageAssetPath(assetKey);
+  if (!assetPath) {
     return NextResponse.json({ error: "Invalid tenant logo reference." }, { status: 400 });
   }
 
   try {
     const body = await readFile(assetPath);
+    const contentType =
+      logo.mimeType === "image/png" || logo.mimeType === "image/webp"
+        ? logo.mimeType
+        : "image/jpeg";
     return new NextResponse(body, {
       headers: {
         "Cache-Control": "private, max-age=3600",
-        "Content-Type": typeof logo.mimeType === "string" ? logo.mimeType : "image/jpeg",
+        "Content-Type": contentType,
         "X-Content-Type-Options": "nosniff",
       },
     });

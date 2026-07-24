@@ -1,7 +1,7 @@
 import { getPrisma } from "@trustfirst/database";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
+import { resolveStorageAssetPath } from "@/server/storage/local-storage-path";
 
 const TENANT_SLUG = "manglam-trading-demo";
 
@@ -19,9 +19,8 @@ export async function GET() {
   if (logo.status !== "LOCKED" || !assetKey?.startsWith(prefix)) {
     return NextResponse.json({ error: "Approved logo is not configured." }, { status: 404 });
   }
-  const storageRoot = path.resolve(process.cwd(), "storage");
-  const assetPath = path.resolve(storageRoot, assetKey);
-  if (!assetPath.startsWith(`${storageRoot}${path.sep}`)) {
+  const assetPath = resolveStorageAssetPath(assetKey);
+  if (!assetPath) {
     return NextResponse.json({ error: "Invalid logo reference." }, { status: 400 });
   }
   try {

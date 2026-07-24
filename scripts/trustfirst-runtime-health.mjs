@@ -80,7 +80,7 @@ if (remoteResult.status !== 0) {
 const remoteStatus = parseMarkers(remoteResult.stdout);
 assertMarker(remoteStatus, "__PM2_PROCESS__", "online");
 assertMarker(remoteStatus, "__PM2_AUTORESTART__", "enabled");
-assertMarker(remoteStatus, "__PORT_3010__", "listening");
+assertMarker(remoteStatus, "__PORT_3010__", "loopback-only");
 assertMarker(remoteStatus, "__SYSTEMD_SERVICE__", expectedService);
 assertMarker(remoteStatus, "__SYSTEMD_ENABLED__", "enabled");
 assertMarker(remoteStatus, "__SYSTEMD_ACTIVE__", "active");
