@@ -98,6 +98,19 @@ describe("HardwareTradeService", () => {
             termsFooter: "Goods once sold follow configured return terms.",
           }),
         },
+        tenant: {
+          findUnique: async () => ({
+            branding: {
+              logo: { assetKey: "client-assets/demo/branding/logo.jpeg" },
+              officialIdentity: {
+                legalName: "Sample Proprietor",
+                proprietorName: "Sample Proprietor",
+                status: "LOCKED",
+              },
+              tagline: "Sample tagline",
+            },
+          }),
+        },
         hardwareTradeDocument: {
           findFirst: async () => ({
             customerId: "client_1",
@@ -133,6 +146,8 @@ describe("HardwareTradeService", () => {
     const projection = await service.printProjection({ tenantId: "tenant_1", userId: "user_1" }, "doc_1");
 
     expect(projection.firm.firmName).toBe("Sample Hardware Firm");
+    expect(projection.firm.legalName).toBe("Sample Proprietor");
+    expect(projection.firm.logoUrl).toBe("/api/tenants/branding/logo");
     expect(projection.customer?.name).toBe("Sample Customer");
     expect(projection.gstSummary).toEqual([{ taxableCents: 1900, taxCents: 342, taxRateBps: 1800 }]);
     expect(projection.document.totalsInWords).toContain("only");

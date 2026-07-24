@@ -1,5 +1,7 @@
 # Manglam Trading Configuration
 
+> **Superseded identity notice:** Placeholder firm identity in this historical demo configuration is `SUPERSEDED_DEMO_CONFIGURATION`. The authoritative identity is defined in `MANGLAM_OFFICIAL_IDENTITY.md`. The stable technical slug remains `manglam-trading-demo`.
+
 ## Scope
 
 This configuration pack prepares a demo tenant for a hardware and sanitary business without changing platform business logic. Firm-specific values live in configuration, seed data, documentation, and the requested demo route only.

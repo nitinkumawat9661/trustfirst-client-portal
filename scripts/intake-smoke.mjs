@@ -1,7 +1,7 @@
 const baseUrl = (process.env.SMOKE_BASE_URL ?? "http://45.10.21.141:3010").replace(/\/$/, "");
 
 const markers = [
-  "Manglam Trading Company",
+  "MANGALAM SANITARY",
   "Software Requirement Form",
   "Business Details",
   "Product/Catalog Details",

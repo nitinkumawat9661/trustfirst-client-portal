@@ -1,5 +1,7 @@
 # Mangalam Sanitary Data Setup Checklist
 
+> Identity checkpoint: official legal/GST identity and approved branding are locked. Product, HSN, tax-rate, stock, supplier, customer, outstanding, and numbering onboarding remains intentionally pending.
+
 Source requirement: `PUB-REQ-2026-0015`.
 
 Real client data must be stored only in the isolated Mangalam tenant. Demo, seed, smoke, and QA records must not be copied into the production client dataset.

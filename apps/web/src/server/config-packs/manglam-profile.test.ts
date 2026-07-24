@@ -13,13 +13,15 @@ import {
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 describe("Manglam configuration pack", () => {
-  it("defines the tenant configuration with placeholders only", () => {
+  it("defines the locked official identity while leaving commercial values pending", () => {
     expect(manglamTradingConfiguration.tenantSlug).toBe("manglam-trading-demo");
     expect(manglamTradingConfiguration.businessType).toBe("hardware and sanitary");
-    expect(manglamTradingConfiguration.gstinPlaceholder).toContain("PLACEHOLDER");
-    expect(manglamTradingConfiguration.phonePlaceholder).toBe("0000000000");
-    expect(manglamTradingConfiguration.invoicePrefix).toBeTruthy();
-    expect(manglamTradingConfiguration.quotationPrefix).toBeTruthy();
+    expect(manglamTradingConfiguration.firmName).toBe("MANGALAM SANITARY");
+    expect(manglamTradingConfiguration.legalName).toBe("KRISHAN KUMAR");
+    expect(manglamTradingConfiguration.gstin).toBe("08EFPK7672A1ZT");
+    expect(manglamTradingConfiguration.identityStatus).toBe("LOCKED");
+    expect(manglamTradingConfiguration.invoicePrefix).toBe("PENDING_CLIENT_CONFIRMATION");
+    expect(manglamTradingConfiguration.quotationPrefix).toBe("PENDING_CLIENT_CONFIRMATION");
   });
 
   it("contains realistic generic hardware and sanitary seed data", () => {

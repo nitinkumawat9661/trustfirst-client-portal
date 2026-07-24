@@ -15,6 +15,7 @@ export const manglamProfile = {
   quotationPrefix: "MTC-QUO",
   seedMarker: "manglam_demo_seed",
   tenantSlug: "manglam-trading-demo",
+  configurationStatus: "SUPERSEDED_DEMO_CONFIGURATION",
 };
 
 export const manglamSeedData = {

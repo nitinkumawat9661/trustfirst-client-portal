@@ -242,7 +242,7 @@ export class HardwareTradeService {
   async printProjection(context: ActorContext, documentId: string): Promise<HardwarePrintProjection> {
     await this.enforce(context, "hardware.sales.read");
     const document = await this.getOrThrow(context.tenantId, documentId);
-    const [settings, customer] = await Promise.all([
+    const [settings, customer, tenant] = await Promise.all([
       this.prisma.hardwareBusinessSettings.findUnique({ where: { tenantId: context.tenantId } }),
       document.customerId
         ? this.prisma.clientOrganization.findFirst({
@@ -250,7 +250,15 @@ export class HardwareTradeService {
             where: { id: document.customerId, tenantId: context.tenantId },
           })
         : Promise.resolve(null),
+      this.prisma.tenant.findUnique({
+        select: { branding: true },
+        where: { id: context.tenantId },
+      }),
     ]);
+    const branding = asRecord(tenant?.branding);
+    const officialIdentity = asRecord(branding.officialIdentity);
+    const logo = asRecord(branding.logo);
+    const identityLocked = officialIdentity.status === "LOCKED";
     const summary = toSummary(document);
     return {
       customer,
@@ -260,8 +268,15 @@ export class HardwareTradeService {
         email: settings?.email ?? null,
         firmName: settings?.firmName ?? "Configured Firm",
         gstin: settings?.gstin ?? null,
+        legalName: identityLocked && typeof officialIdentity.legalName === "string" ? officialIdentity.legalName : null,
+        logoUrl: identityLocked && typeof logo.assetKey === "string" ? "/api/tenants/branding/logo" : null,
         logoPlaceholder: settings?.logoPlaceholder ?? null,
         phone: settings?.phone ?? null,
+        proprietorName:
+          identityLocked && typeof officialIdentity.proprietorName === "string"
+            ? officialIdentity.proprietorName
+            : null,
+        tagline: identityLocked && typeof branding.tagline === "string" ? branding.tagline : null,
         termsFooter: settings?.termsFooter ?? null,
       },
       gstSummary: gstSummary(document.items),
@@ -427,6 +442,12 @@ function taxRateFromConfig(config: Prisma.JsonValue) {
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function validation(message: string) {

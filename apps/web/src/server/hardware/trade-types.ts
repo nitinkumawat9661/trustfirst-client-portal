@@ -53,8 +53,12 @@ export type HardwarePrintProjection = {
     email: string | null;
     firmName: string;
     gstin: string | null;
+    legalName: string | null;
+    logoUrl: string | null;
     logoPlaceholder: string | null;
     phone: string | null;
+    proprietorName: string | null;
+    tagline: string | null;
     termsFooter: string | null;
   };
   gstSummary: Array<{ taxableCents: number; taxCents: number; taxRateBps: number }>;

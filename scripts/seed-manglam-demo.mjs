@@ -82,6 +82,8 @@ async function seedRole() {
 }
 
 async function seedTenant() {
+  const existing = await prisma.tenant.findUnique({ where: { slug: manglamProfile.tenantSlug } });
+  const identityLocked = isOfficialIdentityLocked(existing?.branding);
   return prisma.tenant.upsert({
     create: {
       branding: {
@@ -94,16 +96,19 @@ async function seedTenant() {
       slug: manglamProfile.tenantSlug,
       status: "ACTIVE",
     },
-    update: {
-      branding: {
-        businessType: manglamProfile.businessType,
-        demoPack: "manglam-trading",
-        logoPlaceholder: "logo-placeholder",
-      },
-      name: manglamProfile.firmName,
-      settings: tenantSettings(),
-      status: "ACTIVE",
-    },
+    update: identityLocked
+      ? { status: "ACTIVE" }
+      : {
+          branding: {
+            businessType: manglamProfile.businessType,
+            configurationStatus: manglamProfile.configurationStatus,
+            demoPack: "manglam-trading",
+            logoPlaceholder: "logo-placeholder",
+          },
+          name: manglamProfile.firmName,
+          settings: tenantSettings(),
+          status: "ACTIVE",
+        },
     where: { slug: manglamProfile.tenantSlug },
   });
 }
@@ -154,6 +159,8 @@ async function seedMembership(tenantId, userId, roleId) {
 }
 
 async function seedHardware(tenantId) {
+  const tenant = await prisma.tenant.findUnique({ select: { branding: true }, where: { id: tenantId } });
+  const identityLocked = isOfficialIdentityLocked(tenant?.branding);
   const locationByCode = new Map();
   for (const locationInput of manglamSeedData.locations) {
     const location = await prisma.hardwareStockLocation.upsert({
@@ -200,7 +207,9 @@ async function seedHardware(tenantId) {
       tenantId,
       termsFooter: "Demo terms and footer placeholder. Replace before production use.",
     },
-    update: {
+    update: identityLocked ? {
+      defaultStockLocationId: defaultLocation.id,
+    } : {
       defaultGstMode: manglamProfile.defaultGstMode,
       defaultStockLocationId: defaultLocation.id,
       email: manglamProfile.emailPlaceholder,
@@ -305,6 +314,17 @@ async function seedHardware(tenantId) {
   }
 
   await seedTradeDocuments(tenantId, products, clients);
+}
+
+function isOfficialIdentityLocked(branding) {
+  return Boolean(
+    branding &&
+      typeof branding === "object" &&
+      !Array.isArray(branding) &&
+      branding.officialIdentity &&
+      typeof branding.officialIdentity === "object" &&
+      branding.officialIdentity.status === "LOCKED",
+  );
 }
 
 async function seedTradeDocuments(tenantId, products, clients) {

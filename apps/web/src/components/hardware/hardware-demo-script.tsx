@@ -1,5 +1,6 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@trustfirst/ui";
 import { CheckCircle2, FileSpreadsheet, MapPinned, PackageCheck, Route } from "lucide-react";
+import Image from "next/image";
 
 type ImportTemplateColumn = {
   key: string;
@@ -32,17 +33,23 @@ type DemoAcceptanceItem = {
 };
 
 type HardwareClientConfiguration = {
+  addressDisplay: string;
   businessType: string;
   defaultFinancialYear: string;
   defaultGstMode: string;
   defaultRoundOff: boolean;
   defaultStockLocation: { code: string; name: string };
   firmName: string;
-  gstinPlaceholder: string;
+  gstin: string;
+  identityStatus: string;
   invoicePrefix: string;
-  phonePlaceholder: string;
+  legalName: string;
+  logoUrl: string;
+  proprietorName: string;
   quotationPrefix: string;
+  tagline: string;
   tenantSlug: string;
+  termsFooter: string;
 };
 
 type HardwareDemoScriptProps = {
@@ -65,6 +72,14 @@ export function HardwareDemoScript({
       <section className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
         <Card>
           <CardHeader>
+            <Image
+              alt={`${configuration.firmName} approved logo`}
+              className="mb-3 size-24 object-contain"
+              height={96}
+              src={configuration.logoUrl}
+              unoptimized
+              width={96}
+            />
             <div className="flex flex-wrap items-center gap-2">
               <Badge>Configuration pack</Badge>
               <Badge>{configuration.businessType}</Badge>
@@ -73,13 +88,18 @@ export function HardwareDemoScript({
           </CardHeader>
           <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
             <Readout label="Tenant slug" value={configuration.tenantSlug} />
+            <Readout label="Identity status" value={configuration.identityStatus} />
+            <Readout label="Legal name" value={configuration.legalName} />
+            <Readout label="Proprietor" value={configuration.proprietorName} />
+            <Readout label="GSTIN" value={configuration.gstin} />
+            <Readout label="Official address" value={configuration.addressDisplay} />
+            <Readout label="Tagline" value={configuration.tagline} />
             <Readout label="Financial year" value={configuration.defaultFinancialYear} />
             <Readout label="GST mode" value={configuration.defaultGstMode} />
             <Readout label="Round-off" value={configuration.defaultRoundOff ? "Enabled" : "Disabled"} />
             <Readout label="Invoice prefix" value={configuration.invoicePrefix} />
             <Readout label="Quotation prefix" value={configuration.quotationPrefix} />
-            <Readout label="GSTIN" value={configuration.gstinPlaceholder} />
-            <Readout label="Phone" value={configuration.phonePlaceholder} />
+            <Readout label="Terms/footer" value={configuration.termsFooter} />
             <Readout
               label="Default stock"
               value={`${configuration.defaultStockLocation.name} (${configuration.defaultStockLocation.code})`}

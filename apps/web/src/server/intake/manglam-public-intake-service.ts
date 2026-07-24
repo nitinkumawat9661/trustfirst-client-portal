@@ -263,7 +263,7 @@ export class ManglamPublicIntakeService {
     if (metadata.clientSlug !== MANGLAM_PUBLIC_INTAKE_CLIENT_SLUG) return null;
 
     return {
-      businessName: data?.company?.firmName ?? "Manglam Trading Company",
+      businessName: data?.company?.firmName ?? "MANGALAM SANITARY",
       clientSlug: MANGLAM_PUBLIC_INTAKE_CLIENT_SLUG,
       possibleDuplicate: metadata.possibleDuplicate === true,
       status: record.status,

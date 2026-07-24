@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "tenantSlug": "manglam-trading-demo",
+  "identityStatus": "LOCKED",
+  "legalIdentity": {
+    "legalName": "KRISHAN KUMAR",
+    "tradeName": "MANGALAM SANITARY",
+    "gstin": "08EFPK7672A1ZT",
+    "constitution": "Proprietorship",
+    "proprietorName": "KRISHAN KUMAR",
+    "registrationType": "Regular",
+    "registrationEffectiveDate": "2023-04-13",
+    "state": "Rajasthan",
+    "additionalPlacesOfBusiness": 0,
+    "principalAddress": {
+      "line1": "JAIPUR JHUNJHUNU BYPASS, GROUND FLOOR, SHOP NO.01",
+      "line2": "JAIPUR JHUNJHUNU BYPASS, NAWALGARH ROAD, SHIVSINGHPURA",
+      "city": "SIKAR",
+      "district": "SIKAR",
+      "state": "RAJASTHAN",
+      "postalCode": "332001",
+      "country": "India"
+    },
+    "principalAddressDisplay": "JAIPUR JHUNJHUNU BYPASS, GROUND FLOOR, SHOP NO.01, JAIPUR JHUNJHUNU BYPASS, NAWALGARH ROAD, SHIVSINGHPURA, SIKAR, SIKAR, RAJASTHAN, 332001"
+  },
+  "branding": {
+    "displayName": "MANGALAM SANITARY",
+    "tagline": "BATHWARE • PLUMBING • HARDWARE",
+    "logo": {
+      "status": "LOCKED",
+      "assetKey": "client-assets/manglam-trading-demo/branding/mangalam-sanitary-approved-master.jpeg",
+      "sha256": "942e3aa30fa3952cd07709243411fb04a8fa66508df49b9ff976391d82605cfd",
+      "mimeType": "image/jpeg",
+      "width": 1254,
+      "height": 1254
+    }
+  },
+  "commercialConfiguration": {
+    "invoicePrefix": "PENDING_CLIENT_CONFIRMATION",
+    "quotationPrefix": "PENDING_CLIENT_CONFIRMATION",
+    "gstPricingMode": "PENDING_CLIENT_CONFIRMATION",
+    "termsFooter": "PENDING_CLIENT_CONFIRMATION"
+  },
+  "sourcePriority": [
+    "GST_REGISTRATION_CERTIFICATE_REG_06",
+    "CLIENT_APPROVED_LOGO",
+    "PUB-REQ-2026-0015",
+    "OLDER_DEMO_CONFIGURATION"
+  ],
+  "supersededConfigurationStatus": "SUPERSEDED_DEMO_CONFIGURATION"
+}

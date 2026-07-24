@@ -1,5 +1,7 @@
 # Next Sprint Plan: Mangalam Sanitary
 
+> Historical plan notice: identity spelling, legal identifiers, GSTIN, address, proprietor, logo, and tagline were resolved in Sprint 43A. Commercial prefixes, pricing mode, terms, and operational data remain pending client confirmation.
+
 ## Decision
 
 The next sprint is:

@@ -17,7 +17,7 @@ Classification totals:
 
 | ID | Requirement or fact | Classification | Baseline decision |
 | --- | --- | --- | --- |
-| MRG-001 | Firm identity | CONFIRMED | Use the submitted business name only after spelling approval. |
+| MRG-001 | Firm identity | LOCKED | Official trade name is `MANGALAM SANITARY`; legal name is `KRISHAN KUMAR`. |
 | MRG-002 | Contact details | CONFIRMED | Contact, phone, and email were provided and remain protected. |
 | MRG-003 | Business address | CONFIRMED | Address was provided; validate before configuration. |
 | MRG-004 | GST registration identifier | CONFIRMED | GSTIN was provided; validate format and registration state. |

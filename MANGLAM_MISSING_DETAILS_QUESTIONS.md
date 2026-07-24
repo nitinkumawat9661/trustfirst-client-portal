@@ -1,5 +1,7 @@
 # Mangalam Missing Details And Follow-Up
 
+> Identity update: official trade name, legal name, GSTIN, principal address, proprietor, registration type, logo, and tagline are now locked. Older questions for those fields remain only as historical context.
+
 Source requirement: `PUB-REQ-2026-0015`.
 
 Do not ask the client again for the selected categories, units, payment modes, Owner/Manager roles, bilingual preference, or selected reports.

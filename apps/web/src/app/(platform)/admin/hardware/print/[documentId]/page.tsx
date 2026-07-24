@@ -1,4 +1,5 @@
 import { getPrisma } from "@trustfirst/database";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareTradeService, type HardwarePrintProjection } from "@/server/hardware";
@@ -31,12 +32,27 @@ export default async function HardwarePrintPreviewPage({
         <p className="no-print mb-4 rounded-md border px-3 py-2 text-sm">
           Use browser print
         </p>
-        <header className="flex items-start justify-between border-b pb-4">
-          <div>
+        <header className="flex items-start justify-between gap-6 border-b pb-4">
+          <div className="flex items-start gap-4">
+            {projection.firm.logoUrl ? (
+              <Image
+                alt={`${projection.firm.firmName} approved logo`}
+                className="size-24 shrink-0 object-contain"
+                height={96}
+                src={projection.firm.logoUrl}
+                unoptimized
+                width={96}
+              />
+            ) : null}
+            <div>
             <h1 className="text-2xl font-bold">{projection.firm.firmName}</h1>
+            {projection.firm.tagline ? <p className="text-xs font-medium">{projection.firm.tagline}</p> : null}
             <p className="text-sm">{Object.values(projection.firm.address).join(", ")}</p>
             <p className="text-sm">{projection.firm.phone} {projection.firm.email}</p>
             <p className="text-sm">GSTIN: {projection.firm.gstin ?? "-"}</p>
+            {projection.firm.legalName ? <p className="text-sm">Legal name: {projection.firm.legalName}</p> : null}
+            {projection.firm.proprietorName ? <p className="text-sm">Proprietor: {projection.firm.proprietorName}</p> : null}
+            </div>
           </div>
           <div className="text-right">
             <p className="text-xl font-semibold">{projection.document.documentNumber}</p>

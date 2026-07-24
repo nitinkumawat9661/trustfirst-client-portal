@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { ManglamPublicIntakeServerForm } from "@/features/intake/manglam-public-intake-server-form";
+import { manglamTradingConfiguration } from "@/server/config-packs/manglam-profile";
 
 export const metadata: Metadata = {
-  title: "Manglam Requirement Intake",
-  description: "Public requirement intake for the Manglam Trading hardware ERP demo.",
+  title: "Mangalam Sanitary Requirement Intake",
+  description: "Public requirement intake for Mangalam Sanitary.",
   robots: {
     follow: false,
     index: false,
@@ -24,7 +25,7 @@ export default async function ManglamRequirementIntakePage({
         <div className="mb-5">
           <p className="text-sm font-semibold text-primary">TrustFirst Client Portal</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-normal sm:text-4xl">
-            Manglam Trading Company Software Requirement Form
+            {manglamTradingConfiguration.firmName} Software Requirement Form
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
             Please complete the public intake below. The submission goes directly to the protected TrustFirst admin intake queue.

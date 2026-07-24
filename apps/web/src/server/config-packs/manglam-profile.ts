@@ -29,27 +29,27 @@ export type DemoAcceptanceItem = {
 };
 
 export const manglamTradingConfiguration = {
-  addressPlaceholder: {
-    city: "Demo City",
-    line1: "Address placeholder for client demo",
-    line2: "Replace with verified business address before production",
-    state: "State placeholder",
-  },
+  address: officialProfile.legalIdentity.principalAddress,
+  addressDisplay: officialProfile.legalIdentity.principalAddressDisplay,
   businessType: "hardware and sanitary",
   defaultFinancialYear: "2026-2027",
-  defaultGstMode: "exclusive",
+  defaultGstMode: officialProfile.commercialConfiguration.gstPricingMode,
   defaultRoundOff: true,
   defaultStockLocation: {
     code: "MAIN",
     name: "Main Godown",
   },
-  emailPlaceholder: "demo-contact@example.com",
-  firmName: "Manglam Trading Company",
-  gstinPlaceholder: "GSTIN-PLACEHOLDER",
-  invoicePrefix: "MTC-INV",
-  phonePlaceholder: "0000000000",
-  quotationPrefix: "MTC-QUO",
-  tenantSlug: "manglam-trading-demo",
+  firmName: officialProfile.legalIdentity.tradeName,
+  gstin: officialProfile.legalIdentity.gstin,
+  identityStatus: officialProfile.identityStatus,
+  invoicePrefix: officialProfile.commercialConfiguration.invoicePrefix,
+  legalName: officialProfile.legalIdentity.legalName,
+  logoUrl: "/api/tenants/branding/logo",
+  proprietorName: officialProfile.legalIdentity.proprietorName,
+  quotationPrefix: officialProfile.commercialConfiguration.quotationPrefix,
+  tagline: officialProfile.branding.tagline,
+  tenantSlug: officialProfile.tenantSlug,
+  termsFooter: officialProfile.commercialConfiguration.termsFooter,
 } as const;
 
 export const manglamImportTemplateContract = [
@@ -195,7 +195,7 @@ export const manglamDemoSeedProfile = {
 export const manglamDemoScript = [
   {
     key: "settings",
-    outcome: "Confirm firm settings, GST placeholders, prefixes, round-off, and default stock location.",
+    outcome: "Confirm the locked legal identity and branding; commercial prefixes, GST pricing mode, and terms remain pending.",
     route: "/admin/hardware/demo/manglam",
     title: "Configuration review",
   },
@@ -235,7 +235,7 @@ export const manglamRequirementMapping = [
   {
     demoRoute: "/admin/hardware/demo/manglam",
     implementedModule: "Hardware business settings",
-    note: "Uses tenant-scoped configuration with placeholder GSTIN, phone, and address values.",
+    note: "Uses the tenant-scoped, GST-certificate-backed official identity and approved branding.",
     requirement: "Client-specific firm configuration",
     status: "ready",
   },
@@ -285,7 +285,7 @@ export const manglamRequirementMapping = [
 
 export const manglamAcceptanceChecklist = [
   {
-    evidence: "Tenant slug and business settings are defined in the configuration pack.",
+    evidence: "Tenant slug is stable and the official business identity is locked in the tenant configuration pack.",
     key: "settings",
     label: "Settings ready",
   },
@@ -332,3 +332,4 @@ export const manglamAcceptanceChecklist = [
     limitation: "File sync and native mobile app are intentionally out of scope.",
   },
 ] as const satisfies readonly DemoAcceptanceItem[];
+import officialProfile from "../../../../../config/client-profiles/manglam-trading-demo/official-identity.json";
