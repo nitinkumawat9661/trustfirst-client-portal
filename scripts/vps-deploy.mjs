@@ -219,6 +219,20 @@ NGINX
   fi
 fi
 
+RUNTIME_READY=0
+for attempt in $(seq 1 30); do
+  if curl --silent --show-error --fail --max-time 2 "http://127.0.0.1:$APP_PORT/api/auth/session" >/dev/null 2>&1; then
+    RUNTIME_READY=1
+    break
+  fi
+  sleep 1
+done
+if [ "$RUNTIME_READY" != "1" ]; then
+  echo "TrustFirst runtime did not become ready on loopback after restart." >&2
+  exit 1
+fi
+echo "runtime ready after restart: yes"
+
 if SMOKE_BASE_URL="$AUTH_URL" npm run deploy:smoke; then
   SMOKE_TARGET="$AUTH_URL"
 elif SMOKE_BASE_URL="http://127.0.0.1:$APP_PORT" npm run deploy:smoke; then

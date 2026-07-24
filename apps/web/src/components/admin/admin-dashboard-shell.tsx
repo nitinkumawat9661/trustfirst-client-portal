@@ -183,9 +183,12 @@ function AdminSidebar({
 }
 
 function AdminBreadcrumbs({ breadcrumbs }: { breadcrumbs: Array<{ href: string; label: string }> }) {
+  const current = breadcrumbs.at(-1)?.label ?? "Dashboard";
+
   return (
     <nav aria-label="Breadcrumb" className="min-w-0">
-      <ol className="flex min-w-0 items-center gap-2 text-sm">
+      <span className="block truncate text-sm font-medium md:hidden">{current}</span>
+      <ol className="hidden min-w-0 items-center gap-2 text-sm md:flex">
         {breadcrumbs.map((crumb, index) => (
           <li className="flex min-w-0 items-center gap-2" key={crumb.href}>
             {index > 0 ? <span className="text-muted-foreground">/</span> : null}
