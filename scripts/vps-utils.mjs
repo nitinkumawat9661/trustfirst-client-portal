@@ -178,7 +178,7 @@ export function inspectKnownHost(config) {
   const result = spawnSync("ssh-keygen", ["-F", config.DEPLOY_HOST], {
     cwd: repoRoot,
     encoding: "utf8",
-    shell: process.platform === "win32",
+    shell: false,
     stdio: "pipe",
   });
   return {
@@ -188,11 +188,15 @@ export function inspectKnownHost(config) {
 }
 
 export function runLocal(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const windowsNpm =
+    process.platform === "win32" && command === "npm" && process.env.npm_execpath
+      ? { args: [process.env.npm_execpath, ...args], command: process.execPath }
+      : { args, command };
+  const result = spawnSync(windowsNpm.command, windowsNpm.args, {
     cwd: repoRoot,
     env: options.env ?? process.env,
     encoding: "utf8",
-    shell: process.platform === "win32",
+    shell: false,
     stdio: options.stdio ?? "inherit",
   });
   if (result.status !== 0) {
