@@ -36,6 +36,7 @@
     "vps:smoke": "node scripts/vps-smoke.mjs",
     "vps:report": "node scripts/vps-report.mjs",
     "vps:mangalam:backup": "node scripts/vps-mangalam-backup.mjs",
+    "vps:mangalam:domain": "node scripts/vps-configure-mangalam-domain.mjs",
     "runtime:health": "node scripts/trustfirst-runtime-health.mjs",
     "db:generate": "npm run db:generate --workspace @trustfirst/database",
     "db:migrate": "npm run db:migrate --workspace @trustfirst/database",

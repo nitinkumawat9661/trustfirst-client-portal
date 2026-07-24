@@ -189,7 +189,14 @@ SERVICE
 fi
 
 if [ -n "$DEPLOY_DOMAIN" ] && command -v nginx >/dev/null 2>&1; then
-  need_sudo tee /etc/nginx/sites-available/trustfirst-client-portal >/dev/null <<NGINX
+  if [ "$DEPLOY_DOMAIN" = "mangalamsanitary.in" ]; then
+    if [ ! -L /etc/nginx/sites-enabled/mangalamsanitary.in ] || [ ! -f /etc/nginx/sites-available/mangalamsanitary.in ]; then
+      echo "Dedicated Mangalam Nginx site is missing; refusing to replace it with a generic site." >&2
+      exit 1
+    fi
+    need_sudo nginx -t
+  else
+    need_sudo tee /etc/nginx/sites-available/trustfirst-client-portal >/dev/null <<NGINX
 server {
   listen 80;
   server_name $DEPLOY_DOMAIN;
@@ -206,9 +213,10 @@ server {
   }
 }
 NGINX
-  need_sudo ln -sf /etc/nginx/sites-available/trustfirst-client-portal /etc/nginx/sites-enabled/trustfirst-client-portal
-  need_sudo nginx -t
-  need_sudo systemctl reload nginx
+    need_sudo ln -sf /etc/nginx/sites-available/trustfirst-client-portal /etc/nginx/sites-enabled/trustfirst-client-portal
+    need_sudo nginx -t
+    need_sudo systemctl reload nginx
+  fi
 fi
 
 if SMOKE_BASE_URL="$AUTH_URL" npm run deploy:smoke; then
