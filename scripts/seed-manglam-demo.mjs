@@ -37,11 +37,16 @@ try {
   const user = await seedAdminUser();
   await seedMembership(tenant.id, user.id, role.id);
 
+  const officialIdentityLocked = isOfficialIdentityLocked(tenant.branding);
   if (reset) {
     await resetDemoHardware(tenant.id);
   }
 
-  await seedHardware(tenant.id);
+  if (officialIdentityLocked) {
+    console.log("Official tenant identity is locked; demo business records were not seeded.");
+  } else {
+    await seedHardware(tenant.id);
+  }
 
   console.log("Manglam demo seed completed.");
   console.log(`Tenant: ${tenant.slug}`);
