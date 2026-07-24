@@ -1,6 +1,7 @@
 import { ClientLifecycleStage, HardwareInventoryMovementType, type Prisma, type PrismaClient } from "@trustfirst/database";
 import { AppError } from "../domain/errors";
 import { PermissionResolverService } from "../permissions";
+import { currentIndiaBusinessDay } from "./business-time";
 import { PrismaHardwareRepository } from "./hardware-repository";
 import { hardwareErpPluginManifest } from "./plugin-manifest";
 import type {
@@ -14,13 +15,25 @@ import type {
   HardwareProductInput,
   HardwareUnitInput,
 } from "./schemas";
-import type { HardwareCsvExportContract, HardwareImportPreview, HardwareProductSummary, InventoryDashboard } from "./types";
+import type {
+  HardwareCsvExportContract,
+  HardwareImportPreview,
+  HardwareMovementSummary,
+  HardwarePartyRole,
+  HardwarePartySummary,
+  HardwareProductSummary,
+  InventoryDashboard,
+} from "./types";
 import type { HardwareDemoReadiness, HardwareImportSummary, HardwareOperationalDashboard } from "./types";
 import { genericHardwareDemoData } from "./demo-data";
 
 type ActorContext = { tenantId: string; userId: string };
 type ProductRecord = Awaited<ReturnType<PrismaHardwareRepository["listProducts"]>>[number];
-type MovementRecord = Awaited<ReturnType<PrismaHardwareRepository["allMovements"]>>[number];
+type MovementRecord = {
+  productId: string;
+  quantity: number;
+  type: HardwareInventoryMovementType;
+};
 
 export class HardwareService {
   private readonly permissions: PermissionResolverService;
@@ -83,6 +96,11 @@ export class HardwareService {
     });
   }
 
+  async listUnits(context: ActorContext) {
+    await this.enforce(context, "hardware.catalog.read");
+    return this.repository.listUnits(context.tenantId);
+  }
+
   async createLocation(context: ActorContext, input: HardwareLocationInput) {
     await this.enforce(context, "hardware.inventory.manage");
     return this.repository.createLocation({
@@ -129,6 +147,74 @@ export class HardwareService {
   async listLocations(context: ActorContext) {
     await this.enforce(context, "hardware.inventory.read");
     return this.repository.listLocations(context.tenantId);
+  }
+
+  async listMovements(context: ActorContext): Promise<HardwareMovementSummary[]> {
+    await this.enforce(context, "hardware.inventory.read");
+    return (await this.repository.allMovements(context.tenantId)).map((movement) => ({
+      id: movement.id,
+      locationName: movement.location.name,
+      occurredAt: movement.occurredAt,
+      productId: movement.productId,
+      productName: movement.product.name,
+      quantity: movement.quantity,
+      type: movement.type,
+    }));
+  }
+
+  async listParties(context: ActorContext, role: HardwarePartyRole): Promise<HardwarePartySummary[]> {
+    await this.enforce(context, role === "supplier" ? "hardware.purchase.read" : "hardware.sales.read");
+    const parties = await this.prisma.clientOrganization.findMany({
+      include: {
+        contacts: {
+          orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+          select: { email: true, phone: true },
+          take: 1,
+        },
+        invoices: {
+          select: { paidAmountCents: true, totalAmountCents: true },
+          where: { archivedAt: null, status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] } },
+        },
+        supplierHardwareDocuments: {
+          select: { paymentStatus: true, totalCents: true },
+          where: { archivedAt: null, status: "CONFIRMED", type: "SUPPLIER_BILL" },
+        },
+      },
+      orderBy: { name: "asc" },
+      where: { archivedAt: null, deletedAt: null, tenantId: context.tenantId },
+    });
+
+    return parties.flatMap((party) => {
+      const customFields = asRecord(party.customFields);
+      if (customFields.hardwarePartyRole !== role) return [];
+      const openingBalanceCents = readInteger(customFields.openingBalanceCents) ?? 0;
+      const calculatedBalance =
+        role === "supplier"
+          ? party.supplierHardwareDocuments
+              .filter((document) => document.paymentStatus !== "paid")
+              .reduce((total, document) => total + document.totalCents, 0)
+          : party.invoices.reduce(
+              (total, invoice) => total + Math.max(invoice.totalAmountCents - invoice.paidAmountCents, 0),
+              0,
+            );
+      const currentBalanceCents = openingBalanceCents + calculatedBalance;
+      const contact = party.contacts[0];
+      return [{
+        balanceSide:
+          currentBalanceCents === 0
+            ? null
+            : role === "supplier"
+              ? currentBalanceCents > 0 ? "CR" as const : "DR" as const
+              : currentBalanceCents > 0 ? "DR" as const : "CR" as const,
+        contact: contact?.phone ?? contact?.email ?? readText(customFields.phone) ?? null,
+        currentBalanceCents,
+        gstin: readText(customFields.gstin) ?? null,
+        id: party.id,
+        name: party.name,
+        openingBalanceCents,
+        role,
+      }];
+    });
   }
 
   async createProduct(context: ActorContext, input: HardwareProductInput) {
@@ -329,13 +415,13 @@ export class HardwareService {
         title: "Stock location",
       },
       {
-        description: products.length > 0 ? "Products exist for billing and stock flow." : "Seed or import demo products.",
+        description: products.length > 0 ? "Products exist for billing and stock flow." : "Add or import verified products.",
         key: "products",
         ready: products.length > 0,
         title: "Products",
       },
       {
-        description: customerCount > 0 ? "At least one customer or supplier exists." : "Create or seed demo customers and suppliers.",
+        description: customerCount > 0 ? "At least one customer or supplier exists." : "Create verified customers and suppliers.",
         key: "customers",
         ready: customerCount > 0,
         title: "Customers",
@@ -372,40 +458,68 @@ export class HardwareService {
 
   async operationalDashboard(context: ActorContext): Promise<HardwareOperationalDashboard> {
     await this.enforce(context, "hardware.inventory.read");
-    const [dashboard, tradeDocuments, invoices, products, movements] = await Promise.all([
+    const businessDay = currentIndiaBusinessDay();
+    const [
+      dashboard,
+      recentBills,
+      recentPurchases,
+      invoices,
+      products,
+      movements,
+      todaySales,
+      todayPurchases,
+    ] = await Promise.all([
       this.dashboard(context),
       this.prisma.hardwareTradeDocument.findMany({
         orderBy: { updatedAt: "desc" },
-        take: 12,
-        where: { tenantId: context.tenantId },
+        take: 5,
+        where: { tenantId: context.tenantId, type: "SUPPLIER_BILL" },
+      }),
+      this.prisma.hardwareTradeDocument.findMany({
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+        where: {
+          tenantId: context.tenantId,
+          type: { in: ["PURCHASE_ENTRY", "SUPPLIER_BILL"] },
+        },
       }),
       this.prisma.invoice.findMany({ where: { tenantId: context.tenantId } }),
       this.repository.listProducts(context.tenantId),
       this.repository.allMovements(context.tenantId),
+      this.prisma.hardwareTradeDocument.aggregate({
+        _sum: { totalCents: true },
+        where: {
+          createdAt: businessDay,
+          status: "CONFIRMED",
+          tenantId: context.tenantId,
+          type: "SALES_ORDER",
+        },
+      }),
+      this.prisma.hardwareTradeDocument.aggregate({
+        _sum: { totalCents: true },
+        where: {
+          createdAt: businessDay,
+          status: "CONFIRMED",
+          tenantId: context.tenantId,
+          type: { in: ["PURCHASE_ENTRY", "SUPPLIER_BILL"] },
+        },
+      }),
     ]);
-    const today = new Date().toISOString().slice(0, 10);
-    const saleDocs = tradeDocuments.filter((document) => document.type === "SALES_ORDER");
-    const purchaseDocs = tradeDocuments.filter((document) =>
-      ["PURCHASE_ENTRY", "SUPPLIER_BILL"].includes(document.type),
-    );
     return {
       ...dashboard,
       pendingPaymentsCents: invoices
-        .filter((invoice) => invoice.status !== "PAID")
+        .filter((invoice) => ["ISSUED", "PARTIALLY_PAID", "OVERDUE"].includes(invoice.status))
         .reduce((total, invoice) => total + Math.max(invoice.totalAmountCents - invoice.paidAmountCents, 0), 0),
-      recentBills: tradeDocuments
-        .filter((document) => document.type === "SUPPLIER_BILL")
-        .slice(0, 5)
-        .map((document) => ({ documentNumber: document.documentNumber, totalCents: document.totalCents })),
-      recentPurchases: purchaseDocs
-        .slice(0, 5)
-        .map((document) => ({ documentNumber: document.documentNumber, totalCents: document.totalCents })),
-      todayPurchasesCents: purchaseDocs
-        .filter((document) => document.createdAt.toISOString().startsWith(today))
-        .reduce((total, document) => total + document.totalCents, 0),
-      todaySalesCents: saleDocs
-        .filter((document) => document.createdAt.toISOString().startsWith(today))
-        .reduce((total, document) => total + document.totalCents, 0),
+      recentBills: recentBills.map((document) => ({
+        documentNumber: document.documentNumber,
+        totalCents: document.totalCents,
+      })),
+      recentPurchases: recentPurchases.map((document) => ({
+        documentNumber: document.documentNumber,
+        totalCents: document.totalCents,
+      })),
+      todayPurchasesCents: todayPurchases._sum.totalCents ?? 0,
+      todaySalesCents: todaySales._sum.totalCents ?? 0,
       topProducts: products
         .map((product) => ({
           name: product.name,
@@ -421,6 +535,7 @@ export class HardwareService {
 
   async seedDemoData(context: ActorContext) {
     await this.enforce(context, "hardware.plugin.manage");
+    await this.assertDemoSeedAllowed(context.tenantId);
     const categories = await Promise.all(
       genericHardwareDemoData.categories.map((name) =>
         this.prisma.hardwareProductCategory.upsert({
@@ -506,6 +621,7 @@ export class HardwareService {
 
   async resetDemoData(context: ActorContext) {
     await this.enforce(context, "hardware.plugin.manage");
+    await this.assertDemoSeedAllowed(context.tenantId);
     const sampleSkus = genericHardwareDemoData.products.map((product) => product.sku);
     const sampleClientSlugs = [
       ...genericHardwareDemoData.customers,
@@ -558,6 +674,13 @@ export class HardwareService {
     if (input.categoryId) await this.assertExists("hardwareProductCategory", tenantId, input.categoryId, "Category was not found.");
     if (input.brandId) await this.assertExists("hardwareBrand", tenantId, input.brandId, "Brand was not found.");
     if (input.unitId) await this.assertExists("hardwareUnit", tenantId, input.unitId, "Unit was not found.");
+  }
+
+  private async assertDemoSeedAllowed(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ select: { branding: true }, where: { id: tenantId } });
+    if (asRecord(asRecord(tenant?.branding).officialIdentity).status === "LOCKED") {
+      throw validation("Demo data controls are disabled after official tenant identity is locked.");
+    }
   }
 
   private async validateMovementLinks(tenantId: string, input: HardwareMovementInput) {
@@ -620,9 +743,15 @@ function validateGstTaxConfig(config: Record<string, unknown> | undefined) {
 
 function toProductSummary(product: ProductRecord, movements: MovementRecord[]): HardwareProductSummary {
   const currentStock = stockForProduct(movements.filter((movement) => movement.productId === product.id));
+  const gstTaxConfig = asRecord(product.gstTaxConfig);
+  const metadata = asRecord(product.metadata);
   return {
     barcode: product.barcode,
+    brandName: product.brand?.name ?? null,
+    categoryName: product.category?.name ?? null,
     currentStock,
+    gstRateBps: readInteger(gstTaxConfig.rateBps) ?? null,
+    hsnCode: readText(metadata.hsnCode) ?? null,
     id: product.id,
     lowStock: currentStock <= product.lowStockThreshold,
     lowStockThreshold: product.lowStockThreshold,
@@ -630,6 +759,8 @@ function toProductSummary(product: ProductRecord, movements: MovementRecord[]): 
     purchaseCostCents: product.purchaseCostCents,
     salesPriceCents: product.salesPriceCents,
     sku: product.sku,
+    status: "ACTIVE",
+    unitCode: product.unit?.code ?? null,
   };
 }
 
@@ -647,6 +778,16 @@ function slugify(value: string) {
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readInteger(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) ? value : undefined;
 }
 
 function validation(message: string) {

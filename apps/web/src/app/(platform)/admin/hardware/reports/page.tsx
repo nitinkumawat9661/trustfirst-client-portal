@@ -1,5 +1,5 @@
 import { getPrisma } from "@trustfirst/database";
-import { Badge } from "@trustfirst/ui";
+import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
 import { HardwareReportsPanel } from "@/components/hardware/hardware-trade-panels";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareTradeService } from "@/server/hardware";
@@ -12,10 +12,7 @@ export default async function HardwareReportsPage() {
   const reports = await service.reports({ tenantId: user.activeTenantId ?? "public", userId: user.id });
   return (
     <div className="space-y-6">
-      <div>
-        <Badge>Reports</Badge>
-        <h1 className="mt-4 text-3xl font-semibold">Hardware reports</h1>
-      </div>
+      <HardwarePageHeader description="Reports are calculated only from saved tenant records; empty periods remain zero." eyebrow="Analysis" title="Reports" />
       <HardwareReportsPanel reports={reports} />
     </div>
   );

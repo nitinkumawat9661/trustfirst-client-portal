@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   output: "standalone",
   transpilePackages: ["@trustfirst/ui", "@trustfirst/config", "@trustfirst/database"],
   poweredByHeader: false,
+  images: {
+    unoptimized: true,
+  },
   async headers() {
     return [
       {

@@ -1,19 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #111827;
+  --background: #f5f5f4;
+  --foreground: #1c1917;
   --card: #ffffff;
-  --card-foreground: #111827;
-  --muted: #f3f4f6;
-  --muted-foreground: #667085;
-  --primary: #14532d;
+  --card-foreground: #1c1917;
+  --muted: #eeeeec;
+  --muted-foreground: #6b6863;
+  --primary: #9a681d;
   --primary-foreground: #ffffff;
-  --secondary: #e7f5ee;
-  --secondary-foreground: #123524;
-  --border: #d0d5dd;
-  --input: #d0d5dd;
-  --ring: #0f766e;
+  --secondary: #f3e8d2;
+  --secondary-foreground: #543b15;
+  --border: #d6d3d1;
+  --input: #c9c5c1;
+  --ring: #b7832f;
 }
 
 @theme inline {
@@ -34,25 +34,28 @@
   --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0b1110;
-    --foreground: #f8fafc;
-    --card: #101918;
-    --card-foreground: #f8fafc;
-    --muted: #182422;
-    --muted-foreground: #a7b5b2;
-    --primary: #2dd4bf;
-    --primary-foreground: #042f2e;
-    --secondary: #12332f;
-    --secondary-foreground: #ccfbf1;
-    --border: #24413c;
-    --input: #24413c;
-    --ring: #5eead4;
-  }
+.dark {
+  --background: #151515;
+  --foreground: #f5f5f4;
+  --card: #1d1d1d;
+  --card-foreground: #f5f5f4;
+  --muted: #292827;
+  --muted-foreground: #aaa6a1;
+  --primary: #d2a24c;
+  --primary-foreground: #17120a;
+  --secondary: #3c301c;
+  --secondary-foreground: #f5dfb5;
+  --border: #3b3936;
+  --input: #4a4743;
+  --ring: #d2a24c;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+::selection {
+  background: #d2a24c;
+  color: #17120a;
 }

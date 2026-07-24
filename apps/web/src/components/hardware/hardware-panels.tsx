@@ -1,6 +1,8 @@
-import { Badge, Card, CardContent, CardHeader, CardTitle } from "@trustfirst/ui";
-import { Boxes, CircleDollarSign, PackageSearch, ReceiptText, TrendingUp, Warehouse } from "lucide-react";
-import { hardwareLabels, type HardwareOperationalDashboard, type HardwareProductSummary, type InventoryDashboard } from "@/server/hardware";
+import { Card, CardContent, CardHeader, CardTitle } from "@trustfirst/ui";
+import { Boxes, IndianRupee, PackageSearch, ReceiptText, Warehouse } from "lucide-react";
+import type { HardwareOperationalDashboard, HardwareReportSummary, InventoryDashboard } from "@/server/hardware";
+import type { HardwareProductSummary } from "@/server/hardware";
+import { HardwareProductTable } from "./hardware-product-table";
 
 export function InventoryCards({ dashboard }: { dashboard: InventoryDashboard }) {
   const cards = [
@@ -26,17 +28,20 @@ export function InventoryCards({ dashboard }: { dashboard: InventoryDashboard })
   );
 }
 
-export function HardwareOperationalDashboardCards({ dashboard }: { dashboard: HardwareOperationalDashboard }) {
-  const labels = hardwareLabels.en;
+export function HardwareOperationalDashboardCards({
+  dashboard,
+  reports,
+}: {
+  dashboard: HardwareOperationalDashboard;
+  reports: HardwareReportSummary;
+}) {
   const cards = [
-    { icon: CircleDollarSign, label: labels.dashboardTodaySales, value: money(dashboard.todaySalesCents) },
-    { icon: ReceiptText, label: labels.dashboardTodayPurchases, value: money(dashboard.todayPurchasesCents) },
-    { icon: CircleDollarSign, label: labels.dashboardPendingPayments, value: money(dashboard.pendingPaymentsCents) },
-    { icon: PackageSearch, label: labels.lowStock, value: dashboard.lowStockProducts },
-    { icon: Warehouse, label: labels.dashboardStockValue, value: money(dashboard.stockValueCents) },
-    { icon: TrendingUp, label: labels.dashboardTopProducts, value: dashboard.topProducts.length },
-    { icon: ReceiptText, label: labels.dashboardRecentBills, value: dashboard.recentBills.length },
-    { icon: Boxes, label: labels.dashboardRecentPurchases, value: dashboard.recentPurchases.length },
+    { icon: IndianRupee, label: "Today sales", value: money(dashboard.todaySalesCents) },
+    { icon: ReceiptText, label: "Today purchases", value: money(dashboard.todayPurchasesCents) },
+    { icon: IndianRupee, label: "Customer outstanding", value: money(reports.outstandingCustomersCents) },
+    { icon: IndianRupee, label: "Supplier outstanding", value: money(reports.outstandingSuppliersCents) },
+    { icon: PackageSearch, label: "Low stock", value: dashboard.lowStockProducts },
+    { icon: Boxes, label: "Product count", value: dashboard.products },
   ];
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -56,46 +61,16 @@ export function HardwareOperationalDashboardCards({ dashboard }: { dashboard: Ha
 }
 
 export function ProductList({ products }: { products: HardwareProductSummary[] }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Products</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {products.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">
-            No hardware products are available yet.
-          </div>
-        ) : (
-          products.map((product) => (
-            <div className="rounded-md border border-border p-4" key={product.id}>
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-medium">{product.name}</p>
-                <Badge>{product.sku}</Badge>
-                {product.lowStock ? <Badge>low stock</Badge> : null}
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Stock {product.currentStock} · Barcode {product.barcode ?? "not set"}
-              </p>
-            </div>
-          ))
-        )}
-      </CardContent>
-    </Card>
-  );
+  return <Card><CardContent className="pt-5"><HardwareProductTable products={products} /></CardContent></Card>;
 }
 
 export function HardwarePluginSummary() {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Hardware & Sanitary ERP plugin</CardTitle>
-      </CardHeader>
+      <CardHeader><CardTitle>Hardware and sanitary operations</CardTitle></CardHeader>
       <CardContent className="grid gap-3 sm:grid-cols-2">
-        {["Catalog", "Inventory Ledger", "Import Preview", "CSV Export", "GST Contract", "Low Stock Alerts"].map((item) => (
-          <div className="rounded-md border border-border p-4 text-sm" key={item}>
-            {item}
-          </div>
+        {["Catalog", "Inventory ledger", "Purchase documents", "Sales and billing", "GST reporting", "A4 print"].map((item) => (
+          <div className="rounded-md border border-border p-3 text-sm" key={item}>{item}</div>
         ))}
       </CardContent>
     </Card>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, cn } from "@trustfirst/ui";
-import { AlertTriangle, CheckCircle2, RefreshCw, Trash2, WifiOff } from "lucide-react";
+import { AlertTriangle, CheckCircle2, RefreshCw, Trash2, Wifi, WifiOff, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getOfflineBannerState,
@@ -30,6 +30,7 @@ type OfflineSyncPanelProps = {
 
 export function OfflineSyncPanel({ scope }: OfflineSyncPanelProps) {
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  const [panelOpen, setPanelOpen] = useState(false);
   const [items, setItems] = useState<QueuedMutation[]>([]);
   const [snapshot, setSnapshot] = useState<QueueSnapshot>(emptySnapshot);
   const [syncing, setSyncing] = useState(false);
@@ -111,15 +112,18 @@ export function OfflineSyncPanel({ scope }: OfflineSyncPanelProps) {
           </Button>
         </div>
       ) : null}
-      <Card className="pointer-events-auto w-full shadow-lg">
+      {panelOpen ? <Card className="pointer-events-auto w-full shadow-lg">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
             <CardTitle className="text-sm">Offline sync</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">{status.text}</p>
           </div>
-          <Badge className={cn(status.tone === "error" && "border-destructive text-destructive")}>
-            {online ? "online" : "offline"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge className={cn(status.tone === "error" && "border-destructive text-destructive")}>
+              {online ? "online" : "offline"}
+            </Badge>
+            <Button aria-label="Close offline sync panel" onClick={() => setPanelOpen(false)} size="sm" type="button" variant="ghost"><X className="size-4" /></Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-3 gap-2 text-center text-xs">
@@ -157,7 +161,18 @@ export function OfflineSyncPanel({ scope }: OfflineSyncPanelProps) {
             title="Failed actions"
           />
         </CardContent>
-      </Card>
+      </Card> : (
+        <button
+          aria-label={`Open offline sync panel. ${status.text}`}
+          className="pointer-events-auto inline-flex h-11 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium shadow-lg"
+          onClick={() => setPanelOpen(true)}
+          type="button"
+        >
+          {online ? <Wifi className="size-4 text-emerald-700 dark:text-emerald-300" /> : <WifiOff className="size-4 text-amber-700 dark:text-amber-300" />}
+          <span>Sync</span>
+          {snapshot.pending + snapshot.failed > 0 ? <Badge>{snapshot.pending + snapshot.failed}</Badge> : null}
+        </button>
+      )}
     </div>
   );
 }

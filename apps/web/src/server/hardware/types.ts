@@ -2,7 +2,11 @@ import type { HardwareInventoryMovementType } from "@trustfirst/database";
 
 export type HardwareProductSummary = {
   barcode: string | null;
+  brandName: string | null;
+  categoryName: string | null;
   currentStock: number;
+  gstRateBps: number | null;
+  hsnCode: string | null;
   id: string;
   lowStock: boolean;
   lowStockThreshold: number;
@@ -10,6 +14,8 @@ export type HardwareProductSummary = {
   purchaseCostCents: number;
   salesPriceCents: number;
   sku: string;
+  status: "ACTIVE";
+  unitCode: string | null;
 };
 
 export type InventoryDashboard = {
@@ -39,9 +45,25 @@ export type HardwareCsvExportContract = {
 
 export type HardwareMovementSummary = {
   id: string;
+  locationName: string;
+  occurredAt: Date;
+  productName: string;
   productId: string;
   quantity: number;
   type: HardwareInventoryMovementType;
+};
+
+export type HardwarePartyRole = "customer" | "supplier";
+
+export type HardwarePartySummary = {
+  balanceSide: "CR" | "DR" | null;
+  contact: string | null;
+  currentBalanceCents: number;
+  gstin: string | null;
+  id: string;
+  name: string;
+  openingBalanceCents: number;
+  role: HardwarePartyRole;
 };
 
 export type HardwareOperationalDashboard = InventoryDashboard & {

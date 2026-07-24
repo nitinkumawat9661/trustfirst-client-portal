@@ -6,11 +6,18 @@ import {
   type PrismaClient,
 } from "@trustfirst/database";
 
+const productInclude = {
+  brand: { select: { name: true } },
+  category: { select: { name: true } },
+  unit: { select: { code: true } },
+};
+
 export class PrismaHardwareRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   listProducts(tenantId: string) {
     return this.prisma.hardwareProduct.findMany({
+      include: productInclude,
       orderBy: { updatedAt: "desc" },
       take: 100,
       where: { archivedAt: null, tenantId },
@@ -18,15 +25,15 @@ export class PrismaHardwareRepository {
   }
 
   findProductById(tenantId: string, id: string) {
-    return this.prisma.hardwareProduct.findFirst({ where: { id, tenantId } });
+    return this.prisma.hardwareProduct.findFirst({ include: productInclude, where: { id, tenantId } });
   }
 
   findProductBySku(tenantId: string, sku: string) {
-    return this.prisma.hardwareProduct.findFirst({ where: { sku, tenantId } });
+    return this.prisma.hardwareProduct.findFirst({ include: productInclude, where: { sku, tenantId } });
   }
 
   findProductByBarcode(tenantId: string, barcode: string) {
-    return this.prisma.hardwareProduct.findFirst({ where: { barcode, tenantId } });
+    return this.prisma.hardwareProduct.findFirst({ include: productInclude, where: { barcode, tenantId } });
   }
 
   getSettings(tenantId: string) {
@@ -72,6 +79,10 @@ export class PrismaHardwareRepository {
 
   createUnit(data: Prisma.HardwareUnitUncheckedCreateInput) {
     return this.prisma.hardwareUnit.create({ data });
+  }
+
+  listUnits(tenantId: string) {
+    return this.prisma.hardwareUnit.findMany({ orderBy: { name: "asc" }, where: { tenantId } });
   }
 
   createLocation(data: Prisma.HardwareStockLocationUncheckedCreateInput) {
@@ -157,11 +168,19 @@ export class PrismaHardwareRepository {
   }
 
   allMovements(tenantId: string) {
-    return this.prisma.hardwareInventoryMovement.findMany({ where: { tenantId } });
+    return this.prisma.hardwareInventoryMovement.findMany({
+      include: {
+        location: { select: { name: true } },
+        product: { select: { name: true } },
+      },
+      orderBy: { occurredAt: "desc" },
+      where: { tenantId },
+    });
   }
 
   searchProducts(tenantId: string, query: string) {
     return this.prisma.hardwareProduct.findMany({
+      include: productInclude,
       orderBy: { updatedAt: "desc" },
       take: 25,
       where: {

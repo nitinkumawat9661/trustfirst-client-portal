@@ -25,8 +25,25 @@ export const hardwareTradeDocumentSchema = z.object({
   type: z.nativeEnum(HardwareTradeDocumentType),
 });
 
+export const hardwareSalesDocumentSchema = hardwareTradeDocumentSchema.refine(
+  (value) =>
+    value.type === HardwareTradeDocumentType.SALES_ORDER ||
+    value.type === HardwareTradeDocumentType.SALES_QUOTATION ||
+    value.type === HardwareTradeDocumentType.SALE_RETURN,
+  { message: "Sales API accepts only sales documents.", path: ["type"] },
+);
+
+export const hardwarePurchaseDocumentSchema = hardwareTradeDocumentSchema.refine(
+  (value) =>
+    value.type === HardwareTradeDocumentType.PURCHASE_ENTRY ||
+    value.type === HardwareTradeDocumentType.PURCHASE_ORDER ||
+    value.type === HardwareTradeDocumentType.PURCHASE_RETURN ||
+    value.type === HardwareTradeDocumentType.SUPPLIER_BILL,
+  { message: "Purchase API accepts only purchase documents.", path: ["type"] },
+);
+
 export const hardwareTradeStatusSchema = z.object({
-  locationId: z.string(),
+  locationId: z.string().optional(),
 });
 
 export type HardwareTradeItemInput = z.infer<typeof hardwareTradeItemSchema>;

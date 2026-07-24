@@ -1,99 +1,60 @@
-import {
-  Badge,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@trustfirst/ui";
-import {
-  Activity,
-  Bell,
-  ClipboardList,
-  LayoutDashboard,
-  Search,
-  Settings,
-} from "lucide-react";
-import { AdminEmptyState } from "@/components/admin/admin-empty-state";
+import { getPrisma } from "@trustfirst/database";
+import { Card, CardContent, CardHeader, CardTitle } from "@trustfirst/ui";
+import { Boxes, ReceiptText } from "lucide-react";
+import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
+import { HardwareOperationalDashboardCards } from "@/components/hardware/hardware-panels";
+import { requireCurrentUser } from "@/server/auth/session";
+import { HardwareService, HardwareTradeService } from "@/server/hardware";
 
-const dashboardCards = [
-  {
-    title: "Workspace health",
-    description: "Static operational summary placeholder.",
-    icon: Activity,
-  },
-  {
-    title: "Approvals",
-    description: "Future review and approval queue entry point.",
-    icon: ClipboardList,
-  },
-  {
-    title: "Notifications",
-    description: "Future alert and reminder stream.",
-    icon: Bell,
-  },
-  {
-    title: "Search",
-    description: "Global search UI is available from the top navigation.",
-    icon: Search,
-  },
-];
+export const dynamic = "force-dynamic";
 
-export default function AdminPage() {
+export default async function AdminPage() {
+  const user = await requireCurrentUser();
+  const context = { tenantId: user.activeTenantId ?? "public", userId: user.id };
+  const prisma = getPrisma();
+  const hardware = new HardwareService(prisma);
+  const trade = new HardwareTradeService(prisma);
+  const [dashboard, reports] = await Promise.all([
+    hardware.operationalDashboard(context),
+    trade.reports(context),
+  ]);
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <Badge>Admin dashboard</Badge>
-          <h1 className="mt-4 text-3xl font-semibold">Command center</h1>
-          <p className="mt-2 max-w-2xl text-muted-foreground">
-            Static dashboard foundation for tenant operations, access, search,
-            notifications, and settings workflows.
-          </p>
-        </div>
-        <div className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
-          No APIs connected
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {dashboardCards.map((card) => {
-          const Icon = card.icon;
-
-          return (
-            <Card key={card.title}>
-              <CardHeader>
-                <div className="mb-3 flex size-10 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-                  <Icon className="size-5" />
-                </div>
-                <CardTitle>{card.title}</CardTitle>
-                <CardDescription>{card.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-2 rounded-full bg-muted" />
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Placeholder state
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <AdminEmptyState
-          description="Client, project, and service-line modules are intentionally not connected in this foundation."
-          icon={LayoutDashboard}
-          title="Dashboard modules are waiting for business domains"
+      <HardwarePageHeader
+        description="Live operational figures for the current tenant. Values remain empty until verified business transactions are entered."
+        eyebrow="Business overview"
+        title="Dashboard"
+      />
+      <HardwareOperationalDashboardCards dashboard={dashboard} reports={reports} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <DashboardList
+          empty="No sales or supplier bills have been entered."
+          icon={ReceiptText}
+          items={dashboard.recentBills.map((item) => `${item.documentNumber} · ${money(item.totalCents)}`)}
+          title="Recent bills"
         />
-        <AdminEmptyState
-          actionLabel="Open settings shell"
-          actionHref="/admin/settings"
-          description="Use the settings shell to establish future tenant configuration patterns."
-          icon={Settings}
-          title="Settings shell is ready"
+        <DashboardList
+          empty="No products are available for movement analysis."
+          icon={Boxes}
+          items={dashboard.topProducts.map((item) => `${item.name} · ${item.quantity}`)}
+          title="Top products by movement"
         />
       </div>
     </div>
   );
+}
+
+function DashboardList({ empty, icon: Icon, items, title }: { empty: string; icon: typeof Boxes; items: string[]; title: string }) {
+  return (
+    <Card>
+      <CardHeader><CardTitle className="flex items-center gap-2"><Icon className="size-4 text-primary" />{title}</CardTitle></CardHeader>
+      <CardContent>
+        {items.length ? <ul className="divide-y divide-border">{items.map((item) => <li className="py-3 text-sm" key={item}>{item}</li>)}</ul> : <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{empty}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function money(amountCents: number) {
+  return new Intl.NumberFormat("en-IN", { currency: "INR", style: "currency" }).format(amountCents / 100);
 }

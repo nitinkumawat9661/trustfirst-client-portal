@@ -1,14 +1,23 @@
-import { Badge } from "@trustfirst/ui";
-import { HardwareTradeFormShell } from "@/components/hardware/hardware-trade-panels";
+import { getPrisma } from "@trustfirst/database";
+import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
+import { HardwareTradeForm } from "@/components/hardware/hardware-trade-form";
+import { requireCurrentUser } from "@/server/auth/session";
+import { HardwareService } from "@/server/hardware";
 
-export default function NewHardwarePurchasePage() {
+export const dynamic = "force-dynamic";
+
+export default async function NewHardwarePurchasePage() {
+  const user = await requireCurrentUser();
+  const service = new HardwareService(getPrisma());
+  const context = { tenantId: user.activeTenantId ?? "public", userId: user.id };
+  const [parties, products] = await Promise.all([
+    service.listParties(context, "supplier"),
+    service.listProducts(context),
+  ]);
   return (
     <div className="space-y-6">
-      <div>
-        <Badge>New purchase</Badge>
-        <h1 className="mt-4 text-3xl font-semibold">Create hardware purchase</h1>
-      </div>
-      <HardwareTradeFormShell mode="purchase" />
+      <HardwarePageHeader description="Enter only a verified supplier document. Saving creates a draft; stock changes only after confirmation." eyebrow="Purchasing" title="New purchase" />
+      <HardwareTradeForm mode="purchase" parties={parties} products={products} />
     </div>
   );
 }

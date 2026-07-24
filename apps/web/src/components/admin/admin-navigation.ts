@@ -1,104 +1,32 @@
 import {
-  Bell,
-  Building2,
-  CreditCard,
-  FileStack,
-  FileText,
+  Boxes,
+  ChartNoAxesCombined,
+  IndianRupee,
+  ClipboardList,
+  FileCheck2,
   LayoutDashboard,
-  LifeBuoy,
-  PackageSearch,
-  Search,
+  PackageOpen,
   Settings,
-  ShieldCheck,
+  ShoppingCart,
+  Truck,
   UsersRound,
 } from "lucide-react";
 
 export const adminNavigation = [
-  {
-    href: "/admin",
-    label: "Dashboard",
-    description: "Admin overview foundation",
-    icon: LayoutDashboard,
-  },
-  {
-    href: "/admin/settings",
-    label: "Settings",
-    description: "Tenant and platform settings shell",
-    icon: Settings,
-  },
-  {
-    href: "/admin/documents",
-    label: "Documents",
-    description: "Commercial document engine",
-    icon: FileStack,
-  },
-  {
-    href: "/admin/requirements/intake",
-    label: "Requirement intake",
-    description: "Public submission queue",
-    icon: FileText,
-  },
-  {
-    href: "/admin/billing",
-    label: "Billing",
-    description: "Invoice and payment foundation",
-    icon: CreditCard,
-  },
-  {
-    href: "/admin/plugins/hardware-erp",
-    label: "Hardware ERP",
-    description: "Plugin foundation",
-    icon: PackageSearch,
-  },
-  {
-    href: "/admin/hardware/demo",
-    label: "Hardware demo QA",
-    description: "Demo readiness checklist",
-    icon: ShieldCheck,
-  },
-  {
-    href: "/admin/release-checklist",
-    label: "Release checklist",
-    description: "Preview deployment gate",
-    icon: FileText,
-  },
-  {
-    href: "/client",
-    label: "Client shell",
-    description: "Preview client-facing workspace",
-    icon: UsersRound,
-  },
+  { href: "/admin", icon: LayoutDashboard, label: "Dashboard", permission: "hardware.inventory.read" },
+  { href: "/admin/hardware/products", icon: PackageOpen, label: "Products", permission: "hardware.catalog.read" },
+  { href: "/admin/hardware/inventory", icon: Boxes, label: "Inventory", permission: "hardware.inventory.read" },
+  { href: "/admin/hardware/purchases", icon: Truck, label: "Purchases", permission: "hardware.purchase.read" },
+  { href: "/admin/hardware/sales", icon: ShoppingCart, label: "Sales / Billing", permission: "hardware.sales.read" },
+  { href: "/admin/hardware/quotations", icon: FileCheck2, label: "Quotations", permission: "hardware.sales.read" },
+  { href: "/admin/hardware/suppliers", icon: ClipboardList, label: "Suppliers", permission: "hardware.purchase.read" },
+  { href: "/admin/hardware/customers", icon: UsersRound, label: "Customers", permission: "hardware.sales.read" },
+  { href: "/admin/hardware/outstanding", icon: IndianRupee, label: "Outstanding", permission: "billing.read" },
+  { href: "/admin/hardware/reports", icon: ChartNoAxesCombined, label: "Reports", permission: "hardware.sales.read" },
+  { href: "/admin/settings", icon: Settings, label: "Settings", permission: "hardware.settings.read" },
 ] as const;
 
-export const adminQuickActions = [
-  {
-    label: "Search clients",
-    description: "Open global search UI",
-    icon: Search,
-  },
-  {
-    label: "Review notifications",
-    description: "Open notification center",
-    icon: Bell,
-  },
-  {
-    label: "Security settings",
-    description: "Open future security controls",
-    icon: ShieldCheck,
-  },
-  {
-    label: "Documentation",
-    description: "Open future admin documentation",
-    icon: FileText,
-  },
-  {
-    label: "Tenant profile",
-    description: "Open future tenant profile",
-    icon: Building2,
-  },
-  {
-    label: "Support",
-    description: "Open future support workspace",
-    icon: LifeBuoy,
-  },
-] as const;
+export function permittedAdminNavigation(permissions: readonly string[]) {
+  if (permissions.includes("*")) return adminNavigation;
+  return adminNavigation.filter((item) => permissions.includes(item.permission));
+}

@@ -1,6 +1,8 @@
 import { getPrisma } from "@trustfirst/database";
-import { Badge } from "@trustfirst/ui";
-import { ProductList } from "@/components/hardware/hardware-panels";
+import { Card, CardContent } from "@trustfirst/ui";
+import { Plus } from "lucide-react";
+import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
+import { HardwareProductTable } from "@/components/hardware/hardware-product-table";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareService, type HardwareProductSummary } from "@/server/hardware";
 
@@ -12,11 +14,8 @@ export default async function HardwareProductsPage() {
   const products: HardwareProductSummary[] = await service.listProducts({ tenantId: user.activeTenantId ?? "public", userId: user.id });
   return (
     <div className="space-y-6">
-      <div>
-        <Badge>Hardware catalog</Badge>
-        <h1 className="mt-4 text-3xl font-semibold">Products and SKUs</h1>
-      </div>
-      <ProductList products={products} />
+      <HardwarePageHeader actionHref="/admin/hardware/products/new" actionIcon={Plus} actionLabel="Add product" description="Verified product master with pricing, tax, HSN, and stock status." eyebrow="Catalog" title="Products" />
+      <Card><CardContent className="pt-5"><HardwareProductTable products={products} /></CardContent></Card>
     </div>
   );
 }

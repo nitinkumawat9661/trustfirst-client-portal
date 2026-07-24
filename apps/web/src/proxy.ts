@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { isHttpStagingAuthBypassEnabled } from "@/server/auth/staging-auth-bypass-gate";
 import { applySecurityHeaders } from "@/server/security/headers";
 
 const protectedRoutes = [
@@ -25,12 +24,7 @@ export default auth((request) => {
     nextUrl.pathname.startsWith(route),
   );
 
-  const stagingBypass = isHttpStagingAuthBypassEnabled({
-    host: request.headers.get("host"),
-    internalQaHeader: request.headers.get("x-trustfirst-internal-qa"),
-  });
-
-  if (isProtected && !request.auth?.user?.id && !stagingBypass) {
+  if (isProtected && !request.auth?.user?.id) {
     const signInUrl = new URL("/sign-in", nextUrl);
     signInUrl.searchParams.set("callbackUrl", nextUrl.pathname);
     return applySecurityHeaders(NextResponse.redirect(signInUrl), request);

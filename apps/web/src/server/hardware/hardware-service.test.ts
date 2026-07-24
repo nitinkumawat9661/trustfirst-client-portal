@@ -6,6 +6,7 @@ import {
 } from "@trustfirst/database";
 import { describe, expect, it } from "vitest";
 import { HardwareService, stockForProduct } from "./hardware-service";
+import { hardwareMovementSchema } from "./schemas";
 
 function prismaMock(overrides: Partial<PrismaClient> = {}) {
   return {
@@ -39,6 +40,21 @@ describe("HardwareService", () => {
         { quantity: 5, type: HardwareInventoryMovementType.ADJUSTMENT },
       ]),
     ).toBe(5);
+  });
+
+  it("allows an absolute stock adjustment to zero", () => {
+    expect(hardwareMovementSchema.safeParse({
+      locationId: "loc_1",
+      productId: "prod_1",
+      quantity: 0,
+      type: HardwareInventoryMovementType.ADJUSTMENT,
+    }).success).toBe(true);
+    expect(hardwareMovementSchema.safeParse({
+      locationId: "loc_1",
+      productId: "prod_1",
+      quantity: 0,
+      type: HardwareInventoryMovementType.STOCK_OUT,
+    }).success).toBe(false);
   });
 
   it("validates import preview rows", async () => {
@@ -192,6 +208,22 @@ describe("HardwareService", () => {
     expect(readiness.items.find((item) => item.key === "settings")?.ready).toBe(false);
   });
 
+  it("refuses demo data controls for an official locked tenant", async () => {
+    const service = new HardwareService(
+      prismaMock({
+        tenant: {
+          findUnique: async () => ({
+            branding: { officialIdentity: { status: "LOCKED" } },
+          }),
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      service.seedDemoData({ tenantId: "tenant_1", userId: "user_1" }),
+    ).rejects.toThrow("disabled");
+  });
+
   it("prevents tenant mismatches on linked product metadata", async () => {
     const service = new HardwareService(
       prismaMock({
@@ -259,10 +291,19 @@ describe("HardwareService", () => {
           ],
         },
         hardwareTradeDocument: {
+          aggregate: async (input: { where: { type: unknown } }) => ({
+            _sum: {
+              totalCents:
+                input.where.type === HardwareTradeDocumentType.SALES_ORDER
+                  ? 12000
+                  : 9000,
+            },
+          }),
           findMany: async () => [
             {
               createdAt: today,
               documentNumber: "HSO-2026-0001",
+              status: "CONFIRMED",
               totalCents: 12000,
               type: HardwareTradeDocumentType.SALES_ORDER,
               updatedAt: today,
@@ -270,6 +311,7 @@ describe("HardwareService", () => {
             {
               createdAt: today,
               documentNumber: "HSB-2026-0001",
+              status: "CONFIRMED",
               totalCents: 9000,
               type: HardwareTradeDocumentType.SUPPLIER_BILL,
               updatedAt: today,

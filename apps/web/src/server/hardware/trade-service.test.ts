@@ -63,6 +63,8 @@ describe("HardwareTradeService", () => {
             {
               createdAt: new Date(),
               paymentStatus: "unpaid",
+              status: HardwareTradeDocumentStatus.CONFIRMED,
+              taxCents: 9000,
               totalCents: 50_000,
               type: HardwareTradeDocumentType.SUPPLIER_BILL,
             },
@@ -86,7 +88,13 @@ describe("HardwareTradeService", () => {
     const now = new Date();
     const service = new HardwareTradeService(
       prismaMock({
-        clientOrganization: { findFirst: async () => ({ name: "Sample Customer" }) },
+        clientOrganization: {
+          findFirst: async () => ({
+            contacts: [{ phone: "9999999998" }],
+            customFields: { gstin: "22BBBBB0000B1Z5" },
+            name: "Sample Customer",
+          }),
+        },
         hardwareBusinessSettings: {
           findUnique: async () => ({
             address: { city: "Indore", line1: "Market Road" },
@@ -114,6 +122,7 @@ describe("HardwareTradeService", () => {
         hardwareTradeDocument: {
           findFirst: async () => ({
             customerId: "client_1",
+            createdAt: now,
             discountCents: 100,
             documentNumber: "HSQ-2026-0001",
             id: "doc_1",
@@ -122,6 +131,8 @@ describe("HardwareTradeService", () => {
                 description: "PVC Pipe",
                 discountCents: 100,
                 lineTotalCents: 2241,
+                metadata: { discountPercent: 5, hsnCode: "3917", unitCode: "MTR" },
+                product: { metadata: {}, unit: { code: "MTR" } },
                 productId: "prod_1",
                 quantity: 2,
                 taxCents: 342,
@@ -130,6 +141,7 @@ describe("HardwareTradeService", () => {
               },
             ],
             paymentStatus: "unlinked",
+            metadata: { taxMode: "intra-state" },
             roundOffCents: -1,
             status: HardwareTradeDocumentStatus.DRAFT,
             subtotalCents: 2000,
@@ -149,7 +161,15 @@ describe("HardwareTradeService", () => {
     expect(projection.firm.legalName).toBe("Sample Proprietor");
     expect(projection.firm.logoUrl).toBe("/api/tenants/branding/logo");
     expect(projection.customer?.name).toBe("Sample Customer");
+    expect(projection.customer?.gstin).toBe("22BBBBB0000B1Z5");
     expect(projection.gstSummary).toEqual([{ taxableCents: 1900, taxCents: 342, taxRateBps: 1800 }]);
+    expect(projection.items[0]).toMatchObject({
+      cgstCents: 171,
+      discountPercent: 5,
+      hsnCode: "3917",
+      sgstCents: 171,
+      unitCode: "MTR",
+    });
     expect(projection.document.totalsInWords).toContain("only");
   });
 
@@ -255,6 +275,59 @@ describe("HardwareTradeService", () => {
     await expect(
       service.draftSaleInvoice({ tenantId: "tenant_1", userId: "user_1" }, "doc_1"),
     ).rejects.toThrow("already exists");
+  });
+
+  it("requires a confirmed sale before creating an invoice draft", async () => {
+    const now = new Date();
+    const service = new HardwareTradeService(
+      prismaMock({
+        hardwareTradeDocument: {
+          findFirst: async () => ({
+            currency: "INR",
+            customerId: "client_1",
+            discountCents: 0,
+            documentNumber: "HSO-2026-0002",
+            id: "doc_2",
+            items: [],
+            paymentStatus: "unlinked",
+            roundOffCents: 0,
+            status: HardwareTradeDocumentStatus.DRAFT,
+            subtotalCents: 0,
+            supplierId: null,
+            taxCents: 0,
+            totalCents: 10_000,
+            type: HardwareTradeDocumentType.SALES_ORDER,
+            updatedAt: now,
+          }),
+        },
+        invoice: { findFirst: async () => null },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      service.draftSaleInvoice({ tenantId: "tenant_1", userId: "user_1" }, "doc_2"),
+    ).rejects.toThrow("Confirm the sale");
+  });
+
+  it("does not allow an unclassified intake record to become a trade party", async () => {
+    const service = new HardwareTradeService(
+      prismaMock({
+        clientOrganization: {
+          findFirst: async () => ({ customFields: { source: "public-intake" } }),
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      service.create(
+        { tenantId: "tenant_1", userId: "user_1" },
+        {
+          customerId: "intake_record",
+          items: [{ productId: "prod_1", quantity: 1, unitAmountCents: 1000 }],
+          type: HardwareTradeDocumentType.SALES_ORDER,
+        },
+      ),
+    ).rejects.toThrow("not classified as a customer");
   });
 
   it("rejects invalid GST rates from product tax configuration", async () => {

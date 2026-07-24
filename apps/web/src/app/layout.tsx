@@ -2,17 +2,17 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://trustfirst.example.com"),
+  metadataBase: new URL("https://mangalamsanitary.in"),
   title: {
-    default: "TrustFirst Client Portal",
-    template: "%s | TrustFirst Client Portal",
+    default: "Mangalam Sanitary ERP",
+    template: "%s | Mangalam Sanitary ERP",
   },
-  description: "Secure client collaboration portal for trust-first service teams.",
-  applicationName: "TrustFirst Client Portal",
+  description: "Secure business operations workspace for Mangalam Sanitary.",
+  applicationName: "Mangalam Sanitary ERP",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "TrustFirst",
+    title: "Mangalam ERP",
   },
   icons: {
     icon: "/icons/pwa-icon.svg",
@@ -20,14 +20,14 @@ export const metadata: Metadata = {
   },
   manifest: "/manifest.webmanifest",
   openGraph: {
-    title: "TrustFirst Client Portal",
-    description: "Secure client collaboration portal for trust-first service teams.",
-    siteName: "TrustFirst Client Portal",
+    title: "Mangalam Sanitary ERP",
+    description: "Secure business operations workspace for Mangalam Sanitary.",
+    siteName: "Mangalam Sanitary ERP",
     type: "website",
   },
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
   },
 };
 

@@ -3,6 +3,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareTradeService, type HardwarePrintProjection } from "@/server/hardware";
+import { PrintButton } from "@/components/hardware/print-button";
 
 export const dynamic = "force-dynamic";
 
@@ -19,106 +20,155 @@ export default async function HardwarePrintPreviewPage({
     tenantId: user.activeTenantId ?? "public",
     userId: user.id,
   });
+  const taxMode = projection.document.metadata.taxMode === "inter-state" ? "inter-state" : "intra-state";
+  const documentDate =
+    typeof projection.document.metadata.documentDate === "string"
+      ? projection.document.metadata.documentDate
+      : projection.document.createdAt;
 
   return (
-    <main className="min-h-screen bg-muted p-4 print:bg-white print:p-0">
-      <section className="mx-auto max-w-4xl bg-white p-8 text-black shadow print:shadow-none">
+    <main className="min-h-screen bg-zinc-200 p-3 text-black sm:p-6 print:bg-white print:p-0">
+      <section className="print-sheet mx-auto w-full max-w-[210mm] bg-white p-5 shadow-md sm:p-8 print:max-w-none print:p-0 print:shadow-none">
         <style>{`
           @media print {
-            @page { size: A4; margin: 12mm; }
-            .no-print { display: none; }
+            @page { size: A4 portrait; margin: 10mm; }
+            .no-print { display: none !important; }
+            .print-sheet { width: auto; min-height: auto; }
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+            tr, td, th { break-inside: avoid; page-break-inside: avoid; }
+            .print-break-avoid { break-inside: avoid; page-break-inside: avoid; }
           }
         `}</style>
-        <p className="no-print mb-4 rounded-md border px-3 py-2 text-sm">
-          Use browser print
-        </p>
-        <header className="flex items-start justify-between gap-6 border-b pb-4">
+        <div className="no-print mb-4 flex items-center justify-between gap-3 rounded-md border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm">
+          <span>A4 print preview</span>
+          <PrintButton />
+        </div>
+        <header className="print-break-avoid flex flex-col gap-5 border-b-2 border-zinc-900 pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
             {projection.firm.logoUrl ? (
               <Image
                 alt={`${projection.firm.firmName} approved logo`}
-                className="size-24 shrink-0 object-contain"
+                className="size-20 shrink-0 object-contain sm:size-24"
                 height={96}
+                priority
                 src={projection.firm.logoUrl}
                 unoptimized
                 width={96}
               />
             ) : null}
             <div>
-            <h1 className="text-2xl font-bold">{projection.firm.firmName}</h1>
-            {projection.firm.tagline ? <p className="text-xs font-medium">{projection.firm.tagline}</p> : null}
-            <p className="text-sm">{Object.values(projection.firm.address).join(", ")}</p>
-            <p className="text-sm">{projection.firm.phone} {projection.firm.email}</p>
-            <p className="text-sm">GSTIN: {projection.firm.gstin ?? "-"}</p>
-            {projection.firm.legalName ? <p className="text-sm">Legal name: {projection.firm.legalName}</p> : null}
-            {projection.firm.proprietorName ? <p className="text-sm">Proprietor: {projection.firm.proprietorName}</p> : null}
+              <h1 className="text-2xl font-bold tracking-normal">{projection.firm.firmName}</h1>
+              {projection.firm.tagline ? <p className="mt-1 text-xs font-semibold">{projection.firm.tagline}</p> : null}
+              <p className="mt-2 max-w-xl text-xs leading-5">{formatAddress(projection.firm.address)}</p>
+              <p className="text-xs">{[projection.firm.phone, projection.firm.email].filter(Boolean).join(" · ")}</p>
+              <p className="mt-1 text-xs font-semibold">GSTIN: {projection.firm.gstin ?? "Not provided"}</p>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-xl font-semibold">{projection.document.documentNumber}</p>
-            <p className="text-sm">{projection.document.type.replaceAll("_", " ")}</p>
+          <div className="min-w-52 text-left sm:text-right">
+            <p className="text-xl font-bold">{documentLabel(projection.document.type)}</p>
+            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs sm:grid-cols-[1fr_auto]">
+              <dt>Number</dt><dd className="font-semibold">{projection.document.documentNumber}</dd>
+              <dt>Date</dt><dd>{formatDate(documentDate)}</dd>
+              <dt>Status</dt><dd>{humanize(projection.document.status)}</dd>
+            </dl>
           </div>
         </header>
-        <section className="grid grid-cols-2 gap-4 border-b py-4 text-sm">
+
+        <section className="print-break-avoid grid gap-4 border-b border-zinc-400 py-4 text-xs sm:grid-cols-2">
           <div>
-            <p className="font-semibold">Customer</p>
-            <p>{projection.customer?.name ?? "-"}</p>
+            <p className="font-semibold uppercase">{isPurchaseDocument(projection.document.type) ? "Supplier" : "Bill to"}</p>
+            <p className="mt-1 text-sm font-semibold">{projection.customer?.name ?? "Not linked"}</p>
+            {projection.customer?.address ? <p className="mt-1 max-w-md leading-5">{projection.customer.address}</p> : null}
+            {projection.customer?.phone ? <p>{projection.customer.phone}</p> : null}
+            {projection.customer?.gstin ? <p>GSTIN: {projection.customer.gstin}</p> : null}
           </div>
-          <div>
-            <p className="font-semibold">Totals in words</p>
-            <p>{projection.document.totalsInWords}</p>
+          <div className="sm:text-right">
+            {typeof projection.document.metadata.referenceNumber === "string" ? (
+              <><p className="font-semibold uppercase">Reference</p><p className="mt-1">{projection.document.metadata.referenceNumber}</p></>
+            ) : null}
+            <p className="mt-2">Tax treatment: {taxMode === "inter-state" ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)"}</p>
           </div>
         </section>
-        <table className="mt-4 w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b text-left">
-              <th className="py-2">Item</th>
-              <th>Qty</th>
-              <th>Rate</th>
-              <th>Discount</th>
-              <th>GST</th>
-              <th className="text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {projection.items.map((item) => (
-              <tr className="border-b" key={`${item.description}-${item.lineTotalCents}`}>
-                <td className="py-2">{item.description}</td>
-                <td>{item.quantity}</td>
-                <td>{item.unitAmountCents / 100}</td>
-                <td>{item.discountCents / 100}</td>
-                <td>{item.taxCents / 100}</td>
-                <td className="text-right">{item.lineTotalCents / 100}</td>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[780px] border-collapse text-[10px] sm:text-xs">
+            <thead>
+              <tr className="border-y border-zinc-500 bg-zinc-100 text-left">
+                <th className="px-2 py-2">#</th>
+                <th className="px-2 py-2">Item</th>
+                <th className="px-2 py-2">HSN</th>
+                <th className="px-2 py-2 text-right">Qty</th>
+                <th className="px-2 py-2">Unit</th>
+                <th className="px-2 py-2 text-right">Rate</th>
+                <th className="px-2 py-2 text-right">Disc.</th>
+                <th className="px-2 py-2 text-right">Taxable</th>
+                <th className="px-2 py-2 text-right">GST</th>
+                <th className="px-2 py-2 text-right">Total</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        <section className="mt-6 grid grid-cols-2 gap-6">
+            </thead>
+            <tbody>
+              {projection.items.map((item, index) => (
+                <tr className="border-b border-zinc-300 align-top" key={`${item.description}-${index}`}>
+                  <td className="px-2 py-2">{index + 1}</td>
+                  <td className="px-2 py-2 font-medium">{item.description}</td>
+                  <td className="px-2 py-2">{item.hsnCode ?? "Pending"}</td>
+                  <td className="px-2 py-2 text-right">{item.quantity}</td>
+                  <td className="px-2 py-2">{item.unitCode ?? "-"}</td>
+                  <td className="px-2 py-2 text-right">{money(item.unitAmountCents)}</td>
+                  <td className="px-2 py-2 text-right">{item.discountPercent === null ? money(item.discountCents) : `${item.discountPercent}%`}</td>
+                  <td className="px-2 py-2 text-right">{money(item.taxableCents)}</td>
+                  <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td>
+                  <td className="px-2 py-2 text-right font-medium">{money(item.lineTotalCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <section className="print-break-avoid mt-5 grid gap-6 sm:grid-cols-[minmax(0,1fr)_280px]">
           <div>
-            <p className="font-semibold">GST Summary</p>
-            {projection.gstSummary.map((row) => (
-              <p className="text-sm" key={row.taxRateBps}>
-                {row.taxRateBps / 100}% on {row.taxableCents / 100}: {row.taxCents / 100}
-              </p>
-            ))}
+            <p className="text-xs font-semibold uppercase">Tax summary</p>
+            {projection.gstSummary.length ? (
+              <table className="mt-2 w-full max-w-md text-xs">
+                <thead className="border-b border-zinc-400 text-left"><tr><th className="py-1">Rate</th><th>Taxable</th><th>CGST</th><th>SGST</th><th>IGST</th></tr></thead>
+                <tbody>{projection.gstSummary.map((row) => {
+                  const cgst = taxMode === "intra-state" ? Math.floor(row.taxCents / 2) : 0;
+                  const sgst = taxMode === "intra-state" ? row.taxCents - cgst : 0;
+                  return <tr key={row.taxRateBps}><td className="py-1">{row.taxRateBps / 100}%</td><td>{money(row.taxableCents)}</td><td>{money(cgst)}</td><td>{money(sgst)}</td><td>{money(taxMode === "inter-state" ? row.taxCents : 0)}</td></tr>;
+                })}</tbody>
+              </table>
+            ) : <p className="mt-2 text-xs">No tax lines.</p>}
+            <p className="mt-5 text-xs font-semibold uppercase">Amount in words</p>
+            <p className="mt-1 text-sm">{projection.document.totalsInWords}</p>
           </div>
-          <div className="text-right text-sm">
-            <p>Subtotal: {projection.document.subtotalCents / 100}</p>
-            <p>Discount: {projection.document.discountCents / 100}</p>
-            <p>GST: {projection.document.taxCents / 100}</p>
-            <p>Round off: {projection.document.roundOffCents / 100}</p>
-            <p className="text-lg font-bold">Total: {projection.document.totalCents / 100}</p>
-          </div>
+          <dl className="space-y-2 text-xs">
+            <AmountRow label="Subtotal" value={projection.document.subtotalCents} />
+            <AmountRow label="Line discounts" value={-projection.document.discountCents} />
+            <AmountRow label={taxMode === "inter-state" ? "IGST" : "CGST + SGST"} value={projection.document.taxCents} />
+            <AmountRow label="Round-off" value={projection.document.roundOffCents} />
+            <div className="flex justify-between border-t-2 border-zinc-900 pt-2 text-base font-bold"><dt>Grand total</dt><dd>{money(projection.document.totalCents)}</dd></div>
+          </dl>
         </section>
-        <footer className="mt-10 grid grid-cols-2 gap-8 pt-8 text-sm">
-          <p>{projection.firm.termsFooter ?? "Terms configurable in hardware settings."}</p>
+
+        <footer className="print-break-avoid mt-10 grid gap-10 border-t border-zinc-400 pt-5 text-xs sm:grid-cols-2">
+          <div>
+            <p className="font-semibold">Terms</p>
+            <p className="mt-1 leading-5">{projection.firm.termsFooter ?? "WAITING FOR CLIENT CONFIRMATION"}</p>
+            {projection.firm.legalName ? <p className="mt-3">Legal proprietor: {projection.firm.legalName}</p> : null}
+          </div>
           <div className="text-right">
-            <div className="ml-auto mt-10 w-48 border-t pt-2">{projection.signatureLabel}</div>
+            <p>For {projection.firm.firmName}</p>
+            <div className="ml-auto mt-14 w-52 border-t border-zinc-700 pt-2">{projection.signatureLabel}</div>
           </div>
         </footer>
       </section>
     </main>
   );
+}
+
+function AmountRow({ label, value }: { label: string; value: number }) {
+  return <div className="flex justify-between gap-3"><dt>{label}</dt><dd>{money(value)}</dd></div>;
 }
 
 async function loadProjection(
@@ -133,4 +183,33 @@ async function loadProjection(
   } catch {
     notFound();
   }
+}
+
+function documentLabel(type: string) {
+  if (type === "SALES_QUOTATION") return "QUOTATION";
+  if (type === "SALES_ORDER") return "TAX INVOICE";
+  if (type === "PURCHASE_ORDER") return "PURCHASE ORDER";
+  if (type === "SUPPLIER_BILL") return "SUPPLIER BILL";
+  return humanize(type).toUpperCase();
+}
+
+function isPurchaseDocument(type: string) {
+  return ["PURCHASE_ENTRY", "PURCHASE_ORDER", "PURCHASE_RETURN", "SUPPLIER_BILL"].includes(type);
+}
+
+function formatAddress(address: Record<string, unknown>) {
+  const values = Object.values(address).filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
+  return values.length ? values.join(", ") : "Address not provided";
+}
+
+function formatDate(value: Date | string) {
+  return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(value));
+}
+
+function humanize(value: string) {
+  return value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function money(amountCents: number) {
+  return new Intl.NumberFormat("en-IN", { currency: "INR", style: "currency" }).format(amountCents / 100);
 }

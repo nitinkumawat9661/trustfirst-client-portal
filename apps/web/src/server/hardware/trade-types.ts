@@ -9,12 +9,17 @@ export type HardwareTradeTotals = {
 };
 
 export type HardwareTradeSummary = HardwareTradeTotals & {
+  billingInvoiceId: string | null;
+  createdAt: Date;
   customerId: string | null;
+  customerName: string | null;
   documentNumber: string;
   id: string;
+  metadata: Record<string, unknown>;
   paymentStatus: string;
   status: HardwareTradeDocumentStatus;
   supplierId: string | null;
+  supplierName: string | null;
   type: HardwareTradeDocumentType;
   updatedAt: Date;
 };
@@ -24,7 +29,9 @@ export type HardwareReportSummary = {
   lowStockProducts: number;
   outstandingCustomersCents: number;
   outstandingSuppliersCents: number;
+  purchaseGstCents: number;
   purchaseSummaryCents: number;
+  salesGstCents: number;
   stockMovements: number;
 };
 
@@ -43,7 +50,10 @@ export type HardwareWhatsAppShareContract = {
 
 export type HardwarePrintProjection = {
   customer: {
+    address: string | null;
+    gstin: string | null;
     name: string;
+    phone: string | null;
   } | null;
   document: HardwareTradeSummary & {
     totalsInWords: string;
@@ -63,12 +73,19 @@ export type HardwarePrintProjection = {
   };
   gstSummary: Array<{ taxableCents: number; taxCents: number; taxRateBps: number }>;
   items: Array<{
+    cgstCents: number;
     description: string;
     discountCents: number;
+    discountPercent: number | null;
+    hsnCode: string | null;
+    igstCents: number;
     lineTotalCents: number;
     quantity: number;
+    sgstCents: number;
     taxCents: number;
     taxRateBps: number;
+    taxableCents: number;
+    unitCode: string | null;
     unitAmountCents: number;
   }>;
   printContract: HardwarePrintContract;

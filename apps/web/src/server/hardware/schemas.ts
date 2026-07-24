@@ -60,13 +60,21 @@ export const hardwareMovementSchema = z.object({
   notes: z.string().max(2000).optional(),
   occurredAt: z.coerce.date().optional(),
   productId: z.string(),
-  quantity: z.number().int().positive(),
+  quantity: z.number().int().nonnegative(),
   referenceId: z.string().max(160).optional(),
   referenceType: z.string().max(80).optional(),
   supplierId: z.string().optional(),
   type: z.nativeEnum(HardwareInventoryMovementType),
   unitCostCents: z.number().int().nonnegative().optional(),
   unitPriceCents: z.number().int().nonnegative().optional(),
+}).superRefine((value, context) => {
+  if (value.type !== HardwareInventoryMovementType.ADJUSTMENT && value.quantity === 0) {
+    context.addIssue({
+      code: "custom",
+      message: "Stock in and stock out quantities must be greater than zero.",
+      path: ["quantity"],
+    });
+  }
 });
 
 export const hardwareImportPreviewSchema = z.object({

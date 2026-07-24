@@ -18,11 +18,11 @@ export default function OfflinePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm leading-6 text-muted-foreground">
-            TrustFirst can queue supported hardware actions on this device while the network is unavailable. Return to the
+            Mangalam Sanitary ERP can queue supported hardware actions on this device while the network is unavailable. Return to the
             dashboard when your connection is restored to process pending actions.
           </p>
           <Button asChild>
-            <Link href="/admin/hardware/inventory">Back to hardware dashboard</Link>
+            <Link href="/admin">Back to dashboard</Link>
           </Button>
         </CardContent>
       </Card>

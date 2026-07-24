@@ -1,6 +1,5 @@
 import { auth } from "@/auth";
 import { AppError } from "../domain/errors";
-import { getHttpStagingBypassUser, isHttpStagingAuthBypassActive } from "./staging-auth-bypass";
 
 export async function requireCurrentUser() {
   const session = await auth();
@@ -9,20 +8,11 @@ export async function requireCurrentUser() {
     return session.user;
   }
 
-  if (await isHttpStagingAuthBypassActive()) {
-    const bypassUser = await getHttpStagingBypassUser();
-    if (bypassUser?.id) return bypassUser;
-  }
-
-  if (!session?.user?.id) {
-    throw new AppError({
-      code: "UNAUTHORIZED",
-      message: "Authentication is required.",
-      status: 401,
-    });
-  }
-
-  return session.user;
+  throw new AppError({
+    code: "UNAUTHORIZED",
+    message: "Authentication is required.",
+    status: 401,
+  });
 }
 
 export function readSessionToken(request: Request) {

@@ -1,16 +1,23 @@
-import { Badge } from "@trustfirst/ui";
-import { BillingBarcodeSearch } from "@/components/hardware/hardware-demo-panels";
-import { HardwareTradeFormShell } from "@/components/hardware/hardware-trade-panels";
+import { getPrisma } from "@trustfirst/database";
+import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
+import { HardwareTradeForm } from "@/components/hardware/hardware-trade-form";
+import { requireCurrentUser } from "@/server/auth/session";
+import { HardwareService } from "@/server/hardware";
 
-export default function NewHardwareSalePage() {
+export const dynamic = "force-dynamic";
+
+export default async function NewHardwareSalePage() {
+  const user = await requireCurrentUser();
+  const service = new HardwareService(getPrisma());
+  const context = { tenantId: user.activeTenantId ?? "public", userId: user.id };
+  const [parties, products] = await Promise.all([
+    service.listParties(context, "customer"),
+    service.listProducts(context),
+  ]);
   return (
     <div className="space-y-6">
-      <div>
-        <Badge>New sale</Badge>
-        <h1 className="mt-4 text-3xl font-semibold">Create hardware sale</h1>
-      </div>
-      <BillingBarcodeSearch />
-      <HardwareTradeFormShell mode="sale" />
+      <HardwarePageHeader description="Scan a barcode or select a product. Saving creates a draft; confirmation validates stock before deduction." eyebrow="Sales" title="New bill" />
+      <HardwareTradeForm mode="sale" parties={parties} products={products} />
     </div>
   );
 }

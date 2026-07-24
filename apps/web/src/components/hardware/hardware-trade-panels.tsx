@@ -1,17 +1,28 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@trustfirst/ui";
-import { FileText, RotateCcw, ShoppingCart, Truck } from "lucide-react";
+import { FileText, RotateCcw } from "lucide-react";
 import type { HardwareReportSummary, HardwareTradeSummary } from "@/server/hardware";
+import { HardwareDocumentActions } from "./hardware-document-actions";
 
-export function HardwareTradeList({ documents }: { documents: HardwareTradeSummary[] }) {
+export function HardwareTradeList({
+  documents,
+  emptyMessage,
+  locations,
+  title,
+}: {
+  documents: HardwareTradeSummary[];
+  emptyMessage: string;
+  locations: Array<{ id: string; name: string }>;
+  title: string;
+}) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Documents</CardTitle>
+        <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {documents.length === 0 ? (
           <div className="rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">
-            No hardware trade documents are available yet.
+            {emptyMessage}
           </div>
         ) : (
           documents.map((document) => (
@@ -23,35 +34,12 @@ export function HardwareTradeList({ documents }: { documents: HardwareTradeSumma
                 <Badge>{document.status.toLowerCase()}</Badge>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                Total {formatMoney(document.totalCents)} · Payment {document.paymentStatus}
+                {document.customerName ?? document.supplierName ?? "Party not linked"} · {formatDate(document.createdAt)} · Total {formatMoney(document.totalCents)} · Payment {document.paymentStatus}
               </p>
+              <HardwareDocumentActions document={document} locations={locations} />
             </div>
           ))
         )}
-      </CardContent>
-    </Card>
-  );
-}
-
-export function HardwareTradeFormShell({ mode }: { mode: "purchase" | "sale" }) {
-  const Icon = mode === "sale" ? ShoppingCart : Truck;
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Icon aria-hidden className="size-5 text-muted-foreground" />
-          <CardTitle>{mode === "sale" ? "New sale" : "New purchase"}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-4 text-sm">
-        <div className="rounded-md border border-dashed border-border p-4 text-muted-foreground">
-          Catalog item, discount, GST, round-off, and stock confirmation are handled by hardware trade APIs.
-        </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {["Client/Supplier", "Catalog Items", "Location on Confirm"].map((item) => (
-            <div className="rounded-md border border-border p-3" key={item}>{item}</div>
-          ))}
-        </div>
       </CardContent>
     </Card>
   );
@@ -65,6 +53,8 @@ export function HardwareReportsPanel({ reports }: { reports: HardwareReportSumma
     { label: "Low stock", value: reports.lowStockProducts },
     { label: "Outstanding customers", value: formatMoney(reports.outstandingCustomersCents) },
     { label: "Outstanding suppliers", value: formatMoney(reports.outstandingSuppliersCents) },
+    { label: "Sales GST", value: formatMoney(reports.salesGstCents) },
+    { label: "Purchase GST", value: formatMoney(reports.purchaseGstCents) },
   ];
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -85,4 +75,8 @@ export function HardwareReportsPanel({ reports }: { reports: HardwareReportSumma
 
 function formatMoney(amountCents: number) {
   return new Intl.NumberFormat("en-IN", { currency: "INR", style: "currency" }).format(amountCents / 100);
+}
+
+function formatDate(value: Date | string) {
+  return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(value));
 }

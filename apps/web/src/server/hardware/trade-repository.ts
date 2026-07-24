@@ -10,7 +10,17 @@ import {
 
 const tradeInclude = {
   billingInvoice: true,
-  items: true,
+  customer: true,
+  items: {
+    include: {
+      product: {
+        include: {
+          unit: true,
+        },
+      },
+    },
+  },
+  supplier: true,
   timeline: { orderBy: { occurredAt: "desc" as const }, take: 30 },
 };
 
@@ -19,6 +29,10 @@ export class PrismaHardwareTradeRepository {
 
   list(tenantId: string, types?: HardwareTradeDocumentType[]) {
     return this.prisma.hardwareTradeDocument.findMany({
+      include: {
+        customer: { select: { name: true } },
+        supplier: { select: { name: true } },
+      },
       orderBy: { updatedAt: "desc" },
       take: 50,
       where: { archivedAt: null, tenantId, ...(types ? { type: { in: types } } : {}) },
