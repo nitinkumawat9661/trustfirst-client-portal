@@ -35,6 +35,7 @@ The objective is a reliable two-user hardware and sanitary shop workflow. Unrela
 
 - Supplier master
 - Purchase order, purchase entry, and supplier bill flow
+- Supplier invoice references, multi-line entry, per-line discounts, HSN review, CGST/SGST/IGST, round-off, and multi-page support
 - Stock addition only on confirmed stock-affecting purchase
 - Supplier outstanding and settlement behavior after clarification
 - Purchase return and stock reversal
@@ -50,15 +51,15 @@ The objective is a reliable two-user hardware and sanitary shop workflow. Unrela
 ### 6. Tax, Discount, And Payment
 
 - Client-approved GST mode and item rates
-- Client-approved CGST/SGST/IGST and HSN behavior
-- Client-approved fixed or percentage discount rules
+- CGST/SGST/IGST and per-line HSN capability; actual master classifications remain verification-gated
+- Per-line purchase discount plus separate bill-level discount, with tenant-defined authorization rules
 - Cash, UPI, bank transfer, cheque, card, and other manual payment modes
 - Partial payment and outstanding calculation
 - No live payment gateway
 
 ### 7. Print And Reports
 
-- Browser A4 invoice and quotation print
+- Browser A4 invoice and quotation print with continuation-page support
 - Firm/customer details, item table, GST summary, discount, round-off, totals in words, terms, and signature
 - Daily sales, purchase summary, stock movement, low stock, customer outstanding, supplier outstanding, and GST summary
 - Client-approved CSV/Excel/PDF export behavior

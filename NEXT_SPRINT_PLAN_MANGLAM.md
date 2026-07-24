@@ -2,11 +2,13 @@
 
 > Historical plan notice: identity spelling, legal identifiers, GSTIN, address, proprietor, logo, and tagline were resolved in Sprint 43A. Commercial prefixes, pricing mode, terms, and operational data remain pending client confirmation.
 
+> Real-document update: Sprint 43B locked purchase workflow, line discounts, multi-HSN and split-tax capability, supplier ledger behavior, and A4 multi-page print. No products, stock, rates, parties, or balances were imported.
+
 ## Decision
 
-The next sprint is:
+The recommended next data sprint, after production-domain hardening, is:
 
-`SPRINT 43 - MANGLAM REAL CLIENT CONFIGURATION FOUNDATION`
+`MANGALAM VERIFIED MASTER DATA PREVIEW`
 
 It prepares a protected, configuration-driven real client profile. It does not implement unresolved tax, settlement, migration, return, permission, or offline behavior.
 

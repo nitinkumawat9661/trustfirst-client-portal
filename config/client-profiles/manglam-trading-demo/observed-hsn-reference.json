@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "tenantSlug": "manglam-trading-demo",
+  "datasetStatus": "REFERENCE_ONLY",
+  "masterDataImportAllowed": false,
+  "records": [
+    {
+      "rawProductName": "Kothari CPVC and SWR pipe/fitting examples",
+      "supplierName": "Pranaal Polyplast Private Limited",
+      "observedHSN": "3917",
+      "observedGSTRate": "18%",
+      "sourceDocument": "PPPL-257.pdf",
+      "verificationStatus": "OBSERVED_FROM_INVOICE"
+    },
+    {
+      "rawProductName": "PTMT cistern side handle",
+      "supplierName": "Satyam Tiles And Sanitary Ware",
+      "observedHSN": "39222000",
+      "observedGSTRate": "18%",
+      "sourceDocument": "Sales_GR_231.pdf",
+      "verificationStatus": "OBSERVED_FROM_INVOICE"
+    },
+    {
+      "rawProductName": "Faucet, cock, mixer, and valve examples",
+      "supplierName": "Satyam Tiles And Sanitary Ware / Khushi Enterprises",
+      "observedHSN": "84818020",
+      "observedGSTRate": "18%",
+      "sourceDocument": "Sales_GR_231.pdf; khushi-enterprises-tax-invoice.jpeg",
+      "verificationStatus": "OBSERVED_FROM_INVOICE"
+    },
+    {
+      "rawProductName": "Health faucet and bathroom accessory examples",
+      "supplierName": "Satyam Tiles And Sanitary Ware / Khushi Enterprises",
+      "observedHSN": "39249090 / 39249010",
+      "observedGSTRate": "18%",
+      "sourceDocument": "Sales_GR_231.pdf; khushi-enterprises-tax-invoice.jpeg",
+      "verificationStatus": "PENDING_REVIEW"
+    },
+    {
+      "rawProductName": "Pedestal basin and closet examples",
+      "supplierName": "Khushi Enterprises",
+      "observedHSN": "69101000",
+      "observedGSTRate": "18%",
+      "sourceDocument": "khushi-enterprises-tax-invoice.jpeg",
+      "verificationStatus": "OBSERVED_FROM_INVOICE"
+    }
+  ]
+}

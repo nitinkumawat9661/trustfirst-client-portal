@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "tenantSlug": "manglam-trading-demo",
+  "access": "PRIVATE_TENANT_SOURCE",
+  "importStatus": "REFERENCE_ONLY",
+  "documents": [
+    {
+      "filename": "gst-registration-certificate-reg-06.pdf",
+      "classification": ["LEGAL_IDENTITY_SOURCE"],
+      "sha256": "9f1a266c5aa6955d5d926f60f710ad390414904b031d810f68647b5dc1378a60",
+      "authority": "AUTHORITATIVE_LEGAL_IDENTITY"
+    },
+    {
+      "filename": "manglum.pdf",
+      "classification": ["SUPPLIER_LEDGER_REFERENCE", "PRINT_FORMAT_REFERENCE"],
+      "sha256": "44de281e0e3a9a4e1ae63a58c33bcbc52e83076e15362e2301cdbe69b38a9fc3",
+      "authority": "REFERENCE_ONLY"
+    },
+    {
+      "filename": "PPPL-257.pdf",
+      "classification": ["PURCHASE_INVOICE_REFERENCE", "PRODUCT_HSN_REFERENCE", "PRINT_FORMAT_REFERENCE"],
+      "sha256": "6afb5df2e6aaeaaed81e5ecd66c5f43c88f90b55f0b88d8368c01dc17fd2faf5",
+      "authority": "REFERENCE_ONLY"
+    },
+    {
+      "filename": "Sales_GR_231.pdf",
+      "classification": ["PURCHASE_INVOICE_REFERENCE", "PRODUCT_HSN_REFERENCE", "PRINT_FORMAT_REFERENCE"],
+      "sha256": "168f81ea8e3ede60145e5ae15a92e287c79a475c4b41830abe67bc5d511f1114",
+      "authority": "REFERENCE_ONLY"
+    },
+    {
+      "filename": "khushi-enterprises-tax-invoice.jpeg",
+      "classification": ["PURCHASE_INVOICE_REFERENCE", "PRODUCT_HSN_REFERENCE", "PRINT_FORMAT_REFERENCE"],
+      "sha256": "68c48c32bac6e927a7425ccbd500a140cabf5cdec96ebb2d29f955ae6a04b15f",
+      "authority": "REFERENCE_ONLY",
+      "buyerIdentityStatus": "SOURCE_VARIATION_REVIEW_ONLY"
+    }
+  ]
+}

@@ -13,6 +13,8 @@ Classification totals:
 - Not requested: 2
 - Future or optional: 0
 
+Real document references additionally lock purchase invoice structure, per-line purchase discounts, multi-HSN support, split GST, supplier ledger behavior, and A4 multi-page print. Their products, quantities, rates, and balances remain reference-only.
+
 ## Classified Baseline
 
 | ID | Requirement or fact | Classification | Baseline decision |
@@ -75,6 +77,11 @@ Classification totals:
 | MRG-056 | Measurable success criteria | NEEDS CLARIFICATION | Client answered `DONT KNOW YET`. |
 | MRG-057 | Earliest feasible delivery | CONFIRMED | Urgency is high. |
 | MRG-058 | Calendar demo or go-live date | NEEDS CLARIFICATION | No exact date was supplied. |
+| MRG-059 | Purchase invoice workflow | LOCKED | Locked from protected real-business document references. |
+| MRG-060 | Line-level purchase discount | CONFIRMED | Preserve list rate, item-specific discount, and net taxable amount; never hardcode a percentage. |
+| MRG-061 | Multi-HSN and per-line tax | CONFIRMED | HSN remains verification-gated; CGST, SGST, and IGST are supported. |
+| MRG-062 | Supplier ledger and Dr/Cr balances | CONFIRMED | Opening balance, invoice posting, payment adjustment, and history are required; reference amounts are not imported. |
+| MRG-063 | A4 multi-page document print | CONFIRMED | Continuation pages and repeatable invoice structure are required. |
 
 ## Change Control
 
