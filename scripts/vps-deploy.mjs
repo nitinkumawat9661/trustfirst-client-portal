@@ -160,7 +160,7 @@ echo "build done: yes"
 
 if command -v pm2 >/dev/null 2>&1; then
   pm2 delete "$PM2_PROCESS" >/dev/null 2>&1 || true
-  PORT="$APP_PORT" pm2 start "npm run start --workspace @trustfirst/web" --name "$PM2_PROCESS" --time --update-env
+  HOSTNAME="127.0.0.1" PORT="$APP_PORT" pm2 start "npm run start --workspace @trustfirst/web" --name "$PM2_PROCESS" --time --update-env
   pm2 save
   echo "PM2 restart done: yes"
 else
@@ -174,6 +174,7 @@ After=network.target postgresql.service
 Type=simple
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$ENV_FILE
+Environment=HOSTNAME=127.0.0.1
 Environment=PORT=$APP_PORT
 ExecStart=$(command -v npm) run start --workspace @trustfirst/web
 Restart=always

@@ -49,8 +49,8 @@ if [ "$process_result" != "online|enabled" ]; then
   exit 11
 fi
 
-if ! sudo ss -H -ltn | awk '$4 ~ /:3010$/ { found = 1 } END { exit found ? 0 : 1 }'; then
-  echo "TrustFirst port 3010 is not listening." >&2
+if ! sudo ss -H -ltn | awk '$4 == "127.0.0.1:3010" { found = 1 } END { exit found ? 0 : 1 }'; then
+  echo "TrustFirst port 3010 is not bound exclusively to 127.0.0.1." >&2
   exit 12
 fi
 
@@ -64,7 +64,7 @@ fi
 
 printf '%s\n' "__PM2_PROCESS__=online"
 printf '%s\n' "__PM2_AUTORESTART__=enabled"
-printf '%s\n' "__PORT_3010__=listening"
+printf '%s\n' "__PORT_3010__=loopback-only"
 printf '%s\n' "__SYSTEMD_SERVICE__=pm2-trustfirst.service"
 printf '%s\n' "__SYSTEMD_ENABLED__=enabled"
 printf '%s\n' "__SYSTEMD_ACTIVE__=active"
