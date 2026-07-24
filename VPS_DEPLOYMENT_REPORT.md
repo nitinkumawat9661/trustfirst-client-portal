@@ -1,5 +1,24 @@
 # VPS Deployment Report
 
+## Sprint 41 Runtime Hardening
+
+- Outage root cause: `trustfirst-client-portal` was absent from the `trustfirst` PM2 daemon, so port `3010` was not listening
+- Restoration: started only `trustfirst-client-portal` and saved the TrustFirst PM2 process list
+- PM2 saved list: `/home/trustfirst/.pm2/dump.pm2`
+- PM2 persistence service: `pm2-trustfirst.service`
+- Startup service enabled: yes
+- Startup service active: yes
+- PM2 auto-restart: enabled
+- Controlled systemd restart and saved-process resurrection: passed
+- Runtime health command: `npm run runtime:health`
+- Final runtime health: passed
+- Latest VPS smoke: passed
+- Latest intake smoke: passed, `PUB-REQ-2026-0014`
+- Public intake status: HTTP `200`
+- Auth.js session status: HTTP `200`
+- Route lockdown preserved: yes, anonymous admin request returned `307`
+- CafeLuxe untouched: yes
+
 ## Status
 
 TrustFirst Client Portal is deployed to the authorized shared VPS as an isolated Manglam demo environment.
@@ -51,7 +70,7 @@ Sprint 35 HTTPS domain setup remains blocked because `DEPLOY_DOMAIN` is empty in
 - Seed status: `seed:manglam-demo` completed
 - Tenant slug: `manglam-trading-demo`
 - Public intake DB verification: passed
-- Latest public intake smoke submission: `PUB-REQ-2026-0010`
+- Latest public intake smoke submission: `PUB-REQ-2026-0014`
 
 ## QA
 
@@ -62,7 +81,7 @@ Sprint 35 HTTPS domain setup remains blocked because `DEPLOY_DOMAIN` is empty in
 - Public intake page: 200
 - Public intake loading marker present: no
 - Public form visible markers: passed
-- Public intake JSON submit: passed, `PUB-REQ-2026-0010`
+- Public intake JSON submit: passed, `PUB-REQ-2026-0014`
 - Thank-you page shows Submission ID: yes
 - Thank-you page shows submitted business name: yes
 - Thank-you appears only after saved DB receipt lookup: yes

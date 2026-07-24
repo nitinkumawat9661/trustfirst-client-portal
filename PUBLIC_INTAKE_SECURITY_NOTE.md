@@ -1,5 +1,13 @@
 # Public Intake Security Note
 
+## Runtime Availability
+
+The public intake depends on `trustfirst-client-portal` listening on port `3010`. A prior outage occurred because the TrustFirst PM2 process was absent even though UFW was configured correctly.
+
+Sprint 41 saved the TrustFirst process list and enabled `pm2-trustfirst.service` so systemd resurrects the isolated TrustFirst runtime after reboot or PM2 daemon failure. `npm run runtime:health` verifies intake HTTP `200`, Auth.js session HTTP `200`, port `3010`, PM2/systemd state, and anonymous admin route lockdown without reading secrets.
+
+CafeLuxe processes, files, databases, reverse proxy configuration, and port `3000` are outside this service and health probe.
+
 ## Scope
 
 The public Manglam requirement intake is intentionally limited to:
@@ -114,8 +122,13 @@ Sprint 39C documents the live thank-you marker investigation in `PUBLIC_INTAKE_S
 Latest staging verification:
 
 - Sprint 39 live: yes
+- Sprint 41 PM2 persistence: enabled and active through `pm2-trustfirst.service`
+- Runtime health passed: yes
+- Public intake HTTP status: `200`
+- Auth.js session HTTP status: `200`
+- Anonymous admin lockdown: `307` redirect
 - Intake smoke passed: yes
-- Latest Submission ID: `PUB-REQ-2026-0010`
+- Latest Submission ID: `PUB-REQ-2026-0014`
 - Admin queue verifies same ID: yes
 - Validation secret redaction: yes
 - CafeLuxe untouched: yes

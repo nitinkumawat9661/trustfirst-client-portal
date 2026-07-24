@@ -1,5 +1,28 @@
 # VPS Automated Deployment
 
+## Runtime Persistence
+
+TrustFirst uses the enabled systemd service `pm2-trustfirst.service` to resurrect `/home/trustfirst/.pm2/dump.pm2` after a reboot or TrustFirst PM2 daemon failure. The saved list contains only `trustfirst-client-portal`, which remains on port `3010` with PM2 auto-restart enabled.
+
+Run the combined SSH and public endpoint health check:
+
+```bash
+npm run runtime:health
+```
+
+The command verifies the TrustFirst PM2 process, auto-restart, systemd persistence, port `3010`, public intake, Auth.js session endpoint, and anonymous admin lockdown. It does not manage CafeLuxe or port `3000`.
+
+Latest Sprint 41 verification:
+
+- `pm2-trustfirst.service`: enabled and active
+- Controlled systemd restart: passed
+- Saved process resurrection: passed
+- `npm run runtime:health`: passed
+- `npm run vps:smoke`: passed
+- Public intake smoke: passed, `PUB-REQ-2026-0014`
+- Anonymous admin lockdown: preserved
+- CafeLuxe untouched: yes
+
 ## Status
 
 Automation is active and has successfully deployed TrustFirst Client Portal to the authorized shared VPS using the isolated TrustFirst section.
@@ -127,7 +150,7 @@ Secrets are written only to the VPS env file and are not printed by validation o
 - Build: passed
 - PM2: `trustfirst-client-portal` online
 - External smoke: passed
-- Public intake smoke: passed, `PUB-REQ-2026-0010`
+- Public intake smoke: passed, `PUB-REQ-2026-0014`
 - Thank-you shows submitted business name: yes
 - Admin queue verifies same Submission ID: yes
 - Authenticated QA: passed
