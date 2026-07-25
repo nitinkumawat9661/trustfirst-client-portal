@@ -61,7 +61,7 @@ export default async function HardwarePrintPreviewPage({
               <h1 className="text-2xl font-bold tracking-normal">{projection.firm.firmName}</h1>
               {projection.firm.tagline ? <p className="mt-1 text-xs font-semibold">{projection.firm.tagline}</p> : null}
               <p className="mt-2 max-w-xl text-xs leading-5">{formatAddress(projection.firm.address)}</p>
-              <p className="text-xs">{[projection.firm.phone, projection.firm.email].filter(Boolean).join(" · ")}</p>
+              <p className="text-xs">{[projection.firm.phone, projection.firm.email].filter(Boolean).join(" | ")}</p>
               <p className="mt-1 text-xs font-semibold">GSTIN: {projection.firm.gstin ?? "Not provided"}</p>
             </div>
           </div>

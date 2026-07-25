@@ -22,6 +22,7 @@ export {
   CommercialDocumentStatus,
   CommercialDocumentTimelineVerb,
   CommercialDocumentType,
+  DocumentSequenceKind,
   ContactInvitationStatus,
   DeliverableReviewStatus,
   BillingTimelineVerb,

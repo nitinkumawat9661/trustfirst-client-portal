@@ -8,6 +8,7 @@ import {
   type PrismaClient,
 } from "@trustfirst/database";
 import { AppError } from "../domain/errors";
+import { MANGALAM_TENANT_SLUG } from "../domain/host-routing";
 import { PermissionResolverService } from "../permissions";
 import { PrismaBillingRepository } from "./billing-repository";
 import type {
@@ -101,7 +102,7 @@ export class BillingService {
   async createInvoice(context: ActorContext, input: InvoiceCreateInput) {
     await this.enforce(context, "billing.manage");
     await this.validateLinks(context.tenantId, input);
-    const invoiceNumber = await this.nextInvoiceNumber(context.tenantId);
+    const invoiceNumber = createDraftInvoiceNumber();
     const totalAmountCents = sumLineItems(input.lineItems);
     return this.repository.createInvoice({
       actorId: context.userId,
@@ -160,14 +161,14 @@ export class BillingService {
       if (!issueableStatuses.has(invoice.status)) {
         throw validation("Only draft invoices can be issued.");
       }
-      return this.repository.transitionInvoice({
+      const numbering = await this.resolveInvoiceNumbering(context.tenantId);
+
+      return this.repository.issueInvoice({
         actorId: context.userId,
-        auditAction: AuditAction.BILLING_INVOICE_ISSUED,
-        data: { issuedAt: new Date(), status: InvoiceStatus.ISSUED },
         invoiceId,
-        summary: `Issued invoice ${invoice.invoiceNumber}`,
+        issuedAt: new Date(),
+        prefix: numbering.prefix,
         tenantId: context.tenantId,
-        verb: BillingTimelineVerb.INVOICE_ISSUED,
       });
     }
     if (input.status === InvoiceStatus.VOID) {
@@ -214,11 +215,20 @@ export class BillingService {
       paidAmountCents >= invoice.totalAmountCents
         ? InvoiceStatus.PAID
         : InvoiceStatus.PARTIALLY_PAID;
+    const receivedAt = input.receivedAt ?? new Date();
+    const receiptNumbering = input.receiptDocumentId
+      ? undefined
+      : await this.resolveReceiptNumbering(context.tenantId);
+
     return this.repository.recordPayment({
       actorId: context.userId,
       invoiceId,
       nextStatus,
       paidAmountCents,
+      ...(receiptNumbering
+        ? { receiptPrefix: receiptNumbering.prefix }
+        : {}),
+      receivedAt,
       payment: stripUndefined({
         amountCents: input.amountCents,
         invoiceId,
@@ -227,7 +237,7 @@ export class BillingService {
         notes: input.notes,
         provider: input.provider,
         receiptDocumentId: input.receiptDocumentId,
-        receivedAt: input.receivedAt ?? new Date(),
+        receivedAt,
         recordedById: context.userId,
         reference: input.reference,
         tenantId: context.tenantId,
@@ -334,17 +344,46 @@ export class BillingService {
     if (!record) throw validation(message);
   }
 
-  private async nextInvoiceNumber(tenantId: string) {
-    const year = new Date().getUTCFullYear();
-    let sequence = (await this.repository.countInvoiceNumber(tenantId, year)) + 1;
-    let candidate = formatInvoiceNumber(year, sequence);
-    while (await this.repository.findInvoiceByNumber(tenantId, candidate)) {
-      sequence += 1;
-      candidate = formatInvoiceNumber(year, sequence);
-    }
-    return candidate;
-  }
 
+  private async resolveReceiptNumbering(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      select: { slug: true },
+      where: { id: tenantId },
+    });
+
+    return {
+      prefix:
+        tenant?.slug === MANGALAM_TENANT_SLUG
+          ? "MS/REC"
+          : "REC",
+    };
+  }
+  private async resolveInvoiceNumbering(tenantId: string) {
+    const [tenant, settings] = await Promise.all([
+      this.prisma.tenant.findUnique({
+        select: { slug: true },
+        where: { id: tenantId },
+      }),
+      this.prisma.hardwareBusinessSettings.findUnique({
+        select: { invoicePrefix: true },
+        where: { tenantId },
+      }),
+    ]);
+
+    if (tenant?.slug === MANGALAM_TENANT_SLUG) {
+      return { prefix: "MS/INV" };
+    }
+
+    const configuredPrefix = settings?.invoicePrefix.trim();
+
+    return {
+      prefix:
+        configuredPrefix &&
+        !configuredPrefix.startsWith("PENDING")
+          ? configuredPrefix
+          : "INV",
+    };
+  }
   private async ensureInvoiceAccess(context: ActorContext, invoiceId: string, permission: string) {
     await this.enforce(context, permission);
     return this.getInvoiceOrThrow(context.tenantId, invoiceId);
@@ -447,8 +486,8 @@ function dueDateFromTerms(paymentTerms?: { daysUntilDue?: number | undefined }) 
   return new Date(Date.now() + paymentTerms.daysUntilDue * 24 * 60 * 60_000);
 }
 
-function formatInvoiceNumber(year: number, sequence: number) {
-  return `INV-${year}-${sequence.toString().padStart(4, "0")}`;
+function createDraftInvoiceNumber() {
+  return `DRAFT-${crypto.randomUUID()}`;
 }
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {

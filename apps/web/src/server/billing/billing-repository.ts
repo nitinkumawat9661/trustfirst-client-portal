@@ -1,10 +1,15 @@
 import {
   AuditAction,
   BillingTimelineVerb,
+  CommercialDocumentStatus,
+  CommercialDocumentTimelineVerb,
+  CommercialDocumentType,
+  DocumentSequenceKind,
   InvoiceStatus,
   type Prisma,
   type PrismaClient,
 } from "@trustfirst/database";
+import { allocateDocumentNumber } from "./document-sequence";
 
 const invoiceInclude = {
   attachments: { orderBy: { createdAt: "desc" as const } },
@@ -109,6 +114,63 @@ export class PrismaBillingRepository {
     });
   }
 
+  issueInvoice(input: {
+    actorId: string;
+    financialYear?: string;
+    invoiceId: string;
+    issuedAt: Date;
+    prefix: string;
+    tenantId: string;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const invoiceNumber = await allocateDocumentNumber(tx, {
+        ...(input.financialYear
+          ? { financialYear: input.financialYear }
+          : {}),
+        kind: DocumentSequenceKind.INVOICE,
+        occurredAt: input.issuedAt,
+        prefix: input.prefix,
+        tenantId: input.tenantId,
+      });
+
+      const invoice = await tx.invoice.update({
+        data: {
+          invoiceNumber,
+          issuedAt: input.issuedAt,
+          status: InvoiceStatus.ISSUED,
+        },
+        where: {
+          id: input.invoiceId,
+          status: InvoiceStatus.DRAFT,
+          tenantId: input.tenantId,
+        },
+      });
+
+      await tx.billingTimelineEvent.create({
+        data: {
+          actorId: input.actorId,
+          invoiceId: invoice.id,
+          metadata: { invoiceNumber },
+          summary: `Issued invoice ${invoiceNumber}`,
+          tenantId: input.tenantId,
+          verb: BillingTimelineVerb.INVOICE_ISSUED,
+        },
+      });
+
+      await tx.auditEvent.create({
+        data: {
+          action: AuditAction.BILLING_INVOICE_ISSUED,
+          actorId: input.actorId,
+          metadata: { invoiceNumber },
+          targetId: invoice.id,
+          targetType: "Invoice",
+          tenantId: input.tenantId,
+        },
+      });
+
+      return invoice;
+    });
+  }
   transitionInvoice(input: {
     actorId: string;
     data: Prisma.InvoiceUncheckedUpdateInput;
@@ -153,42 +215,168 @@ export class PrismaBillingRepository {
     nextStatus: InvoiceStatus;
     paidAmountCents: number;
     payment: Prisma.PaymentRecordUncheckedCreateInput;
+    receiptPrefix?: string;
+    receivedAt: Date;
     tenantId: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      const payment = await tx.paymentRecord.create({ data: input.payment });
+      const sourceInvoice = await tx.invoice.findFirst({
+        select: {
+          branding: true,
+          clientId: true,
+          currency: true,
+          invoiceNumber: true,
+          projectId: true,
+          requirementId: true,
+          title: true,
+        },
+        where: {
+          id: input.invoiceId,
+          tenantId: input.tenantId,
+        },
+      });
+
+      if (!sourceInvoice) {
+        throw new Error("Invoice was not found while recording payment.");
+      }
+
+      let receipt = null;
+      let receiptDocumentId = input.payment.receiptDocumentId ?? null;
+
+      if (!receiptDocumentId) {
+        if (!input.receiptPrefix) {
+          throw new Error("Receipt number prefix is required.");
+        }
+
+        const receiptNumber = await allocateDocumentNumber(tx, {
+          kind: DocumentSequenceKind.RECEIPT,
+          occurredAt: input.receivedAt,
+          prefix: input.receiptPrefix,
+          tenantId: input.tenantId,
+        });
+
+        const receiptContent = {
+          amountCents: input.payment.amountCents,
+          currency: sourceInvoice.currency,
+          invoiceNumber: sourceInvoice.invoiceNumber,
+          mode: input.payment.mode,
+          notes: input.payment.notes ?? null,
+          provider: input.payment.provider,
+          receivedAt: input.receivedAt.toISOString(),
+          reference: input.payment.reference ?? null,
+        } as Prisma.InputJsonValue;
+
+        receipt = await tx.commercialDocument.create({
+          data: {
+            approvedAt: input.receivedAt,
+            approvedById: input.actorId,
+            branding: sourceInvoice.branding as Prisma.InputJsonValue,
+            clientId: sourceInvoice.clientId,
+            content: receiptContent,
+            documentNumber: receiptNumber,
+            metadata: {
+              billingInvoiceId: input.invoiceId,
+              generatedAutomatically: true,
+            },
+            ownerId: input.actorId,
+            projectId: sourceInvoice.projectId,
+            requirementId: sourceInvoice.requirementId,
+            status: CommercialDocumentStatus.APPROVED,
+            summary: `Payment received against ${sourceInvoice.invoiceNumber}`,
+            templateKey: "billing-payment-receipt-v1",
+            tenantId: input.tenantId,
+            title: `Receipt for ${sourceInvoice.invoiceNumber}`,
+            type: CommercialDocumentType.RECEIPT,
+          },
+        });
+
+        receiptDocumentId = receipt.id;
+
+        await tx.commercialDocumentVersion.create({
+          data: {
+            content: receiptContent,
+            createdById: input.actorId,
+            documentId: receipt.id,
+            summary: "Automatic payment receipt",
+            tenantId: input.tenantId,
+            version: 1,
+          },
+        });
+
+        await tx.commercialDocumentTimelineEvent.createMany({
+          data: [
+            {
+              actorId: input.actorId,
+              documentId: receipt.id,
+              summary: `Created receipt ${receiptNumber}`,
+              tenantId: input.tenantId,
+              verb: CommercialDocumentTimelineVerb.CREATED,
+            },
+            {
+              actorId: input.actorId,
+              documentId: receipt.id,
+              summary: `Approved receipt ${receiptNumber}`,
+              tenantId: input.tenantId,
+              verb: CommercialDocumentTimelineVerb.APPROVED,
+            },
+          ],
+        });
+      }
+
+      const payment = await tx.paymentRecord.create({
+        data: {
+          ...input.payment,
+          receiptDocumentId,
+        },
+      });
+
       const invoice = await tx.invoice.update({
         data: {
           paidAmountCents: input.paidAmountCents,
-          paidAt: input.nextStatus === InvoiceStatus.PAID ? input.payment.receivedAt : null,
+          paidAt:
+            input.nextStatus === InvoiceStatus.PAID
+              ? input.receivedAt
+              : null,
           status: input.nextStatus,
         },
-        where: { id: input.invoiceId, tenantId: input.tenantId },
+        where: {
+          id: input.invoiceId,
+          tenantId: input.tenantId,
+        },
       });
+
       await tx.billingTimelineEvent.create({
         data: {
           actorId: input.actorId,
           invoiceId: input.invoiceId,
-          metadata: { amountCents: payment.amountCents, paymentId: payment.id },
+          metadata: {
+            amountCents: payment.amountCents,
+            paymentId: payment.id,
+            receiptDocumentId,
+          },
           summary: `Recorded payment for ${invoice.invoiceNumber}`,
           tenantId: input.tenantId,
           verb: BillingTimelineVerb.PAYMENT_RECORDED,
         },
       });
+
       await tx.auditEvent.create({
         data: {
           action: AuditAction.BILLING_PAYMENT_RECORDED,
           actorId: input.actorId,
-          metadata: { amountCents: payment.amountCents },
+          metadata: {
+            amountCents: payment.amountCents,
+            receiptDocumentId,
+          },
           targetId: input.invoiceId,
           targetType: "Invoice",
           tenantId: input.tenantId,
         },
       });
-      return { invoice, payment };
+
+      return { invoice, payment, receipt };
     });
   }
-
   addComment(input: Prisma.InvoiceCommentUncheckedCreateInput) {
     return this.prisma.$transaction(async (tx) => {
       const comment = await tx.invoiceComment.create({ data: input });

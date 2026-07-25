@@ -213,6 +213,10 @@ enum CommercialDocumentTimelineVerb {
   ATTACHED
 }
 
+enum DocumentSequenceKind {
+  INVOICE
+  RECEIPT
+}
 enum InvoiceStatus {
   DRAFT
   ISSUED
@@ -420,6 +424,7 @@ model Tenant {
   billingProfiles BillingProfile[]
   invoices        Invoice[]
   payments        PaymentRecord[]
+  documentSequences DocumentSequence[]
   billingTimelineEvents BillingTimelineEvent[]
   hardwareCategories HardwareProductCategory[]
   hardwareBrands HardwareBrand[]
@@ -1076,6 +1081,19 @@ model Project {
   @@index([targetDate])
 }
 
+model DocumentSequence {
+  id            String               @id @default(cuid())
+  tenantId      String
+  kind          DocumentSequenceKind
+  financialYear String
+  lastValue     Int
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, kind, financialYear])
+  @@index([tenantId, financialYear])
+}
 model CommercialDocument {
   id                  String                   @id @default(cuid())
   tenantId            String

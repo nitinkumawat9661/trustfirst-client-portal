@@ -1,5 +1,5 @@
 import { InvoiceStatus, PaymentMode, PaymentProvider, type PrismaClient } from "@trustfirst/database";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { BillingService, currentStatus, outstandingAmount } from "./billing-service";
 
 function prismaMock(overrides: Partial<PrismaClient> = {}) {
@@ -52,7 +52,7 @@ describe("BillingService", () => {
     ).toBe(InvoiceStatus.OVERDUE);
   });
 
-  it("generates invoice numbers", async () => {
+  it("creates invoices with temporary draft numbers", async () => {
     const tx = {
       auditEvent: { create: async () => ({}) },
       billingTimelineEvent: { create: async () => ({}) },
@@ -84,14 +84,94 @@ describe("BillingService", () => {
       },
     );
 
-    expect(created.invoiceNumber).toMatch(/^INV-\d{4}-0005$/);
+    expect(created.invoiceNumber).toMatch(/^DRAFT-[0-9a-f-]{36}$/);
   });
 
-  it("supports partial manual payment records", async () => {
+  it("issues Mangalam invoices with an atomic final number", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-25T00:00:00.000Z"));
+
+    try {
+      const tx = {
+        auditEvent: { create: async () => ({}) },
+        billingTimelineEvent: { create: async () => ({}) },
+        documentSequence: {
+          upsert: async () => ({ lastValue: 1 }),
+        },
+        invoice: {
+          update: async ({ data }: { data: Record<string, unknown> }) => ({
+            ...invoice,
+            ...data,
+          }),
+        },
+      };
+
+      const service = new BillingService(
+        prismaMock({
+          $transaction: async (callback: (client: typeof tx) => unknown) =>
+            callback(tx),
+          hardwareBusinessSettings: {
+            findUnique: async () => ({
+              invoicePrefix: "PENDING_CLIENT_CONFIRMATION",
+            }),
+          },
+          invoice: {
+            findFirst: async () => ({
+              ...invoice,
+              invoiceNumber: "DRAFT-order-1",
+            }),
+          },
+          tenant: {
+            findUnique: async () => ({
+              slug: "manglam-trading-demo",
+            }),
+          },
+        } as unknown as Partial<PrismaClient>),
+      );
+
+      const issued = await service.transitionInvoice(
+        { tenantId: "tenant_1", userId: "user_1" },
+        "inv_1",
+        { status: InvoiceStatus.ISSUED },
+      );
+
+      expect(issued.invoiceNumber).toBe("MS/INV/2026-27/00001");
+      expect(issued.status).toBe(InvoiceStatus.ISSUED);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("creates an automatic receipt for partial manual payments", async () => {
+    const receivedAt = new Date("2026-07-25T10:30:00.000Z");
+
     const tx = {
       auditEvent: { create: async () => ({}) },
       billingTimelineEvent: { create: async () => ({}) },
+      commercialDocument: {
+        create: async ({ data }: { data: Record<string, unknown> }) => ({
+          ...data,
+          id: "receipt_1",
+        }),
+      },
+      commercialDocumentTimelineEvent: {
+        createMany: async () => ({ count: 2 }),
+      },
+      commercialDocumentVersion: {
+        create: async () => ({}),
+      },
+      documentSequence: {
+        upsert: async () => ({ lastValue: 1 }),
+      },
       invoice: {
+        findFirst: async () => ({
+          branding: {},
+          clientId: null,
+          currency: "INR",
+          invoiceNumber: "MS/INV/2026-27/00001",
+          projectId: null,
+          requirementId: null,
+          title: "Portal invoice",
+        }),
         update: async ({ data }: { data: Record<string, unknown> }) => ({
           ...invoice,
           ...data,
@@ -99,14 +179,28 @@ describe("BillingService", () => {
         }),
       },
       paymentRecord: {
-        create: async ({ data }: { data: Record<string, unknown> }) => ({ ...data, id: "pay_1" }),
+        create: async ({ data }: { data: Record<string, unknown> }) => ({
+          ...data,
+          id: "pay_1",
+        }),
       },
     };
+
     const service = new BillingService(
       prismaMock({
-        $transaction: async (callback: (client: typeof tx) => unknown) => callback(tx),
+        $transaction: async (callback: (client: typeof tx) => unknown) =>
+          callback(tx),
         invoice: {
-          findFirst: async () => ({ ...invoice, status: InvoiceStatus.ISSUED }),
+          findFirst: async () => ({
+            ...invoice,
+            invoiceNumber: "MS/INV/2026-27/00001",
+            status: InvoiceStatus.ISSUED,
+          }),
+        },
+        tenant: {
+          findUnique: async () => ({
+            slug: "manglam-trading-demo",
+          }),
         },
       } as unknown as Partial<PrismaClient>),
     );
@@ -118,13 +212,17 @@ describe("BillingService", () => {
         amountCents: 40_000,
         mode: PaymentMode.BANK_TRANSFER,
         provider: PaymentProvider.MANUAL,
+        receivedAt,
       },
     );
 
     expect(result.invoice.status).toBe(InvoiceStatus.PARTIALLY_PAID);
     expect(result.invoice.paidAmountCents).toBe(40_000);
+    expect(result.receipt?.documentNumber).toBe(
+      "MS/REC/2026-27/00001",
+    );
+    expect(result.payment.receiptDocumentId).toBe("receipt_1");
   });
-
   it("rejects invalid manual payment amounts", async () => {
     const service = new BillingService(
       prismaMock({
