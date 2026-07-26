@@ -1,6 +1,7 @@
 "use client";
 
 import { FileSearch, LoaderCircle, ReceiptText } from "lucide-react";
+import Link from "next/link";
 import type { FormEvent } from "react";
 import { useState } from "react";
 
@@ -73,9 +74,9 @@ export function MangalamReceiptLookup() {
     <main className="min-h-screen bg-[#f5f2eb] text-zinc-950">
       <header className="border-b border-white/10 bg-[#151515] text-white">
         <div className="mx-auto flex min-h-20 max-w-5xl items-center px-4 sm:px-6">
-          <a className="text-sm font-semibold tracking-[0.12em]" href="/">
+          <Link className="text-sm font-semibold tracking-[0.12em]" href="/">
             MANGALAM SANITARY
-          </a>
+          </Link>
         </div>
       </header>
 
