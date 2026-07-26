@@ -423,6 +423,166 @@ describe("HardwareTradeService", () => {
     expect(created).toEqual(expect.arrayContaining(["invoice", "document", "movement", "payment"]));
   });
 
+  it("cancels a confirmed sale by reversing stock and voiding the linked invoice", async () => {
+    const movements: Array<{ data: { referenceType: string | null | undefined; type: HardwareInventoryMovementType } }> = [];
+    const invoiceUpdates: Array<{ data: { status?: InvoiceStatus } }> = [];
+    const now = new Date();
+    const document = {
+      billingInvoice: { id: "inv_1", metadata: {} },
+      billingInvoiceId: "inv_1",
+      createdAt: now,
+      currency: "INR",
+      customer: { name: "Counter Customer" },
+      customerId: "client_1",
+      discountCents: 0,
+      documentNumber: "HSO-2026-0009",
+      id: "doc_9",
+      items: [
+        {
+          description: "Basin Tap",
+          discountCents: 0,
+          id: "item_1",
+          lineTotalCents: 12000,
+          metadata: {},
+          product: { metadata: {}, unit: null },
+          productId: "prod_1",
+          quantity: 2,
+          taxCents: 0,
+          taxRateBps: 0,
+          unitAmountCents: 6000,
+        },
+      ],
+      metadata: {},
+      paymentStatus: "paid",
+      roundOffCents: 0,
+      status: HardwareTradeDocumentStatus.CONFIRMED as HardwareTradeDocumentStatus,
+      subtotalCents: 12000,
+      supplier: null,
+      supplierId: null,
+      taxCents: 0,
+      totalCents: 12000,
+      type: HardwareTradeDocumentType.SALES_ORDER,
+      updatedAt: now,
+    };
+    const service = new HardwareTradeService(
+      prismaMock({
+        $transaction: async (callback: (tx: Record<string, unknown>) => Promise<unknown>) =>
+          callback({
+            auditEvent: { create: async () => ({}) },
+            billingTimelineEvent: { create: async () => ({}) },
+            hardwareInventoryMovement: {
+              create: async (input: { data: { referenceType: string | null | undefined; type: HardwareInventoryMovementType } }) => {
+                movements.push(input);
+                return input.data;
+              },
+            },
+            hardwareTradeDocument: {
+              update: async ({ data }: { data: { status?: HardwareTradeDocumentStatus } }) => {
+                if (data.status) document.status = data.status;
+                return document;
+              },
+            },
+            hardwareTradeTimelineEvent: { create: async () => ({}) },
+            invoice: {
+              update: async (input: { data: { status?: InvoiceStatus } }) => {
+                invoiceUpdates.push(input);
+                return {};
+              },
+            },
+          }),
+        hardwareInventoryMovement: { findFirst: async () => null },
+        hardwareStockLocation: { findFirst: async () => ({ id: "loc_1" }) },
+        hardwareTradeDocument: {
+          findFirst: async (args?: { where?: { type?: HardwareTradeDocumentType } }) =>
+            args?.where?.type === HardwareTradeDocumentType.SALE_RETURN ? null : document,
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const result = await service.cancelSale(
+      { tenantId: "tenant_1", userId: "user_1" },
+      "doc_9",
+      {
+        confirm: true,
+        idempotencyKey: "cancel-confirmed-sale-1",
+        locationId: "loc_1",
+        reason: "Customer cancelled counter sale",
+      },
+    );
+
+    expect(result.status).toBe(HardwareTradeDocumentStatus.CANCELLED);
+    expect(movements[0]?.data).toMatchObject({
+      referenceType: "SALE_CANCELLATION",
+      type: HardwareInventoryMovementType.STOCK_IN,
+    });
+    expect(invoiceUpdates[0]?.data.status).toBe(InvoiceStatus.VOID);
+  });
+
+  it("rejects a sale return quantity greater than the remaining sold quantity", async () => {
+    const now = new Date();
+    const document = {
+      billingInvoice: null,
+      billingInvoiceId: null,
+      createdAt: now,
+      currency: "INR",
+      customer: { name: "Counter Customer" },
+      customerId: "client_1",
+      discountCents: 0,
+      documentNumber: "HSO-2026-0010",
+      id: "doc_10",
+      items: [
+        {
+          description: "Wall Mixer",
+          discountCents: 0,
+          id: "item_1",
+          lineTotalCents: 8000,
+          metadata: {},
+          product: { metadata: {}, unit: null },
+          productId: "prod_1",
+          quantity: 1,
+          taxCents: 0,
+          taxRateBps: 0,
+          unitAmountCents: 8000,
+        },
+      ],
+      metadata: {},
+      paymentStatus: "paid",
+      roundOffCents: 0,
+      status: HardwareTradeDocumentStatus.CONFIRMED,
+      subtotalCents: 8000,
+      supplier: null,
+      supplierId: null,
+      taxCents: 0,
+      totalCents: 8000,
+      type: HardwareTradeDocumentType.SALES_ORDER,
+      updatedAt: now,
+    };
+    const service = new HardwareTradeService(
+      prismaMock({
+        hardwareStockLocation: { findFirst: async () => ({ id: "loc_1" }) },
+        hardwareTradeDocument: {
+          findFirst: async (args?: { where?: { type?: HardwareTradeDocumentType } }) =>
+            args?.where?.type === HardwareTradeDocumentType.SALE_RETURN ? null : document,
+          findMany: async () => [],
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      service.createSaleReturn(
+        { tenantId: "tenant_1", userId: "user_1" },
+        "doc_10",
+        {
+          idempotencyKey: "sale-return-over-1",
+          items: [{ originalItemId: "item_1", quantity: 2 }],
+          locationId: "loc_1",
+          reason: "Customer returned damaged goods",
+          refundType: "customer_credit",
+        },
+      ),
+    ).rejects.toThrow("exceeds sold quantity");
+  });
+
   it("rejects manipulated quick POS client totals before posting", async () => {
     const service = new HardwareTradeService(
       prismaMock({

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@trustfirst/ui";
-import { Check, FileInput, FileText, Printer } from "lucide-react";
+import { Ban, Check, FileInput, FileText, Printer } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -23,8 +23,17 @@ export function HardwareDocumentActions({
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
   const isQuotation = document.type === "SALES_QUOTATION";
   const isStockDocument = !["SALES_QUOTATION", "PURCHASE_ORDER"].includes(document.type);
+  const canCancelSale = document.type === "SALES_ORDER" && document.status === "CONFIRMED";
 
-  async function run(action: "confirm" | "convert" | "invoice") {
+  async function run(action: "confirm" | "convert" | "invoice" | "cancel") {
+    const cancellationReason =
+      action === "cancel"
+        ? window.prompt(`Reason for cancelling ${document.documentNumber}`)
+        : null;
+    if (action === "cancel" && (!cancellationReason || cancellationReason.trim().length < 3)) {
+      setError("Cancellation reason is required.");
+      return;
+    }
     if (
       (action === "confirm" || action === "convert") &&
       !window.confirm(
@@ -37,6 +46,12 @@ export function HardwareDocumentActions({
     ) {
       return;
     }
+    if (
+      action === "cancel" &&
+      !window.confirm(`Cancel ${document.documentNumber}, void linked invoice, and reverse stock movement?`)
+    ) {
+      return;
+    }
     setError(null);
     setPending(action);
     const endpoint =
@@ -44,10 +59,21 @@ export function HardwareDocumentActions({
         ? `/api/hardware/trade/${document.id}/confirm`
         : action === "convert"
           ? `/api/hardware/trade/${document.id}/convert-to-sale`
-          : `/api/hardware/trade/${document.id}/invoice-draft`;
+          : action === "invoice"
+            ? `/api/hardware/trade/${document.id}/invoice-draft`
+            : `/api/hardware/trade/${document.id}/cancel`;
     const result = await postHardwareJson<unknown>(
       endpoint,
-      action === "confirm" ? (isStockDocument ? { locationId } : {}) : undefined,
+      action === "confirm"
+        ? (isStockDocument ? { locationId } : {})
+        : action === "cancel"
+          ? {
+              confirm: true,
+              idempotencyKey: `sale-cancel-${document.id}-${Date.now()}`,
+              locationId,
+              reason: cancellationReason?.trim(),
+            }
+          : undefined,
     );
     setPending(null);
     if (!result.ok) {
@@ -71,6 +97,17 @@ export function HardwareDocumentActions({
             {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
           </select>
         ) : null}
+        {canCancelSale ? (
+          <select
+            aria-label="Cancellation stock location"
+            className="h-9 min-w-40 rounded-md border border-input bg-background px-2 text-xs"
+            onChange={(event) => setLocationId(event.target.value)}
+            value={locationId}
+          >
+            <option value="">Return stock to location</option>
+            {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+          </select>
+        ) : null}
         {document.status === "DRAFT" ? (
           <Button
             disabled={pending !== null || (isStockDocument && !locationId)}
@@ -90,6 +127,11 @@ export function HardwareDocumentActions({
         {document.type === "SALES_ORDER" && document.status === "CONFIRMED" && !document.billingInvoiceId ? (
           <Button disabled={pending !== null} onClick={() => run("invoice")} size="sm" type="button" variant="outline">
             <FileText className="size-4" />Create invoice draft
+          </Button>
+        ) : null}
+        {canCancelSale ? (
+          <Button disabled={pending !== null || !locationId} onClick={() => run("cancel")} size="sm" type="button" variant="outline">
+            <Ban className="size-4" />Cancel sale
           </Button>
         ) : null}
         <Button asChild size="sm" variant="ghost">

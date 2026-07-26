@@ -90,6 +90,11 @@ export default async function HardwarePrintPreviewPage({
             </dl>
           </div>
         </header>
+        {projection.document.status === "CANCELLED" ? (
+          <div className="print-break-avoid mt-4 rounded-md border-2 border-zinc-900 bg-zinc-100 px-4 py-3 text-center text-sm font-bold tracking-normal">
+            CANCELLED / VOID - DO NOT COLLECT PAYMENT OR DISPATCH GOODS AGAINST THIS DOCUMENT
+          </div>
+        ) : null}
 
         <section className={`print-break-avoid grid gap-4 border-b border-zinc-400 py-4 text-xs ${format === "a4" ? "sm:grid-cols-2" : ""}`}>
           <div>
@@ -204,6 +209,7 @@ async function loadProjection(
 function documentLabel(type: string) {
   if (type === "SALES_QUOTATION") return "QUOTATION";
   if (type === "SALES_ORDER") return "TAX INVOICE";
+  if (type === "SALE_RETURN") return "SALE RETURN";
   if (type === "PURCHASE_ORDER") return "PURCHASE ORDER";
   if (type === "SUPPLIER_BILL") return "SUPPLIER BILL";
   return humanize(type).toUpperCase();

@@ -46,6 +46,25 @@ export const hardwareTradeStatusSchema = z.object({
   locationId: z.string().optional(),
 });
 
+export const hardwareTradeCancelSchema = z.object({
+  confirm: z.literal(true),
+  idempotencyKey: z.string().min(12).max(120),
+  locationId: z.string(),
+  reason: z.string().trim().min(3).max(1000),
+});
+
+export const hardwareSaleReturnSchema = z.object({
+  idempotencyKey: z.string().min(12).max(120),
+  items: z.array(z.object({
+    originalItemId: z.string(),
+    quantity: z.number().int().positive(),
+  })).min(1),
+  locationId: z.string(),
+  reason: z.string().trim().min(3).max(1000),
+  refundReference: z.string().trim().max(120).optional(),
+  refundType: z.enum(["cash_refund", "payment_refund", "customer_credit"]).default("customer_credit"),
+});
+
 export const quickPosSaleSchema = z.object({
   clientTotalCents: z.number().int().nonnegative(),
   customerId: z.string().optional(),
@@ -63,4 +82,6 @@ export const quickPosSaleSchema = z.object({
 export type HardwareTradeItemInput = z.infer<typeof hardwareTradeItemSchema>;
 export type HardwareTradeDocumentInput = z.infer<typeof hardwareTradeDocumentSchema>;
 export type HardwareTradeStatusInput = z.infer<typeof hardwareTradeStatusSchema>;
+export type HardwareTradeCancelInput = z.infer<typeof hardwareTradeCancelSchema>;
+export type HardwareSaleReturnInput = z.infer<typeof hardwareSaleReturnSchema>;
 export type QuickPosSaleInput = z.infer<typeof quickPosSaleSchema>;
