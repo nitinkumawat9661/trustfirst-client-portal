@@ -47,15 +47,39 @@ export const hardwareProductSchema = z.object({
 });
 
 export const quickHardwareProductSchema = z.object({
+  barcode: z.string().max(120).optional(),
+  brandId: z.string().optional(),
   categoryId: z.string().optional(),
   gstRateBps: z.number().int().min(0).max(10_000).optional(),
+  hsnCode: z.string().regex(/^[0-9A-Za-z-]{2,12}$/u, "HSN must be 2 to 12 letters, digits, or dashes.").optional(),
+  lowStockThreshold: z.number().int().min(0).optional(),
   name: z.string().trim().min(2).max(240),
   openingStock: z.object({
     locationId: z.string(),
     quantity: z.number().int().nonnegative(),
   }).optional(),
+  purchaseCostCents: z.number().int().nonnegative().optional(),
   salesPriceCents: z.number().int().nonnegative().optional(),
+  sku: z.string().min(1).max(120).optional(),
   unitId: z.string().optional(),
+});
+
+export const quickHardwarePartySchema = z.object({
+  address: z.string().max(500).optional(),
+  balanceDirection: z.enum(["DR", "CR"]).optional(),
+  gstin: z.string().regex(/^[0-9A-Z]{15}$/u, "GSTIN must be 15 uppercase letters or digits.").optional(),
+  mobile: z.string().max(30).optional(),
+  name: z.string().trim().min(2).max(240),
+  openingBalanceCents: z.number().int().nonnegative().optional(),
+  role: z.enum(["customer", "supplier"]),
+}).superRefine((value, context) => {
+  if ((value.openingBalanceCents ?? 0) > 0 && !value.balanceDirection) {
+    context.addIssue({
+      code: "custom",
+      message: "Opening balance direction is required when an opening balance is provided.",
+      path: ["balanceDirection"],
+    });
+  }
 });
 
 export const hardwareLocationSchema = z.object({
@@ -121,6 +145,7 @@ export type HardwareBrandInput = z.infer<typeof hardwareBrandSchema>;
 export type HardwareUnitInput = z.infer<typeof hardwareUnitSchema>;
 export type HardwareProductInput = z.infer<typeof hardwareProductSchema>;
 export type QuickHardwareProductInput = z.infer<typeof quickHardwareProductSchema>;
+export type QuickHardwarePartyInput = z.infer<typeof quickHardwarePartySchema>;
 export type HardwareLocationInput = z.infer<typeof hardwareLocationSchema>;
 export type HardwareMovementInput = z.infer<typeof hardwareMovementSchema>;
 export type HardwareImportPreviewInput = z.infer<typeof hardwareImportPreviewSchema>;

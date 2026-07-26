@@ -1,16 +1,24 @@
 import {
+  AuditAction,
+  BillingTimelineVerb,
+  DocumentSequenceKind,
   HardwareTradeDocumentType,
+  HardwareTradeDocumentStatus,
+  HardwareTradeTimelineVerb,
   InvoiceStatus,
+  PaymentProvider,
   type Prisma,
   type PrismaClient,
 } from "@trustfirst/database";
+import { allocateDocumentNumber } from "../billing/document-sequence";
 import { AppError } from "../domain/errors";
+import { MANGALAM_TENANT_SLUG } from "../domain/host-routing";
 import { PermissionResolverService } from "../permissions";
 import { currentIndiaBusinessDay } from "./business-time";
 import { stockForProduct } from "./hardware-service";
 import { calculateTradeTotals } from "./trade-calculations";
 import { movementTypeForDocument, PrismaHardwareTradeRepository } from "./trade-repository";
-import type { HardwareTradeDocumentInput, HardwareTradeStatusInput } from "./trade-schemas";
+import type { HardwareTradeDocumentInput, HardwareTradeStatusInput, QuickPosSaleInput } from "./trade-schemas";
 import type { HardwarePrintContract, HardwarePrintProjection, HardwareReportSummary, HardwareTradeSummary, HardwareWhatsAppShareContract } from "./trade-types";
 
 type ActorContext = { tenantId: string; userId: string };
@@ -165,6 +173,249 @@ export class HardwareTradeService {
         }) as Prisma.HardwareInventoryMovementUncheckedCreateInput,
       ),
       tenantId: context.tenantId,
+    });
+  }
+
+  async postQuickPosSale(context: ActorContext, input: QuickPosSaleInput) {
+    await this.enforce(context, "hardware.sales.manage");
+    await this.ensureLocation(context.tenantId, input.locationId);
+    if (input.customerId) {
+      await this.ensureParty(context.tenantId, input.customerId, "customer", "Customer link was not found or is not classified as a customer.");
+    }
+
+    const existing = await this.prisma.hardwareTradeDocument.findFirst({
+      include: { billingInvoice: true, customer: true, items: true, supplier: true },
+      where: {
+        metadata: { equals: input.idempotencyKey, path: ["idempotencyKey"] },
+        tenantId: context.tenantId,
+        type: HardwareTradeDocumentType.SALES_ORDER,
+      },
+    });
+    if (existing) {
+      return {
+        documentId: existing.id,
+        documentNumber: existing.documentNumber,
+        invoiceId: existing.billingInvoiceId,
+        invoiceNumber: existing.billingInvoice?.invoiceNumber ?? null,
+        paymentStatus: existing.paymentStatus,
+        totalCents: existing.totalCents,
+      };
+    }
+
+    const products = await this.loadProducts(context.tenantId, input.items.map((item) => item.productId));
+    const normalizedItems = input.items.map((item) => {
+      const product = products.get(item.productId);
+      if (!product) throw validation("Product was not found.");
+      return { ...item, taxRateBps: item.taxRateBps ?? taxRateFromConfig(product.gstTaxConfig) };
+    });
+    const itemTotals = calculateTradeTotals(normalizedItems, input.roundOffCents ?? 0);
+    const invoiceDiscountCents = input.invoiceDiscountCents ?? 0;
+    const totalCents = Math.max(itemTotals.totalCents - invoiceDiscountCents, 0);
+    if (input.clientTotalCents !== totalCents) {
+      throw validation("Bill total changed on the server. Review the bill and submit again.");
+    }
+    if (input.paidAmountCents > totalCents) {
+      throw validation("Paid amount cannot exceed bill total.");
+    }
+
+    const trackedItems = normalizedItems.filter((item) => !isStockSetupPending(products.get(item.productId)?.metadata));
+    for (const item of trackedItems) {
+      const movements = await this.prisma.hardwareInventoryMovement.findMany({
+        where: { locationId: input.locationId, productId: item.productId, tenantId: context.tenantId },
+      });
+      if (item.quantity > stockForProduct(movements)) {
+        throw validation("Confirmed sale cannot deduct more stock than available.");
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.findUnique({ select: { slug: true }, where: { id: context.tenantId } });
+      const invoicePrefix = tenant?.slug === MANGALAM_TENANT_SLUG ? "MS/INV" : "INV";
+      const invoiceNumber = await allocateDocumentNumber(tx, {
+        kind: DocumentSequenceKind.INVOICE,
+        prefix: invoicePrefix,
+        tenantId: context.tenantId,
+      });
+      const tradeNumber = await this.nextNumber(context.tenantId, HardwareTradeDocumentType.SALES_ORDER);
+      const nextInvoiceStatus =
+        input.paidAmountCents >= totalCents
+          ? InvoiceStatus.PAID
+          : input.paidAmountCents > 0
+            ? InvoiceStatus.PARTIALLY_PAID
+            : InvoiceStatus.ISSUED;
+      const now = new Date();
+      const invoice = await tx.invoice.create({
+        data: stripUndefined({
+          clientId: input.customerId,
+          currency: "INR",
+          invoiceNumber,
+          issuedAt: now,
+          lineItems: normalizedItems.map((item) => {
+            const product = products.get(item.productId);
+            const line = calculateTradeTotals([item]);
+            return {
+              description: product?.name ?? "Item",
+              discountCents: item.discountCents ?? 0,
+              productId: item.productId,
+              quantity: item.quantity,
+              taxCents: line.taxCents,
+              taxRateBps: item.taxRateBps ?? 0,
+              totalAmountCents: line.totalCents,
+              unitAmountCents: item.unitAmountCents,
+            };
+          }) as Prisma.InputJsonValue,
+          metadata: {
+            idempotencyKey: input.idempotencyKey,
+            invoiceDiscountCents,
+            notes: input.notes ?? null,
+            source: "quick-pos",
+            taxMode: input.taxMode,
+          },
+          ownerId: context.userId,
+          paidAmountCents: input.paidAmountCents,
+          paidAt: nextInvoiceStatus === InvoiceStatus.PAID ? now : null,
+          status: nextInvoiceStatus,
+          summary: input.notes ?? null,
+          tenantId: context.tenantId,
+          title: `Counter sale ${invoiceNumber}`,
+          totalAmountCents: totalCents,
+        }) as Prisma.InvoiceUncheckedCreateInput,
+      });
+      const document = await tx.hardwareTradeDocument.create({
+        data: stripUndefined({
+          billingInvoiceId: invoice.id,
+          confirmedAt: now,
+          currency: "INR",
+          customerId: input.customerId,
+          discountCents: itemTotals.discountCents + invoiceDiscountCents,
+          documentNumber: tradeNumber,
+          items: {
+            create: normalizedItems.map((item) => {
+              const product = products.get(item.productId);
+              const line = calculateTradeTotals([item]);
+              return {
+                description: product?.name ?? "Item",
+                discountCents: item.discountCents ?? 0,
+                lineTotalCents: line.totalCents,
+                metadata: (item.metadata ?? {}) as Prisma.InputJsonValue,
+                productId: item.productId,
+                quantity: item.quantity,
+                taxCents: line.taxCents,
+                taxRateBps: item.taxRateBps ?? 0,
+                tenantId: context.tenantId,
+                unitAmountCents: item.unitAmountCents,
+              };
+            }),
+          },
+          metadata: {
+            idempotencyKey: input.idempotencyKey,
+            invoiceDiscountCents,
+            notes: input.notes ?? null,
+            posFlow: "quick-pos",
+            taxMode: input.taxMode,
+            walkInCustomer: !input.customerId,
+          },
+          paymentStatus: nextInvoiceStatus === InvoiceStatus.PAID ? "paid" : nextInvoiceStatus === InvoiceStatus.PARTIALLY_PAID ? "partial" : "unpaid",
+          roundOffCents: itemTotals.roundOffCents,
+          status: HardwareTradeDocumentStatus.CONFIRMED,
+          subtotalCents: itemTotals.subtotalCents,
+          taxCents: itemTotals.taxCents,
+          tenantId: context.tenantId,
+          totalCents,
+          type: HardwareTradeDocumentType.SALES_ORDER,
+        }) as Prisma.HardwareTradeDocumentUncheckedCreateInput,
+      });
+      for (const item of trackedItems) {
+        await tx.hardwareInventoryMovement.create({
+          data: stripUndefined({
+            customerId: input.customerId,
+            locationId: input.locationId,
+            metadata: { idempotencyKey: input.idempotencyKey, tradeDocumentId: document.id },
+            productId: item.productId,
+            quantity: item.quantity,
+            referenceId: document.id,
+            referenceType: document.type,
+            tenantId: context.tenantId,
+            type: movementTypeForDocument(document.type),
+            unitPriceCents: item.unitAmountCents,
+          }) as Prisma.HardwareInventoryMovementUncheckedCreateInput,
+        });
+      }
+      let payment = null;
+      if (input.paidAmountCents > 0) {
+        payment = await tx.paymentRecord.create({
+          data: {
+            amountCents: input.paidAmountCents,
+            invoiceId: invoice.id,
+            metadata: { idempotencyKey: input.idempotencyKey, source: "quick-pos" },
+            mode: input.paymentMode ?? "CASH",
+            provider: PaymentProvider.MANUAL,
+            receivedAt: now,
+            recordedById: context.userId,
+            tenantId: context.tenantId,
+          },
+        });
+      }
+      await tx.hardwareTradeTimelineEvent.create({
+        data: {
+          actorId: context.userId,
+          documentId: document.id,
+          metadata: { idempotencyKey: input.idempotencyKey, movements: trackedItems.length },
+          summary: `Posted counter sale ${tradeNumber}`,
+          tenantId: context.tenantId,
+          verb: HardwareTradeTimelineVerb.CONFIRMED,
+        },
+      });
+      await tx.billingTimelineEvent.createMany({
+        data: [
+          {
+            actorId: context.userId,
+            invoiceId: invoice.id,
+            metadata: { idempotencyKey: input.idempotencyKey },
+            summary: `Issued invoice ${invoiceNumber}`,
+            tenantId: context.tenantId,
+            verb: BillingTimelineVerb.INVOICE_ISSUED,
+          },
+          ...(payment
+            ? [{
+                actorId: context.userId,
+                invoiceId: invoice.id,
+                metadata: { amountCents: payment.amountCents, paymentId: payment.id },
+                summary: `Recorded payment for ${invoiceNumber}`,
+                tenantId: context.tenantId,
+                verb: BillingTimelineVerb.PAYMENT_RECORDED,
+              }]
+            : []),
+        ],
+      });
+      await tx.auditEvent.createMany({
+        data: [
+          {
+            action: AuditAction.BILLING_INVOICE_ISSUED,
+            actorId: context.userId,
+            metadata: { idempotencyKey: input.idempotencyKey, invoiceNumber },
+            targetId: invoice.id,
+            targetType: "Invoice",
+            tenantId: context.tenantId,
+          },
+          {
+            action: AuditAction.HARDWARE_STOCK_MOVED,
+            actorId: context.userId,
+            metadata: { idempotencyKey: input.idempotencyKey, movements: trackedItems.length },
+            targetId: document.id,
+            targetType: "HardwareTradeDocument",
+            tenantId: context.tenantId,
+          },
+        ],
+      });
+      return {
+        documentId: document.id,
+        documentNumber: document.documentNumber,
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        paymentStatus: document.paymentStatus,
+        totalCents: document.totalCents,
+      };
     });
   }
 

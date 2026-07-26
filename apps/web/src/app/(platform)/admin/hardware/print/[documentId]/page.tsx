@@ -1,5 +1,6 @@
 import { getPrisma } from "@trustfirst/database";
 import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareTradeService, type HardwarePrintProjection } from "@/server/hardware";
@@ -9,10 +10,14 @@ export const dynamic = "force-dynamic";
 
 export default async function HardwarePrintPreviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ documentId: string }>;
+  searchParams: Promise<{ format?: string }>;
 }) {
   const { documentId } = await params;
+  const query = await searchParams;
+  const format = parsePrintFormat(query.format);
   const user = await requireCurrentUser();
   const service = new HardwareTradeService(getPrisma());
   const projection = await loadProjection(service, {
@@ -28,10 +33,10 @@ export default async function HardwarePrintPreviewPage({
 
   return (
     <main className="min-h-screen bg-zinc-200 p-3 text-black sm:p-6 print:bg-white print:p-0">
-      <section className="print-sheet mx-auto w-full max-w-[210mm] bg-white p-5 shadow-md sm:p-8 print:max-w-none print:p-0 print:shadow-none">
+      <section className={`print-sheet mx-auto w-full bg-white p-5 shadow-md sm:p-8 print:p-0 print:shadow-none ${format === "a4" ? "max-w-[210mm]" : format === "80mm" ? "max-w-[80mm]" : "max-w-[58mm]"}`}>
         <style>{`
           @media print {
-            @page { size: A4 portrait; margin: 10mm; }
+            @page { size: ${format === "a4" ? "A4 portrait" : `${format} auto`}; margin: ${format === "a4" ? "10mm" : "2mm"}; }
             .no-print { display: none !important; }
             .print-sheet { width: auto; min-height: auto; }
             thead { display: table-header-group; }
@@ -40,11 +45,22 @@ export default async function HardwarePrintPreviewPage({
             .print-break-avoid { break-inside: avoid; page-break-inside: avoid; }
           }
         `}</style>
-        <div className="no-print mb-4 flex items-center justify-between gap-3 rounded-md border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm">
-          <span>A4 print preview</span>
+        <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{formatLabel(format)} print preview</span>
+            {(["58mm", "80mm", "a4"] as const).map((candidate) => (
+              <Link
+                className={`rounded-md border px-2 py-1 text-xs ${candidate === format ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 bg-white text-zinc-900"}`}
+                href={`/admin/hardware/print/${documentId}?format=${candidate}`}
+                key={candidate}
+              >
+                {formatLabel(candidate)}
+              </Link>
+            ))}
+          </div>
           <PrintButton />
         </div>
-        <header className="print-break-avoid flex flex-col gap-5 border-b-2 border-zinc-900 pb-5 sm:flex-row sm:items-start sm:justify-between">
+        <header className={`print-break-avoid flex flex-col gap-5 border-b-2 border-zinc-900 pb-5 ${format === "a4" ? "sm:flex-row sm:items-start sm:justify-between" : "items-center text-center"}`}>
           <div className="flex items-start gap-4">
             {projection.firm.logoUrl ? (
               <Image
@@ -75,7 +91,7 @@ export default async function HardwarePrintPreviewPage({
           </div>
         </header>
 
-        <section className="print-break-avoid grid gap-4 border-b border-zinc-400 py-4 text-xs sm:grid-cols-2">
+        <section className={`print-break-avoid grid gap-4 border-b border-zinc-400 py-4 text-xs ${format === "a4" ? "sm:grid-cols-2" : ""}`}>
           <div>
             <p className="font-semibold uppercase">{isPurchaseDocument(projection.document.type) ? "Supplier" : "Bill to"}</p>
             <p className="mt-1 text-sm font-semibold">{projection.customer?.name ?? "Not linked"}</p>
@@ -83,7 +99,7 @@ export default async function HardwarePrintPreviewPage({
             {projection.customer?.phone ? <p>{projection.customer.phone}</p> : null}
             {projection.customer?.gstin ? <p>GSTIN: {projection.customer.gstin}</p> : null}
           </div>
-          <div className="sm:text-right">
+          <div className={format === "a4" ? "sm:text-right" : ""}>
             {typeof projection.document.metadata.referenceNumber === "string" ? (
               <><p className="font-semibold uppercase">Reference</p><p className="mt-1">{projection.document.metadata.referenceNumber}</p></>
             ) : null}
@@ -92,18 +108,18 @@ export default async function HardwarePrintPreviewPage({
         </section>
 
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[780px] border-collapse text-[10px] sm:text-xs">
+          <table className={`w-full border-collapse text-[10px] ${format === "a4" ? "min-w-[780px] sm:text-xs" : ""}`}>
             <thead>
               <tr className="border-y border-zinc-500 bg-zinc-100 text-left">
                 <th className="px-2 py-2">#</th>
                 <th className="px-2 py-2">Item</th>
-                <th className="px-2 py-2">HSN</th>
+                {format === "a4" ? <th className="px-2 py-2">HSN</th> : null}
                 <th className="px-2 py-2 text-right">Qty</th>
                 <th className="px-2 py-2">Unit</th>
                 <th className="px-2 py-2 text-right">Rate</th>
                 <th className="px-2 py-2 text-right">Disc.</th>
                 <th className="px-2 py-2 text-right">Taxable</th>
-                <th className="px-2 py-2 text-right">GST</th>
+                {format === "a4" ? <th className="px-2 py-2 text-right">GST</th> : null}
                 <th className="px-2 py-2 text-right">Total</th>
               </tr>
             </thead>
@@ -111,14 +127,14 @@ export default async function HardwarePrintPreviewPage({
               {projection.items.map((item, index) => (
                 <tr className="border-b border-zinc-300 align-top" key={`${item.description}-${index}`}>
                   <td className="px-2 py-2">{index + 1}</td>
-                  <td className="px-2 py-2 font-medium">{item.description}</td>
-                  <td className="px-2 py-2">{item.hsnCode ?? "Pending"}</td>
+                  <td className="px-2 py-2 font-medium">{item.description}{format !== "a4" ? <div className="text-[9px]">HSN {item.hsnCode ?? "-"} · GST {item.taxRateBps / 100}%</div> : null}</td>
+                  {format === "a4" ? <td className="px-2 py-2">{item.hsnCode ?? "Pending"}</td> : null}
                   <td className="px-2 py-2 text-right">{item.quantity}</td>
                   <td className="px-2 py-2">{item.unitCode ?? "-"}</td>
                   <td className="px-2 py-2 text-right">{money(item.unitAmountCents)}</td>
                   <td className="px-2 py-2 text-right">{item.discountPercent === null ? money(item.discountCents) : `${item.discountPercent}%`}</td>
                   <td className="px-2 py-2 text-right">{money(item.taxableCents)}</td>
-                  <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td>
+                  {format === "a4" ? <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td> : null}
                   <td className="px-2 py-2 text-right font-medium">{money(item.lineTotalCents)}</td>
                 </tr>
               ))}
@@ -126,7 +142,7 @@ export default async function HardwarePrintPreviewPage({
           </table>
         </div>
 
-        <section className="print-break-avoid mt-5 grid gap-6 sm:grid-cols-[minmax(0,1fr)_280px]">
+        <section className={`print-break-avoid mt-5 grid gap-6 ${format === "a4" ? "sm:grid-cols-[minmax(0,1fr)_280px]" : ""}`}>
           <div>
             <p className="text-xs font-semibold uppercase">Tax summary</p>
             {projection.gstSummary.length ? (
@@ -212,4 +228,13 @@ function humanize(value: string) {
 
 function money(amountCents: number) {
   return new Intl.NumberFormat("en-IN", { currency: "INR", style: "currency" }).format(amountCents / 100);
+}
+
+function parsePrintFormat(value: string | undefined): "58mm" | "80mm" | "a4" {
+  return value === "58mm" || value === "80mm" || value === "a4" ? value : "a4";
+}
+
+function formatLabel(value: "58mm" | "80mm" | "a4") {
+  if (value === "a4") return "A4";
+  return value === "58mm" ? "58 mm" : "80 mm";
 }

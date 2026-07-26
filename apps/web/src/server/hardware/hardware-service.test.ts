@@ -208,6 +208,7 @@ describe("HardwareService", () => {
           }),
         hardwareInventoryMovement: { findMany: async () => movements },
         hardwareProduct: { findFirst: async () => null },
+        hardwareUnit: { upsert: async () => ({ id: "unit_pcs" }) },
       } as unknown as Partial<PrismaClient>),
     );
 
@@ -234,6 +235,29 @@ describe("HardwareService", () => {
       service.quickCreateProduct(
         { tenantId: "tenant_1", userId: "user_1" },
         { name: "Existing Tap" },
+      ),
+    ).rejects.toThrow("already exists");
+  });
+
+  it("rejects duplicate normalized customer mobile during quick-create", async () => {
+    const service = new HardwareService(
+      prismaMock({
+        clientOrganization: {
+          findMany: async () => [
+            {
+              contacts: [{ phone: "919876543210" }],
+              customFields: { hardwarePartyRole: "customer" },
+              name: "Existing Customer",
+            },
+          ],
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      service.quickCreateParty(
+        { tenantId: "tenant_1", userId: "user_1" },
+        { mobile: "09876543210", name: "New Customer", role: "customer" },
       ),
     ).rejects.toThrow("already exists");
   });

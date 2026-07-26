@@ -366,6 +366,90 @@ describe("HardwareTradeService", () => {
     ).rejects.toThrow("Confirm the sale");
   });
 
+  it("posts a quick POS sale atomically with invoice, stock movement, and payment", async () => {
+    const created: string[] = [];
+    const service = new HardwareTradeService(
+      prismaMock({
+        $transaction: async (callback: (tx: Record<string, unknown>) => Promise<unknown>) =>
+          callback({
+            auditEvent: { createMany: async () => created.push("audit") },
+            billingTimelineEvent: { createMany: async () => created.push("billingTimeline") },
+            documentSequence: { upsert: async () => ({ lastValue: 1 }) },
+            hardwareInventoryMovement: { create: async () => created.push("movement") },
+            hardwareTradeDocument: {
+              create: async ({ data }: { data: { documentNumber: string; paymentStatus: string; totalCents: number } }) => {
+                created.push("document");
+                return { id: "doc_1", ...data };
+              },
+            },
+            hardwareTradeTimelineEvent: { create: async () => created.push("tradeTimeline") },
+            invoice: {
+              create: async ({ data }: { data: { invoiceNumber: string; totalAmountCents: number } }) => {
+                created.push("invoice");
+                return { id: "inv_1", ...data };
+              },
+            },
+            paymentRecord: { create: async () => { created.push("payment"); return { amountCents: 1180, id: "pay_1" }; } },
+            tenant: { findUnique: async () => ({ slug: "manglam-trading-demo" }) },
+          }),
+        hardwareInventoryMovement: {
+          findMany: async () => [{ quantity: 5, type: HardwareInventoryMovementType.STOCK_IN }],
+        },
+        hardwareProduct: {
+          findMany: async () => [{ gstTaxConfig: { rateBps: 1800 }, id: "prod_1", metadata: {}, name: "Tap" }],
+        },
+        hardwareStockLocation: { findFirst: async () => ({ id: "loc_1" }) },
+        hardwareTradeDocument: {
+          count: async () => 0,
+          findFirst: async () => null,
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const result = await service.postQuickPosSale(
+      { tenantId: "tenant_1", userId: "user_1" },
+      {
+        clientTotalCents: 1180,
+        idempotencyKey: "idem-quick-pos-1",
+        items: [{ productId: "prod_1", quantity: 1, unitAmountCents: 1000 }],
+        locationId: "loc_1",
+        paidAmountCents: 1180,
+        paymentMode: "CASH",
+        taxMode: "intra-state",
+      },
+    );
+
+    expect(result).toMatchObject({ invoiceNumber: "MS/INV/2026-27/00001", paymentStatus: "paid" });
+    expect(created).toEqual(expect.arrayContaining(["invoice", "document", "movement", "payment"]));
+  });
+
+  it("rejects manipulated quick POS client totals before posting", async () => {
+    const service = new HardwareTradeService(
+      prismaMock({
+        hardwareInventoryMovement: { findMany: async () => [] },
+        hardwareProduct: {
+          findMany: async () => [{ gstTaxConfig: { rateBps: 1800 }, id: "prod_1", metadata: {}, name: "Tap" }],
+        },
+        hardwareStockLocation: { findFirst: async () => ({ id: "loc_1" }) },
+        hardwareTradeDocument: { findFirst: async () => null },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      service.postQuickPosSale(
+        { tenantId: "tenant_1", userId: "user_1" },
+        {
+          clientTotalCents: 1,
+          idempotencyKey: "idem-quick-pos-2",
+          items: [{ productId: "prod_1", quantity: 1, unitAmountCents: 1000 }],
+          locationId: "loc_1",
+          paidAmountCents: 0,
+          taxMode: "intra-state",
+        },
+      ),
+    ).rejects.toThrow("server");
+  });
+
   it("does not allow an unclassified intake record to become a trade party", async () => {
     const service = new HardwareTradeService(
       prismaMock({

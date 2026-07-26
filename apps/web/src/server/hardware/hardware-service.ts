@@ -13,6 +13,7 @@ import type {
   HardwareLocationInput,
   HardwareMovementInput,
   HardwareProductInput,
+  QuickHardwarePartyInput,
   QuickHardwareProductInput,
   HardwareUnitInput,
 } from "./schemas";
@@ -254,28 +255,46 @@ export class HardwareService {
   async quickCreateProduct(context: ActorContext, input: QuickHardwareProductInput) {
     await this.enforce(context, "hardware.catalog.manage");
     validateGstTaxConfig(input.gstRateBps === undefined ? undefined : { rateBps: input.gstRateBps });
-    await this.validateOptionalLinks(context.tenantId, { categoryId: input.categoryId, name: input.name, unitId: input.unitId });
+    await this.validateOptionalLinks(context.tenantId, {
+      brandId: input.brandId,
+      categoryId: input.categoryId,
+      name: input.name,
+      unitId: input.unitId,
+    });
     const existing = await this.repository.findProductByExactName(context.tenantId, input.name);
     if (existing) {
       throw validation("A product with this name already exists. Select the existing product instead.");
     }
+    const sku = input.sku?.trim() || await this.nextProductSku(context.tenantId, input.name);
+    if (await this.repository.findProductBySku(context.tenantId, sku)) {
+      throw validation("Product SKU already exists for this tenant.");
+    }
+    if (input.barcode && await this.repository.findProductByBarcode(context.tenantId, input.barcode)) {
+      throw validation("Product barcode already exists for this tenant.");
+    }
     if (input.openingStock) {
       await this.assertExists("hardwareStockLocation", context.tenantId, input.openingStock.locationId, "Stock location was not found.");
     }
+    const unitId = input.unitId ?? (await this.ensureDefaultUnit(context.tenantId)).id;
     const product = await this.repository.createProduct({
       actorId: context.userId,
       data: stripUndefined({
+        barcode: input.barcode,
+        brandId: input.brandId,
         categoryId: input.categoryId,
         gstTaxConfig: input.gstRateBps === undefined ? {} : { rateBps: input.gstRateBps },
         metadata: {
+          hsnCode: input.hsnCode,
           stockSetupStatus: input.openingStock ? "TRACKED" : "PENDING",
           stockSetupPendingAt: input.openingStock ? undefined : new Date().toISOString(),
         } as Prisma.InputJsonValue,
+        lowStockThreshold: input.lowStockThreshold ?? 0,
         name: input.name,
+        purchaseCostCents: input.purchaseCostCents ?? 0,
         salesPriceCents: input.salesPriceCents ?? 0,
-        sku: await this.nextProductSku(context.tenantId, input.name),
+        sku,
         tenantId: context.tenantId,
-        unitId: input.unitId,
+        unitId,
       }) as Prisma.HardwareProductUncheckedCreateInput,
     });
     if (input.openingStock && input.openingStock.quantity > 0) {
@@ -292,6 +311,101 @@ export class HardwareService {
     }
     const movements = input.openingStock ? await this.repository.movementsForProduct(context.tenantId, product.id) : [];
     return toProductSummary({ ...product, brand: null, category: null, unit: null }, movements);
+  }
+
+  async quickCreateParty(context: ActorContext, input: QuickHardwarePartyInput): Promise<HardwarePartySummary> {
+    await this.enforce(context, input.role === "supplier" ? "hardware.purchase.manage" : "hardware.sales.manage");
+    const normalizedName = normalizeComparable(input.name);
+    const normalizedMobile = normalizeMobile(input.mobile);
+    const existing = await this.prisma.clientOrganization.findMany({
+      include: { contacts: { select: { phone: true } } },
+      where: { archivedAt: null, deletedAt: null, tenantId: context.tenantId },
+    });
+    const duplicate = existing.find((party) => {
+      const customFields = asRecord(party.customFields);
+      if (customFields.hardwarePartyRole !== input.role) return false;
+      const sameName = normalizeComparable(party.name) === normalizedName;
+      const existingMobile = normalizeMobile(party.contacts[0]?.phone ?? readText(customFields.phone));
+      const sameMobile = normalizedMobile && existingMobile === normalizedMobile;
+      return sameName || Boolean(sameMobile);
+    });
+    if (duplicate) {
+      throw validation(`${input.role === "supplier" ? "Supplier" : "Customer"} already exists. Select the existing record.`);
+    }
+    const openingBalanceCents = input.openingBalanceCents ?? 0;
+    const signedOpening =
+      openingBalanceCents === 0
+        ? 0
+        : input.balanceDirection === "CR"
+          ? -openingBalanceCents
+          : openingBalanceCents;
+    const party = await this.prisma.clientOrganization.create({
+      data: {
+        customFields: stripUndefined({
+          address: input.address,
+          gstin: input.gstin,
+          hardwarePartyRole: input.role,
+          openingBalanceCents: signedOpening,
+          openingBalanceDirection: input.balanceDirection,
+          phone: normalizedMobile,
+        }) as Prisma.InputJsonValue,
+        lifecycleStage: "CLIENT",
+        name: input.name,
+        slug: await this.nextPartySlug(context.tenantId, input.name),
+        tenantId: context.tenantId,
+      },
+    });
+    if (normalizedMobile) {
+      await this.prisma.clientContact.create({
+        data: {
+          clientId: party.id,
+          email: `${party.id}@local.invalid`,
+          isPrimary: true,
+          name: input.name,
+          normalizedEmail: `${party.id}@local.invalid`,
+          phone: normalizedMobile,
+          tenantId: context.tenantId,
+        },
+      });
+    }
+    return {
+      balanceSide: signedOpening === 0 ? null : input.role === "supplier" ? (signedOpening > 0 ? "CR" : "DR") : (signedOpening > 0 ? "DR" : "CR"),
+      contact: normalizedMobile ?? null,
+      currentBalanceCents: signedOpening,
+      gstin: input.gstin ?? null,
+      id: party.id,
+      name: party.name,
+      openingBalanceCents: signedOpening,
+      role: input.role,
+    };
+  }
+
+  async quickCreateCategory(context: ActorContext, name: string) {
+    await this.enforce(context, "hardware.catalog.manage");
+    return this.prisma.hardwareProductCategory.upsert({
+      create: { name, slug: slugify(name), tenantId: context.tenantId },
+      update: {},
+      where: { tenantId_slug: { slug: slugify(name), tenantId: context.tenantId } },
+    });
+  }
+
+  async quickCreateBrand(context: ActorContext, name: string) {
+    await this.enforce(context, "hardware.catalog.manage");
+    return this.prisma.hardwareBrand.upsert({
+      create: { name, slug: slugify(name), tenantId: context.tenantId },
+      update: {},
+      where: { tenantId_slug: { slug: slugify(name), tenantId: context.tenantId } },
+    });
+  }
+
+  async quickCreateUnit(context: ActorContext, name: string) {
+    await this.enforce(context, "hardware.catalog.manage");
+    const code = name.trim().toUpperCase().replace(/[^A-Z0-9]+/gu, "").slice(0, 12) || "UNIT";
+    return this.prisma.hardwareUnit.upsert({
+      create: { code, name, tenantId: context.tenantId },
+      update: {},
+      where: { tenantId_code: { code, tenantId: context.tenantId } },
+    });
   }
 
   async recordMovement(context: ActorContext, input: HardwareMovementInput) {
@@ -912,6 +1026,25 @@ export class HardwareService {
     return candidate;
   }
 
+  private ensureDefaultUnit(tenantId: string) {
+    return this.prisma.hardwareUnit.upsert({
+      create: { code: "PCS", name: "Pieces", tenantId },
+      update: {},
+      where: { tenantId_code: { code: "PCS", tenantId } },
+    });
+  }
+
+  private async nextPartySlug(tenantId: string, name: string) {
+    const base = slugify(name) || "party";
+    let candidate = base;
+    let sequence = 1;
+    while (await this.prisma.clientOrganization.findUnique({ where: { tenantId_slug: { slug: candidate, tenantId } } })) {
+      sequence += 1;
+      candidate = `${base}-${sequence}`;
+    }
+    return candidate;
+  }
+
   private async enforce(context: ActorContext, permission: string) {
     await this.permissions.enforce({
       policy: { anyOf: [permission as `${string}.${string}.${string}`, "hardware.plugin.manage", "*"] },
@@ -923,6 +1056,16 @@ export class HardwareService {
 
 function readText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeComparable(value: string) {
+  return value.trim().replace(/\s+/gu, " ").toLowerCase();
+}
+
+function normalizeMobile(value: string | null | undefined) {
+  const digits = value?.replace(/\D/gu, "").replace(/^0+/u, "") ?? "";
+  if (!digits) return undefined;
+  return digits.length === 10 ? `91${digits}` : digits;
 }
 
 function readNumber(value: unknown) {

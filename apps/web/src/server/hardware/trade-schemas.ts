@@ -1,4 +1,4 @@
-import { HardwareTradeDocumentType } from "@trustfirst/database";
+import { HardwareTradeDocumentType, PaymentMode } from "@trustfirst/database";
 import { z } from "zod";
 
 const jsonRecord = z.record(z.string(), z.unknown());
@@ -46,6 +46,21 @@ export const hardwareTradeStatusSchema = z.object({
   locationId: z.string().optional(),
 });
 
+export const quickPosSaleSchema = z.object({
+  clientTotalCents: z.number().int().nonnegative(),
+  customerId: z.string().optional(),
+  idempotencyKey: z.string().min(12).max(120),
+  invoiceDiscountCents: z.number().int().nonnegative().optional(),
+  items: z.array(hardwareTradeItemSchema).min(1),
+  locationId: z.string(),
+  notes: z.string().max(1000).optional(),
+  paidAmountCents: z.number().int().nonnegative().default(0),
+  paymentMode: z.nativeEnum(PaymentMode).optional(),
+  roundOffCents: z.number().int().optional(),
+  taxMode: z.enum(["intra-state", "inter-state"]).default("intra-state"),
+});
+
 export type HardwareTradeItemInput = z.infer<typeof hardwareTradeItemSchema>;
 export type HardwareTradeDocumentInput = z.infer<typeof hardwareTradeDocumentSchema>;
 export type HardwareTradeStatusInput = z.infer<typeof hardwareTradeStatusSchema>;
+export type QuickPosSaleInput = z.infer<typeof quickPosSaleSchema>;
