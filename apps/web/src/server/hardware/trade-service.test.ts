@@ -426,6 +426,7 @@ describe("HardwareTradeService", () => {
   it("cancels a confirmed sale by reversing stock and voiding the linked invoice", async () => {
     const movements: Array<{ data: { referenceType: string | null | undefined; type: HardwareInventoryMovementType } }> = [];
     const invoiceUpdates: Array<{ data: { status?: InvoiceStatus } }> = [];
+    const paymentUpdates: Array<{ data: { metadata?: unknown } }> = [];
     const now = new Date();
     const document = {
       billingInvoice: { id: "inv_1", metadata: {} },
@@ -489,6 +490,13 @@ describe("HardwareTradeService", () => {
                 return {};
               },
             },
+            paymentRecord: {
+              findMany: async () => [{ id: "pay_1", metadata: { source: "quick-pos" } }],
+              update: async (input: { data: { metadata?: unknown } }) => {
+                paymentUpdates.push(input);
+                return {};
+              },
+            },
           }),
         hardwareInventoryMovement: { findFirst: async () => null },
         hardwareStockLocation: { findFirst: async () => ({ id: "loc_1" }) },
@@ -516,6 +524,9 @@ describe("HardwareTradeService", () => {
       type: HardwareInventoryMovementType.STOCK_IN,
     });
     expect(invoiceUpdates[0]?.data.status).toBe(InvoiceStatus.VOID);
+    expect(paymentUpdates[0]?.data.metadata).toMatchObject({
+      cancellation: { refundStatus: "pending_explicit_refund_or_customer_credit" },
+    });
   });
 
   it("rejects a sale return quantity greater than the remaining sold quantity", async () => {

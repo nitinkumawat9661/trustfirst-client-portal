@@ -417,7 +417,10 @@ describe("HardwareService", () => {
           ],
         },
         hardwareTradeDocument: {
-          findMany: async () => [{ createdAt: new Date("2026-07-01"), documentNumber: "HSB-1", supplierId: "sup_1", totalCents: 5000 }],
+          findMany: async (input?: { where?: { type?: HardwareTradeDocumentType } }) =>
+            input?.where?.type === HardwareTradeDocumentType.SUPPLIER_BILL
+              ? [{ createdAt: new Date("2026-07-01"), documentNumber: "HSB-1", supplierId: "sup_1", totalCents: 5000 }]
+              : [],
         },
         invoice: {
           findMany: async () => [{ clientId: "cust_1", createdAt: new Date("2026-07-01"), invoiceNumber: "INV-1", title: "Invoice", totalAmountCents: 8000 }],
@@ -433,6 +436,69 @@ describe("HardwareService", () => {
 
     expect(customerLedger?.totalRemainingCents).toBe(6000);
     expect(supplierLedger?.totalRemainingCents).toBe(7000);
+  });
+
+  it("derives customer ledger safely for cancelled paid sales and sale returns", async () => {
+    const service = new HardwareService(
+      prismaMock({
+        clientOrganization: {
+          findMany: async () => [
+            { contacts: [], customFields: { hardwarePartyRole: "customer", openingBalanceCents: 0 }, id: "cust_1", invoices: [], name: "Customer", supplierHardwareDocuments: [] },
+          ],
+        },
+        hardwareTradeDocument: {
+          findMany: async (input?: { where?: { type?: HardwareTradeDocumentType } }) =>
+            input?.where?.type === HardwareTradeDocumentType.SALE_RETURN
+              ? [
+                  {
+                    createdAt: new Date("2026-07-04"),
+                    customerId: "cust_1",
+                    documentNumber: "HSR-2026-0001",
+                    metadata: { refundType: "customer_credit" },
+                    totalCents: 1500,
+                  },
+                ]
+              : [],
+        },
+        invoice: {
+          findMany: async () => [
+            {
+              clientId: "cust_1",
+              createdAt: new Date("2026-07-03"),
+              invoiceNumber: "MS/INV/2026-27/00002",
+              status: InvoiceStatus.PARTIALLY_PAID,
+              title: "Active invoice",
+              totalAmountCents: 8_000,
+            },
+          ],
+        },
+        paymentRecord: {
+          findMany: async () => [
+            {
+              amountCents: 10_000,
+              invoice: { clientId: "cust_1", invoiceNumber: "MS/INV/2026-27/00001", status: InvoiceStatus.VOID },
+              mode: "CASH",
+              receivedAt: new Date("2026-07-02"),
+              reference: "REC-VOID",
+            },
+            {
+              amountCents: 3_000,
+              invoice: { clientId: "cust_1", invoiceNumber: "MS/INV/2026-27/00002", status: InvoiceStatus.PARTIALLY_PAID },
+              mode: "UPI",
+              receivedAt: new Date("2026-07-03"),
+              reference: "REC-ACTIVE",
+            },
+          ],
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const [ledger] = await service.ledger({ tenantId: "tenant_1", userId: "user_1" }, "customer");
+
+    expect(ledger?.entries.some((entry) => entry.reference === "MS/INV/2026-27/00001")).toBe(false);
+    expect(ledger?.entries.find((entry) => entry.reference === "REC-VOID")?.creditCents).toBe(10_000);
+    expect(ledger?.entries.find((entry) => entry.reference === "HSR-2026-0001")?.creditCents).toBe(1500);
+    expect(ledger?.totalRemainingCents).toBe(-6500);
   });
 
   it("blocks stock out above available stock", async () => {

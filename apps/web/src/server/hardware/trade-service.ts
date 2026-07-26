@@ -527,6 +527,23 @@ export class HardwareTradeService {
             verb: BillingTimelineVerb.INVOICE_VOIDED,
           },
         });
+        const payments = await tx.paymentRecord.findMany({
+          where: { invoiceId: document.billingInvoiceId, tenantId: context.tenantId },
+        });
+        for (const payment of payments) {
+          await tx.paymentRecord.update({
+            data: {
+              metadata: {
+                ...asRecord(payment.metadata),
+                cancellation: {
+                  ...cancellationMetadata,
+                  refundStatus: "pending_explicit_refund_or_customer_credit",
+                },
+              } as Prisma.InputJsonValue,
+            },
+            where: { id: payment.id },
+          });
+        }
       }
       await tx.hardwareTradeTimelineEvent.create({
         data: {
@@ -650,6 +667,7 @@ export class HardwareTradeService {
         originalSaleNumber: document.documentNumber,
         reason: input.reason,
         refundReference: input.refundReference ?? null,
+        refundMode: input.refundMode ?? null,
         refundType: input.refundType,
       };
       const returnDocument = await tx.hardwareTradeDocument.create({

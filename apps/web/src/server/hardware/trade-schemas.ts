@@ -61,6 +61,7 @@ export const hardwareSaleReturnSchema = z.object({
   })).min(1),
   locationId: z.string(),
   reason: z.string().trim().min(3).max(1000),
+  refundMode: z.nativeEnum(PaymentMode).optional(),
   refundReference: z.string().trim().max(120).optional(),
   refundType: z.enum(["cash_refund", "payment_refund", "customer_credit"]).default("customer_credit"),
 });

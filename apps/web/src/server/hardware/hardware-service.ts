@@ -1,4 +1,12 @@
-import { ClientLifecycleStage, HardwareInventoryMovementType, type Prisma, type PrismaClient } from "@trustfirst/database";
+import {
+  ClientLifecycleStage,
+  HardwareInventoryMovementType,
+  HardwareTradeDocumentStatus,
+  HardwareTradeDocumentType,
+  InvoiceStatus,
+  type Prisma,
+  type PrismaClient,
+} from "@trustfirst/database";
 import { AppError } from "../domain/errors";
 import { PermissionResolverService } from "../permissions";
 import { currentIndiaBusinessDay } from "./business-time";
@@ -526,17 +534,35 @@ export class HardwareService {
   async ledger(context: ActorContext, role: HardwarePartyRole, partyId?: string): Promise<PartyLedger[]> {
     await this.enforce(context, role === "supplier" ? "hardware.purchase.read" : "hardware.sales.read");
     const parties = (await this.listParties(context, role)).filter((party) => !partyId || party.id === partyId);
-    const [invoices, supplierBills, payments] = await Promise.all([
+    const [invoices, saleReturns, supplierBills, payments] = await Promise.all([
       this.prisma.invoice.findMany({
         orderBy: { createdAt: "asc" },
-        where: { archivedAt: null, tenantId: context.tenantId },
+        where: {
+          archivedAt: null,
+          status: { in: [InvoiceStatus.ISSUED, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.PAID, InvoiceStatus.OVERDUE] },
+          tenantId: context.tenantId,
+        },
       }),
       this.prisma.hardwareTradeDocument.findMany({
         orderBy: { createdAt: "asc" },
-        where: { archivedAt: null, status: "CONFIRMED", tenantId: context.tenantId, type: "SUPPLIER_BILL" },
+        where: {
+          archivedAt: null,
+          status: HardwareTradeDocumentStatus.CONFIRMED,
+          tenantId: context.tenantId,
+          type: HardwareTradeDocumentType.SALE_RETURN,
+        },
+      }),
+      this.prisma.hardwareTradeDocument.findMany({
+        orderBy: { createdAt: "asc" },
+        where: {
+          archivedAt: null,
+          status: HardwareTradeDocumentStatus.CONFIRMED,
+          tenantId: context.tenantId,
+          type: HardwareTradeDocumentType.SUPPLIER_BILL,
+        },
       }),
       this.prisma.paymentRecord.findMany({
-        include: { invoice: { select: { clientId: true } } },
+        include: { invoice: { select: { clientId: true, invoiceNumber: true, status: true } } },
         orderBy: { receivedAt: "asc" },
         where: { tenantId: context.tenantId },
       }),
@@ -563,6 +589,20 @@ export class HardwareService {
             debitCents: invoice.totalAmountCents,
             description: invoice.title,
             reference: invoice.invoiceNumber,
+          });
+        }
+        for (const saleReturn of saleReturns.filter((document) => document.customerId === party.id)) {
+          const metadata = asRecord(saleReturn.metadata);
+          const refundType = readText(metadata.refundType) ?? "customer_credit";
+          balance -= saleReturn.totalCents;
+          entries.push({
+            amountCents: saleReturn.totalCents,
+            balanceCents: balance,
+            creditCents: saleReturn.totalCents,
+            date: saleReturn.createdAt,
+            debitCents: 0,
+            description: refundType === "customer_credit" ? "Sale return customer credit" : "Sale return refund pending",
+            reference: saleReturn.documentNumber,
           });
         }
         for (const payment of payments.filter((payment) => payment.invoice.clientId === party.id)) {
