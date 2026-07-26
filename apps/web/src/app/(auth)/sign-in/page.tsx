@@ -9,9 +9,12 @@ import {
   BriefcaseBusiness,
   FileCheck2,
   FolderKanban,
+  PackageCheck,
   ShieldCheck,
+  Warehouse,
 } from "lucide-react";
 import { headers } from "next/headers";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import type { CSSProperties } from "react";
 import { auth } from "@/auth";
@@ -21,6 +24,11 @@ import {
   readEffectiveHost,
   resolveAppSurfaceFromHost,
 } from "@/server/domain/host-routing";
+import {
+  defaultSignInDestination,
+  safeSignInCallback,
+  signInBrandForSurface,
+} from "@/server/domain/sign-in-surface";
 
 export const metadata = {
   title: "Sign in",
@@ -32,6 +40,13 @@ const trustFirstTheme = {
   "--ring": "#60a5fa",
   "--border": "#dbeafe",
   "--input": "#cbd5e1",
+} as CSSProperties;
+const mangalamTheme = {
+  "--primary": "#c99a45",
+  "--primary-foreground": "#111111",
+  "--ring": "#d6aa57",
+  "--border": "#3f3426",
+  "--input": "#3a332b",
 } as CSSProperties;
 
 export default async function SignInPage({
@@ -48,8 +63,7 @@ export default async function SignInPage({
     redirect(`${CANONICAL_ORIGINS.mangalamErp}/sign-in`);
   }
 
-  const defaultDestination =
-    surface === "TRUSTFIRST_PORTAL" ? "/client" : "/admin";
+  const defaultDestination = defaultSignInDestination(surface);
 
   const session = await auth();
 
@@ -57,20 +71,19 @@ export default async function SignInPage({
     redirect(defaultDestination);
   }
 
-  const safeDestination = safeCallback(
+  const safeDestination = safeSignInCallback(
     callbackUrl,
     defaultDestination,
   );
 
-  const portalLabel =
-    surface === "MANGALAM_ERP"
-      ? "SECURE ERP ACCESS"
-      : "CLIENT PORTAL";
+  if (signInBrandForSurface(surface) === "MANGALAM") {
+    return <MangalamSignIn callbackUrl={safeDestination} />;
+  }
 
   return (
     <TrustFirstSignIn
       callbackUrl={safeDestination}
-      portalLabel={portalLabel}
+      portalLabel="CLIENT PORTAL"
     />
   );
 }
@@ -132,7 +145,7 @@ function TrustFirstSignIn({
             </Card>
 
             <p className="mt-6 text-center text-xs text-slate-400">
-              Secure client workspace Ã‚Â· Powered by TrustFirst Solutions
+              Secure client workspace · Powered by TrustFirst Solutions
             </p>
           </div>
         </section>
@@ -201,7 +214,7 @@ function TrustFirstSignIn({
             </div>
 
             <p className="text-xs tracking-wide text-slate-500">
-              Role-based access Ã‚Â· Secure sessions Ã‚Â· Controlled client visibility
+              Role-based access · Secure sessions · Controlled client visibility
             </p>
           </div>
         </section>
@@ -210,11 +223,140 @@ function TrustFirstSignIn({
   );
 }
 
-function safeCallback(
-  value: string | undefined,
-  fallback: string,
-) {
-  return value?.startsWith("/") && !value.startsWith("//")
-    ? value
-    : fallback;
+function MangalamSignIn({ callbackUrl }: { callbackUrl: string }) {
+  return (
+    <main
+      className="relative min-h-screen overflow-hidden bg-[#0f0f0f] text-white"
+      style={mangalamTheme}
+    >
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(201,154,69,0.22),transparent_34%),linear-gradient(135deg,#0b0b0b,#181511_52%,#080808)]"
+      />
+
+      <div className="relative grid min-h-screen lg:grid-cols-[minmax(380px,0.9fr)_minmax(560px,1.1fr)]">
+        <section className="flex items-center justify-center px-5 py-10 sm:px-10">
+          <div className="w-full max-w-md">
+            <div className="mb-8 flex items-center gap-4">
+              <div className="grid size-16 place-items-center rounded-full border border-[#d2a24c]/45 bg-white p-1 shadow-[0_0_42px_rgba(210,162,76,0.2)]">
+                <Image
+                  alt="Mangalam Sanitary approved logo"
+                  className="size-full rounded-full object-contain"
+                  height={64}
+                  src="/api/public/branding/mangalam-sanitary-logo"
+                  unoptimized
+                  width={64}
+                />
+              </div>
+
+              <div>
+                <p className="font-semibold tracking-[0.16em] text-white">
+                  MANGALAM SANITARY
+                </p>
+                <p className="mt-1 text-xs font-medium tracking-[0.18em] text-[#d2a24c]">
+                  BATHWARE · PLUMBING · HARDWARE
+                </p>
+              </div>
+            </div>
+
+            <Card className="border-[#d2a24c]/20 bg-[#fbfaf7] text-[#141414] shadow-[0_30px_90px_rgba(0,0,0,0.42)]">
+              <CardHeader className="space-y-3">
+                <div className="mb-1 grid size-11 place-items-center rounded-xl bg-[#171717] text-[#d2a24c]">
+                  <ShieldCheck className="size-5" />
+                </div>
+
+                <CardTitle className="text-2xl">
+                  Mangalam Sanitary ERP
+                </CardTitle>
+
+                <CardDescription className="leading-6 text-zinc-700">
+                  Sign in to manage products, stock, purchasing,
+                  billing, payments, and customer/supplier ledgers.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent>
+                <SignInForm callbackUrl={callbackUrl} />
+              </CardContent>
+            </Card>
+
+            <p className="mt-6 text-center text-xs text-zinc-400">
+              Secure ERP workspace · Powered by TrustFirst Solutions
+            </p>
+          </div>
+        </section>
+
+        <section className="relative hidden overflow-hidden border-l border-[#d2a24c]/15 lg:flex lg:flex-col lg:justify-between">
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-[linear-gradient(145deg,rgba(15,15,15,0.82),rgba(5,5,5,0.98)),radial-gradient(circle_at_70%_20%,rgba(210,162,76,0.22),transparent_34%)]"
+          />
+
+          <div className="relative z-10 flex h-full flex-col justify-between p-12 xl:p-16">
+            <div className="flex items-center gap-3 text-sm text-[#f0d79b]">
+              <span className="size-2 rounded-full bg-[#d2a24c] shadow-[0_0_16px_rgba(210,162,76,0.8)]" />
+              Secure Mangalam ERP access
+            </div>
+
+            <div className="max-w-2xl py-14">
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#d2a24c]">
+                Mangalam Sanitary ERP
+              </p>
+
+              <h1 className="mt-5 text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">
+                Daily shop operations in one protected workspace.
+              </h1>
+
+              <p className="mt-6 max-w-xl text-base leading-8 text-zinc-300">
+                Manage product master, stock movement, purchasing,
+                billing, payments, and ledgers with role-based access.
+              </p>
+
+              <div className="mt-10 grid gap-4 xl:grid-cols-3">
+                <MangalamFeature
+                  icon={PackageCheck}
+                  title="Products"
+                  text="Search, bill, and keep master data clean."
+                />
+                <MangalamFeature
+                  icon={Warehouse}
+                  title="Stock"
+                  text="Protect inventory while handling daily sales."
+                />
+                <MangalamFeature
+                  icon={BriefcaseBusiness}
+                  title="Ledgers"
+                  text="Track purchasing, billing, and balances."
+                />
+              </div>
+            </div>
+
+            <p className="text-xs tracking-wide text-zinc-500">
+              Black/gold ERP access · Secure sessions · Tenant protected
+            </p>
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function MangalamFeature({
+  icon: Icon,
+  text,
+  title,
+}: {
+  icon: typeof PackageCheck;
+  text: string;
+  title: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-[#d2a24c]/15 bg-white/[0.05] p-5 backdrop-blur">
+      <Icon className="size-6 text-[#d2a24c]" />
+      <p className="mt-4 font-medium">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-zinc-400">
+        {text}
+      </p>
+    </div>
+  );
 }
