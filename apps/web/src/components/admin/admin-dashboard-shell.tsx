@@ -215,15 +215,43 @@ function GlobalSearch({ onOpen }: { onOpen: () => void }) {
 }
 
 function NotificationBell({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [items, setItems] = useState<Array<{ actionHref: string; amountCents?: number; currentStock?: number; id: string; label: string; title: string }>>([]);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetch("/api/hardware/reminders")
+      .then((response) => response.json())
+      .then((result) => {
+        if (!cancelled && result.ok) setItems(result.data ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
   return (
     <div className="relative">
       <Button aria-expanded={open} aria-label="Notifications" onClick={() => onOpenChange(!open)} size="sm" type="button" variant="ghost">
         <Bell className="size-5" />
+        {items.length ? <span className="sr-only">{items.length} reminders</span> : null}
       </Button>
       {open ? (
         <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] rounded-md border border-border bg-card p-4 shadow-lg">
           <p className="font-medium">Notifications</p>
-          <p className="mt-2 text-sm text-muted-foreground">No new notifications.</p>
+          {items.length ? (
+            <ul className="mt-3 max-h-80 space-y-2 overflow-y-auto">
+              {items.slice(0, 8).map((item) => (
+                <li key={item.id}>
+                  <Link className="block rounded-md border border-border p-2 text-sm hover:bg-muted" href={item.actionHref} onClick={() => onOpenChange(false)}>
+                    <span className="block font-medium">{item.title}</span>
+                    <span className="block text-muted-foreground">{item.label}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="mt-2 text-sm text-muted-foreground">No daily reminders.</p>}
         </div>
       ) : null}
     </div>

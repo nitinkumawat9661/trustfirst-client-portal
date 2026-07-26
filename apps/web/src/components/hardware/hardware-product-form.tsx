@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@trustfirst/ui";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -26,7 +26,7 @@ const productFormSchema = z.object({
   name: z.string().trim().min(2).max(240),
   purchasePrice: optionalMoney,
   salePrice: optionalMoney,
-  sku: z.string().trim().min(1).max(120),
+  sku: z.string().trim().max(120),
   unitId: z.string(),
 });
 
@@ -45,6 +45,7 @@ export function HardwareProductForm({
 }) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -93,41 +94,52 @@ export function HardwareProductForm({
     <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
       <Card>
         <CardHeader>
-          <CardTitle>Product details</CardTitle>
+          <CardTitle>Simple product</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <CardContent className="space-y-4">
           <Field error={errors.name?.message} label="Product name" required>
             <Input autoFocus autoComplete="off" {...register("name")} />
           </Field>
-          <Field error={errors.sku?.message} label="SKU / item code" required>
-            <Input autoComplete="off" {...register("sku")} />
-          </Field>
-          <Field error={errors.barcode?.message} label="Barcode">
-            <Input autoComplete="off" inputMode="numeric" {...register("barcode")} />
-          </Field>
-          <SelectField label="Category" options={categories} register={register("categoryId")} />
-          <SelectField label="Brand" options={brands} register={register("brandId")} />
-          <Field label="Unit">
-            <select className={selectClassName} {...register("unitId")}>
-              <option value="">Not provided</option>
-              {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name} ({unit.code})</option>)}
-            </select>
-          </Field>
-          <Field error={errors.hsnCode?.message} label="HSN / SAC">
-            <Input autoComplete="off" {...register("hsnCode")} />
-          </Field>
-          <Field error={errors.gstRate?.message} label="GST rate (%)">
-            <Input inputMode="decimal" min="0" max="100" step="0.01" type="number" {...register("gstRate")} />
-          </Field>
-          <Field error={errors.lowStockThreshold?.message} label="Low-stock threshold">
-            <Input inputMode="numeric" min="0" step="1" type="number" {...register("lowStockThreshold", { valueAsNumber: true })} />
-          </Field>
-          <Field error={errors.purchasePrice?.message} label="Purchase price (INR)">
-            <Input inputMode="decimal" min="0" step="0.01" type="number" {...register("purchasePrice")} />
-          </Field>
-          <Field error={errors.salePrice?.message} label="Sale price (INR)">
-            <Input inputMode="decimal" min="0" step="0.01" type="number" {...register("salePrice")} />
-          </Field>
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium"
+            onClick={() => setDetailsOpen((open) => !open)}
+            type="button"
+          >
+            <SlidersHorizontal className="size-4" />More details
+          </button>
+          {detailsOpen ? (
+            <div className="grid gap-4 border-t border-border pt-4 md:grid-cols-2 xl:grid-cols-3">
+              <Field error={errors.sku?.message} label="Item code">
+                <Input autoComplete="off" placeholder="Auto generated if blank" {...register("sku")} />
+              </Field>
+              <Field error={errors.barcode?.message} label="Barcode">
+                <Input autoComplete="off" inputMode="numeric" {...register("barcode")} />
+              </Field>
+              <SelectField label="Category" options={categories} register={register("categoryId")} />
+              <SelectField label="Brand" options={brands} register={register("brandId")} />
+              <Field label="Unit">
+                <select className={selectClassName} {...register("unitId")}>
+                  <option value="">Not provided</option>
+                  {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name} ({unit.code})</option>)}
+                </select>
+              </Field>
+              <Field error={errors.hsnCode?.message} label="HSN / SAC">
+                <Input autoComplete="off" {...register("hsnCode")} />
+              </Field>
+              <Field error={errors.gstRate?.message} label="GST rate (%)">
+                <Input inputMode="decimal" min="0" max="100" step="0.01" type="number" {...register("gstRate")} />
+              </Field>
+              <Field error={errors.lowStockThreshold?.message} label="Low-stock alert level">
+                <Input inputMode="numeric" min="0" step="1" type="number" {...register("lowStockThreshold", { valueAsNumber: true })} />
+              </Field>
+              <Field error={errors.purchasePrice?.message} label="Purchase price (INR)">
+                <Input inputMode="decimal" min="0" step="0.01" type="number" {...register("purchasePrice")} />
+              </Field>
+              <Field error={errors.salePrice?.message} label="Sale price (INR)">
+                <Input inputMode="decimal" min="0" step="0.01" type="number" {...register("salePrice")} />
+              </Field>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
       {serverError ? <p className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">{serverError}</p> : null}

@@ -36,6 +36,13 @@ export class PrismaHardwareRepository {
     return this.prisma.hardwareProduct.findFirst({ include: productInclude, where: { barcode, tenantId } });
   }
 
+  findProductByExactName(tenantId: string, name: string) {
+    return this.prisma.hardwareProduct.findFirst({
+      include: productInclude,
+      where: { archivedAt: null, name: { equals: name.trim(), mode: "insensitive" }, tenantId },
+    });
+  }
+
   getSettings(tenantId: string) {
     return this.prisma.hardwareBusinessSettings.findUnique({ where: { tenantId } });
   }

@@ -17,6 +17,7 @@ import type {
   SessionRotationResult,
 } from "./types";
 import type {
+  AdminResetPasswordInput,
   ChangePasswordInput,
   CredentialsLoginInput,
   EmailVerificationConfirmInput,
@@ -260,6 +261,50 @@ export class AuthenticationService {
       action: "AUTH_PASSWORD_CHANGED",
       actorId: userId,
       request,
+    });
+  }
+
+  async adminResetPassword(
+    actorId: string,
+    tenantId: string,
+    input: AdminResetPasswordInput,
+    request: RequestMetadata,
+  ) {
+    if (actorId === input.userId) {
+      throw new AppError({ code: "BAD_REQUEST", message: "Use change password for your own account.", status: 400 });
+    }
+    const [actorMembership, targetMembership] = await Promise.all([
+      this.prisma.tenantMembership.findUnique({
+        include: { role: { include: { permissions: { include: { permission: true } } } } },
+        where: { tenantId_userId: { tenantId, userId: actorId } },
+      }),
+      this.prisma.tenantMembership.findUnique({
+        select: { userId: true },
+        where: { tenantId_userId: { tenantId, userId: input.userId } },
+      }),
+    ]);
+    const actorPermissions = actorMembership?.role.permissions.map((entry) => entry.permission.key) ?? [];
+    const roleKey = actorMembership?.role.key ?? "";
+    const allowed = actorMembership?.status === "ACTIVE" && (
+      actorPermissions.includes("*") ||
+      actorPermissions.includes("auth.users.manage") ||
+      roleKey.includes("admin") ||
+      roleKey.includes("owner")
+    );
+    if (!allowed) {
+      throw new AppError({ code: "FORBIDDEN", message: "You are not allowed to reset another user's password.", status: 403 });
+    }
+    if (!targetMembership) {
+      throw new AppError({ code: "NOT_FOUND", message: "User is not a member of this tenant.", status: 404 });
+    }
+    await this.authRepository.updatePassword(input.userId, await hashPassword(input.temporaryPassword));
+    await this.sessionRepository.revokeAllForUser(input.userId);
+    await this.audit.record({
+      action: "AUTH_PASSWORD_RESET_COMPLETED",
+      actorId,
+      metadata: { targetUserId: input.userId },
+      request,
+      tenantId,
     });
   }
 

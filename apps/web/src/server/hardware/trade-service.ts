@@ -144,10 +144,11 @@ export class HardwareTradeService {
       await this.ensureLocation(context.tenantId, input.locationId);
       await this.ensureStockAvailable(context.tenantId, document, input.locationId);
     }
+    const stockItems = document.items.filter((item) => !isStockSetupPending(item.product?.metadata));
     return this.repository.confirm({
       actorId: context.userId,
       documentId,
-      movements: nonStockDocument ? [] : document.items.map((item) =>
+      movements: nonStockDocument ? [] : stockItems.map((item) =>
         stripUndefined({
           customerId: document.customerId,
           locationId: input.locationId,
@@ -420,6 +421,7 @@ export class HardwareTradeService {
     ]);
     if (!stockOutTypes.has(document.type)) return;
     for (const item of document.items) {
+      if (isStockSetupPending(item.product?.metadata)) continue;
       const movements = await this.prisma.hardwareInventoryMovement.findMany({
         where: { locationId, productId: item.productId, tenantId },
       });
@@ -520,6 +522,10 @@ export class HardwareTradeService {
       userId: context.userId,
     });
   }
+}
+
+function isStockSetupPending(value: unknown) {
+  return asRecord(value).stockSetupStatus === "PENDING";
 }
 
 function gstSummary(items: TradeFullRecord["items"]) {

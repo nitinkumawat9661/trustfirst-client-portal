@@ -245,6 +245,63 @@ describe("HardwareTradeService", () => {
     expect(movements[0]?.data.type).toBe(HardwareInventoryMovementType.STOCK_OUT);
   });
 
+  it("does not create stock movement for stock-setup-pending products", async () => {
+    const movements: Array<{ data: { type: HardwareInventoryMovementType } }> = [];
+    const now = new Date();
+    const document = {
+      customerId: "client_1",
+      discountCents: 0,
+      documentNumber: "HSO-2026-0003",
+      id: "doc_3",
+      items: [
+        {
+          description: "Pending Item",
+          discountCents: 0,
+          lineTotalCents: 12000,
+          product: { metadata: { stockSetupStatus: "PENDING" }, unit: null },
+          productId: "prod_pending",
+          quantity: 2,
+          taxCents: 0,
+          taxRateBps: 0,
+          unitAmountCents: 6000,
+        },
+      ],
+      paymentStatus: "unlinked",
+      roundOffCents: 0,
+      status: HardwareTradeDocumentStatus.DRAFT,
+      subtotalCents: 12000,
+      supplierId: null,
+      taxCents: 0,
+      totalCents: 12000,
+      type: HardwareTradeDocumentType.SALES_ORDER,
+      updatedAt: now,
+    };
+    const service = new HardwareTradeService(
+      prismaMock({
+        $transaction: async (
+          callback: (tx: {
+            auditEvent: { create: () => Promise<unknown> };
+            hardwareInventoryMovement: { create: (input: { data: { type: HardwareInventoryMovementType } }) => Promise<{ type: HardwareInventoryMovementType }> };
+            hardwareTradeDocument: { update: () => Promise<Record<string, unknown>> };
+            hardwareTradeTimelineEvent: { create: () => Promise<unknown> };
+          }) => Promise<unknown>,
+        ) =>
+          callback({
+            auditEvent: { create: async () => ({}) },
+            hardwareInventoryMovement: { create: async (input) => { movements.push(input); return input.data; } },
+            hardwareTradeDocument: { update: async () => ({ ...document, status: HardwareTradeDocumentStatus.CONFIRMED }) },
+            hardwareTradeTimelineEvent: { create: async () => ({}) },
+          }),
+        hardwareStockLocation: { findFirst: async () => ({ id: "loc_1" }) },
+        hardwareTradeDocument: { findFirst: async () => document },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await service.confirm({ tenantId: "tenant_1", userId: "user_1" }, "doc_3", { locationId: "loc_1" });
+
+    expect(movements).toHaveLength(0);
+  });
+
   it("blocks duplicate draft invoice numbers for hardware documents", async () => {
     const now = new Date();
     const service = new HardwareTradeService(

@@ -1,6 +1,7 @@
 import { getPrisma } from "@trustfirst/database";
 import { Card, CardContent, CardHeader, CardTitle } from "@trustfirst/ui";
 import { Boxes, ReceiptText } from "lucide-react";
+import Link from "next/link";
 import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
 import { HardwareOperationalDashboardCards } from "@/components/hardware/hardware-panels";
 import { requireCurrentUser } from "@/server/auth/session";
@@ -14,9 +15,10 @@ export default async function AdminPage() {
   const prisma = getPrisma();
   const hardware = new HardwareService(prisma);
   const trade = new HardwareTradeService(prisma);
-  const [dashboard, reports] = await Promise.all([
+  const [dashboard, reports, reminders] = await Promise.all([
     hardware.operationalDashboard(context),
     trade.reports(context),
+    hardware.reminders(context),
   ]);
   return (
     <div className="space-y-6">
@@ -26,6 +28,23 @@ export default async function AdminPage() {
         title="Dashboard"
       />
       <HardwareOperationalDashboardCards dashboard={dashboard} reports={reports} />
+      <Card>
+        <CardHeader><CardTitle>Daily reminders</CardTitle></CardHeader>
+        <CardContent>
+          {reminders.length ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {reminders.slice(0, 9).map((reminder) => (
+                <Link className="rounded-md border border-border p-3 text-sm hover:bg-muted" href={reminder.actionHref} key={reminder.id}>
+                  <span className="block font-medium">{reminder.title}</span>
+                  <span className="mt-1 block text-muted-foreground">{reminder.label}</span>
+                  {"amountCents" in reminder && reminder.amountCents !== undefined ? <span className="mt-2 block font-semibold">{money(reminder.amountCents)}</span> : null}
+                  {"currentStock" in reminder && reminder.currentStock !== undefined ? <span className="mt-2 block font-semibold">Stock {reminder.currentStock}</span> : null}
+                </Link>
+              ))}
+            </div>
+          ) : <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No daily reminders from current data.</p>}
+        </CardContent>
+      </Card>
       <div className="grid gap-4 lg:grid-cols-2">
         <DashboardList
           empty="No sales or supplier bills have been entered."

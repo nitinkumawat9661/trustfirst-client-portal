@@ -14,8 +14,41 @@ export type HardwareProductSummary = {
   purchaseCostCents: number;
   salesPriceCents: number;
   sku: string;
+  stockSetupStatus: "TRACKED" | "PENDING";
   status: "ACTIVE";
   unitCode: string | null;
+};
+
+export type LedgerEntry = {
+  amountCents: number;
+  balanceCents: number;
+  creditCents: number;
+  date: Date;
+  debitCents: number;
+  description: string;
+  reference: string;
+};
+
+export type PartyLedger = {
+  entries: LedgerEntry[];
+  openingBalanceCents: number;
+  partyId: string;
+  partyName: string;
+  totalPaidCents: number;
+  totalPayableCents: number;
+  totalRemainingCents: number;
+};
+
+export type HardwareReminder = {
+  actionHref: string;
+  amountCents?: number;
+  count?: number;
+  currentStock?: number;
+  id: string;
+  label: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  type: "customer-outstanding" | "supplier-payable" | "low-stock" | "zero-stock" | "stock-setup-pending";
 };
 
 export type InventoryDashboard = {

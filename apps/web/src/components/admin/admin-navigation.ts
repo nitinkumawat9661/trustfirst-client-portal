@@ -2,6 +2,7 @@ import {
   Boxes,
   ChartNoAxesCombined,
   IndianRupee,
+  ListOrdered,
   ClipboardList,
   FileCheck2,
   LayoutDashboard,
@@ -22,6 +23,7 @@ export const adminNavigation = [
   { href: "/admin/hardware/suppliers", icon: ClipboardList, label: "Suppliers", permission: "hardware.purchase.read" },
   { href: "/admin/hardware/customers", icon: UsersRound, label: "Customers", permission: "hardware.sales.read" },
   { href: "/admin/hardware/outstanding", icon: IndianRupee, label: "Outstanding", permission: "billing.read" },
+  { href: "/admin/hardware/ledger", icon: ListOrdered, label: "Ledger", permission: "billing.read" },
   { href: "/admin/hardware/reports", icon: ChartNoAxesCombined, label: "Reports", permission: "hardware.sales.read" },
   { href: "/admin/settings", icon: Settings, label: "Settings", permission: "hardware.settings.read" },
 ] as const;

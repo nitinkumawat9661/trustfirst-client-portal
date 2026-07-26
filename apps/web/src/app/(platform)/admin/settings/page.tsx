@@ -2,6 +2,7 @@ import { getPrisma } from "@trustfirst/database";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@trustfirst/ui";
 import { Building2, Languages, Printer, ShieldCheck, WalletCards } from "lucide-react";
 import Image from "next/image";
+import { ChangePasswordPanel } from "@/components/auth/change-password-panel";
 import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
 import { requireCurrentUser } from "@/server/auth/session";
 
@@ -15,7 +16,7 @@ export default async function AdminSettingsPage() {
     prisma.tenant.findUnique({ select: { branding: true, name: true, primaryDomain: true, status: true }, where: { id: tenantId } }),
     prisma.hardwareBusinessSettings.findUnique({ where: { tenantId } }),
     prisma.tenantMembership.findMany({
-      include: { role: { select: { description: true, key: true } } },
+      include: { role: { include: { permissions: { include: { permission: true } } } }, user: { select: { email: true, id: true, name: true } } },
       where: { status: "ACTIVE", tenantId },
     }),
   ]);
@@ -25,6 +26,16 @@ export default async function AdminSettingsPage() {
   const locked = identity.status === "LOCKED";
   const commercialSettingsPending = settings?.financialYear === "PENDING";
   const roles = [...new Map(memberships.map((membership) => [membership.role.key, membership.role])).values()];
+  const currentMembership = memberships.find((membership) => membership.userId === user.id);
+  const resetAllowed = Boolean(
+    currentMembership?.role.permissions.some((entry) => entry.permission.key === "*") ||
+    currentMembership?.role.permissions.some((entry) => entry.permission.key === "auth.users.manage") ||
+    currentMembership?.role.key.includes("admin") ||
+    currentMembership?.role.key.includes("owner"),
+  );
+  const resetUsers = resetAllowed
+    ? memberships.filter((membership) => membership.userId !== user.id).map((membership) => membership.user)
+    : [];
 
   return (
     <div className="space-y-6">
@@ -76,6 +87,7 @@ export default async function AdminSettingsPage() {
           <CardContent className="space-y-3 text-sm"><Setting label="Current" value="English" /><Setting label="Hindi labels" value="Foundation available" /><p className="text-xs text-muted-foreground">Default client language is waiting for confirmation.</p></CardContent>
         </Card>
       </section>
+      <ChangePasswordPanel resetUsers={resetUsers} />
     </div>
   );
 }

@@ -28,6 +28,11 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(12).max(256),
 });
 
+export const adminResetPasswordSchema = z.object({
+  temporaryPassword: z.string().min(12).max(256),
+  userId: z.string().min(1),
+});
+
 export type CredentialsLoginInput = z.infer<typeof credentialsLoginSchema>;
 export type PasswordResetRequestInput = z.infer<typeof passwordResetRequestSchema>;
 export type PasswordResetConfirmInput = z.infer<typeof passwordResetConfirmSchema>;
@@ -38,3 +43,4 @@ export type EmailVerificationConfirmInput = z.infer<
   typeof emailVerificationConfirmSchema
 >;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type AdminResetPasswordInput = z.infer<typeof adminResetPasswordSchema>;

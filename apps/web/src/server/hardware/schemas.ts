@@ -42,7 +42,19 @@ export const hardwareProductSchema = z.object({
   name: z.string().min(2).max(240),
   purchaseCostCents: z.number().int().nonnegative().optional(),
   salesPriceCents: z.number().int().nonnegative().optional(),
-  sku: z.string().min(1).max(120),
+  sku: z.string().min(1).max(120).optional(),
+  unitId: z.string().optional(),
+});
+
+export const quickHardwareProductSchema = z.object({
+  categoryId: z.string().optional(),
+  gstRateBps: z.number().int().min(0).max(10_000).optional(),
+  name: z.string().trim().min(2).max(240),
+  openingStock: z.object({
+    locationId: z.string(),
+    quantity: z.number().int().nonnegative(),
+  }).optional(),
+  salesPriceCents: z.number().int().nonnegative().optional(),
   unitId: z.string().optional(),
 });
 
@@ -108,6 +120,7 @@ export type HardwareCategoryInput = z.infer<typeof hardwareCategorySchema>;
 export type HardwareBrandInput = z.infer<typeof hardwareBrandSchema>;
 export type HardwareUnitInput = z.infer<typeof hardwareUnitSchema>;
 export type HardwareProductInput = z.infer<typeof hardwareProductSchema>;
+export type QuickHardwareProductInput = z.infer<typeof quickHardwareProductSchema>;
 export type HardwareLocationInput = z.infer<typeof hardwareLocationSchema>;
 export type HardwareMovementInput = z.infer<typeof hardwareMovementSchema>;
 export type HardwareImportPreviewInput = z.infer<typeof hardwareImportPreviewSchema>;

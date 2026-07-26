@@ -11,3 +11,4 @@ export * from "./trade-schemas";
 export * from "./trade-service";
 export * from "./trade-types";
 export * from "./types";
+export * from "./whatsapp";

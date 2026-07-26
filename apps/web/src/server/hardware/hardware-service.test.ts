@@ -190,6 +190,54 @@ describe("HardwareService", () => {
     ).rejects.toThrow("GST rate");
   });
 
+  it("quick-creates a pending product without fake inventory movement", async () => {
+    const movements: unknown[] = [];
+    const service = new HardwareService(
+      prismaMock({
+        $transaction: async (
+          callback: (tx: {
+            auditEvent: { create: () => Promise<unknown> };
+            hardwareProduct: { create: (input: { data: Record<string, unknown> }) => Promise<Record<string, unknown>> };
+            hardwareTimelineEvent: { create: () => Promise<unknown> };
+          }) => Promise<unknown>,
+        ) =>
+          callback({
+            auditEvent: { create: async () => ({}) },
+            hardwareProduct: { create: async ({ data }) => ({ brand: null, category: null, id: "prod_new", unit: null, ...data }) },
+            hardwareTimelineEvent: { create: async () => ({}) },
+          }),
+        hardwareInventoryMovement: { findMany: async () => movements },
+        hardwareProduct: { findFirst: async () => null },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const product = await service.quickCreateProduct(
+      { tenantId: "tenant_1", userId: "user_1" },
+      { name: "New Tap" },
+    );
+
+    expect(product.stockSetupStatus).toBe("PENDING");
+    expect(movements).toHaveLength(0);
+  });
+
+  it("rejects quick-add exact name duplicates", async () => {
+    const service = new HardwareService(
+      prismaMock({
+        hardwareProduct: {
+          findFirst: async ({ where }: { where: { name?: { equals?: string } } }) =>
+            where.name?.equals === "Existing Tap" ? { id: "prod_1" } : null,
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(
+      service.quickCreateProduct(
+        { tenantId: "tenant_1", userId: "user_1" },
+        { name: "Existing Tap" },
+      ),
+    ).rejects.toThrow("already exists");
+  });
+
   it("reports demo readiness and tenant-scoped missing setup", async () => {
     const service = new HardwareService(
       prismaMock({
@@ -333,6 +381,34 @@ describe("HardwareService", () => {
     expect(dashboard.pendingPaymentsCents).toBe(6000);
     expect(dashboard.stockValueCents).toBe(28000);
     expect(dashboard.topProducts[0]).toMatchObject({ sku: "TAP-1" });
+  });
+
+  it("builds customer and supplier ledger running balances", async () => {
+    const service = new HardwareService(
+      prismaMock({
+        clientOrganization: {
+          findMany: async () => [
+            { contacts: [], customFields: { hardwarePartyRole: "customer", openingBalanceCents: 1000 }, id: "cust_1", invoices: [], name: "Customer", supplierHardwareDocuments: [] },
+            { contacts: [], customFields: { hardwarePartyRole: "supplier", openingBalanceCents: 2000 }, id: "sup_1", invoices: [], name: "Supplier", supplierHardwareDocuments: [] },
+          ],
+        },
+        hardwareTradeDocument: {
+          findMany: async () => [{ createdAt: new Date("2026-07-01"), documentNumber: "HSB-1", supplierId: "sup_1", totalCents: 5000 }],
+        },
+        invoice: {
+          findMany: async () => [{ clientId: "cust_1", createdAt: new Date("2026-07-01"), invoiceNumber: "INV-1", title: "Invoice", totalAmountCents: 8000 }],
+        },
+        paymentRecord: {
+          findMany: async () => [{ amountCents: 3000, invoice: { clientId: "cust_1" }, mode: "CASH", receivedAt: new Date("2026-07-02"), reference: "REC-1" }],
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const [customerLedger] = await service.ledger({ tenantId: "tenant_1", userId: "user_1" }, "customer");
+    const [supplierLedger] = await service.ledger({ tenantId: "tenant_1", userId: "user_1" }, "supplier");
+
+    expect(customerLedger?.totalRemainingCents).toBe(6000);
+    expect(supplierLedger?.totalRemainingCents).toBe(7000);
   });
 
   it("blocks stock out above available stock", async () => {

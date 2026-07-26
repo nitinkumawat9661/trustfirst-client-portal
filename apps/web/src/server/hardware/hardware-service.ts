@@ -13,16 +13,19 @@ import type {
   HardwareLocationInput,
   HardwareMovementInput,
   HardwareProductInput,
+  QuickHardwareProductInput,
   HardwareUnitInput,
 } from "./schemas";
 import type {
   HardwareCsvExportContract,
+  HardwareReminder,
   HardwareImportPreview,
   HardwareMovementSummary,
   HardwarePartyRole,
   HardwarePartySummary,
   HardwareProductSummary,
   InventoryDashboard,
+  PartyLedger,
 } from "./types";
 import type { HardwareDemoReadiness, HardwareImportSummary, HardwareOperationalDashboard } from "./types";
 import { genericHardwareDemoData } from "./demo-data";
@@ -219,7 +222,8 @@ export class HardwareService {
 
   async createProduct(context: ActorContext, input: HardwareProductInput) {
     await this.enforce(context, "hardware.catalog.manage");
-    if (await this.repository.findProductBySku(context.tenantId, input.sku)) {
+    const sku = input.sku?.trim() || await this.nextProductSku(context.tenantId, input.name);
+    if (await this.repository.findProductBySku(context.tenantId, sku)) {
       throw validation("Product SKU already exists for this tenant.");
     }
     if (input.barcode && await this.repository.findProductByBarcode(context.tenantId, input.barcode)) {
@@ -240,11 +244,54 @@ export class HardwareService {
         name: input.name,
         purchaseCostCents: input.purchaseCostCents ?? 0,
         salesPriceCents: input.salesPriceCents ?? 0,
-        sku: input.sku,
+        sku,
         tenantId: context.tenantId,
         unitId: input.unitId,
       }) as Prisma.HardwareProductUncheckedCreateInput,
     });
+  }
+
+  async quickCreateProduct(context: ActorContext, input: QuickHardwareProductInput) {
+    await this.enforce(context, "hardware.catalog.manage");
+    validateGstTaxConfig(input.gstRateBps === undefined ? undefined : { rateBps: input.gstRateBps });
+    await this.validateOptionalLinks(context.tenantId, { categoryId: input.categoryId, name: input.name, unitId: input.unitId });
+    const existing = await this.repository.findProductByExactName(context.tenantId, input.name);
+    if (existing) {
+      throw validation("A product with this name already exists. Select the existing product instead.");
+    }
+    if (input.openingStock) {
+      await this.assertExists("hardwareStockLocation", context.tenantId, input.openingStock.locationId, "Stock location was not found.");
+    }
+    const product = await this.repository.createProduct({
+      actorId: context.userId,
+      data: stripUndefined({
+        categoryId: input.categoryId,
+        gstTaxConfig: input.gstRateBps === undefined ? {} : { rateBps: input.gstRateBps },
+        metadata: {
+          stockSetupStatus: input.openingStock ? "TRACKED" : "PENDING",
+          stockSetupPendingAt: input.openingStock ? undefined : new Date().toISOString(),
+        } as Prisma.InputJsonValue,
+        name: input.name,
+        salesPriceCents: input.salesPriceCents ?? 0,
+        sku: await this.nextProductSku(context.tenantId, input.name),
+        tenantId: context.tenantId,
+        unitId: input.unitId,
+      }) as Prisma.HardwareProductUncheckedCreateInput,
+    });
+    if (input.openingStock && input.openingStock.quantity > 0) {
+      await this.recordMovement(context, {
+        locationId: input.openingStock.locationId,
+        metadata: { stockSetup: "opening" },
+        notes: "Opening stock setup",
+        productId: product.id,
+        quantity: input.openingStock.quantity,
+        referenceType: "stock_setup",
+        type: HardwareInventoryMovementType.STOCK_IN,
+        unitPriceCents: input.salesPriceCents,
+      });
+    }
+    const movements = input.openingStock ? await this.repository.movementsForProduct(context.tenantId, product.id) : [];
+    return toProductSummary({ ...product, brand: null, category: null, unit: null }, movements);
   }
 
   async recordMovement(context: ActorContext, input: HardwareMovementInput) {
@@ -303,6 +350,149 @@ export class HardwareService {
     const products = await this.repository.searchProducts(context.tenantId, query);
     const movements = await this.repository.allMovements(context.tenantId);
     return products.map((product) => toProductSummary(product, movements));
+  }
+
+  async reminders(context: ActorContext): Promise<HardwareReminder[]> {
+    await this.enforce(context, "hardware.inventory.read");
+    const [products, movements, customers, suppliers] = await Promise.all([
+      this.repository.listProducts(context.tenantId),
+      this.repository.allMovements(context.tenantId),
+      this.listParties(context, "customer"),
+      this.listParties(context, "supplier"),
+    ]);
+    const summaries = products.map((product) => toProductSummary(product, movements));
+    return [
+      ...customers.filter((party) => party.currentBalanceCents > 0).map((party) => ({
+        actionHref: `/admin/hardware/ledger?tab=customer&party=${party.id}`,
+        amountCents: party.currentBalanceCents,
+        id: `customer-${party.id}`,
+        label: party.name,
+        severity: "warning" as const,
+        title: "Customer balance pending",
+        type: "customer-outstanding" as const,
+      })),
+      ...suppliers.filter((party) => party.currentBalanceCents > 0).map((party) => ({
+        actionHref: `/admin/hardware/ledger?tab=supplier&party=${party.id}`,
+        amountCents: party.currentBalanceCents,
+        id: `supplier-${party.id}`,
+        label: party.name,
+        severity: "warning" as const,
+        title: "Supplier payable pending",
+        type: "supplier-payable" as const,
+      })),
+      ...summaries.filter((product) => product.stockSetupStatus === "TRACKED" && product.currentStock > 0 && product.lowStock).map((product) => ({
+        actionHref: `/admin/hardware/stock?product=${product.id}`,
+        currentStock: product.currentStock,
+        id: `low-${product.id}`,
+        label: product.name,
+        severity: "warning" as const,
+        title: "Low stock",
+        type: "low-stock" as const,
+      })),
+      ...summaries.filter((product) => product.stockSetupStatus === "TRACKED" && product.currentStock === 0).map((product) => ({
+        actionHref: `/admin/hardware/stock?product=${product.id}`,
+        currentStock: product.currentStock,
+        id: `zero-${product.id}`,
+        label: product.name,
+        severity: "critical" as const,
+        title: "Zero stock",
+        type: "zero-stock" as const,
+      })),
+      ...summaries.filter((product) => product.stockSetupStatus === "PENDING").map((product) => ({
+        actionHref: `/admin/hardware/stock?product=${product.id}&setup=1`,
+        id: `pending-${product.id}`,
+        label: product.name,
+        severity: "info" as const,
+        title: "Stock setup pending",
+        type: "stock-setup-pending" as const,
+      })),
+    ];
+  }
+
+  async ledger(context: ActorContext, role: HardwarePartyRole, partyId?: string): Promise<PartyLedger[]> {
+    await this.enforce(context, role === "supplier" ? "hardware.purchase.read" : "hardware.sales.read");
+    const parties = (await this.listParties(context, role)).filter((party) => !partyId || party.id === partyId);
+    const [invoices, supplierBills, payments] = await Promise.all([
+      this.prisma.invoice.findMany({
+        orderBy: { createdAt: "asc" },
+        where: { archivedAt: null, tenantId: context.tenantId },
+      }),
+      this.prisma.hardwareTradeDocument.findMany({
+        orderBy: { createdAt: "asc" },
+        where: { archivedAt: null, status: "CONFIRMED", tenantId: context.tenantId, type: "SUPPLIER_BILL" },
+      }),
+      this.prisma.paymentRecord.findMany({
+        include: { invoice: { select: { clientId: true } } },
+        orderBy: { receivedAt: "asc" },
+        where: { tenantId: context.tenantId },
+      }),
+    ]);
+    return parties.map((party) => {
+      let balance = party.openingBalanceCents;
+      const entries = [{
+        amountCents: party.openingBalanceCents,
+        balanceCents: balance,
+        creditCents: party.openingBalanceCents < 0 ? Math.abs(party.openingBalanceCents) : 0,
+        date: new Date(0),
+        debitCents: party.openingBalanceCents > 0 ? party.openingBalanceCents : 0,
+        description: "Opening balance",
+        reference: "OPENING",
+      }];
+      if (role === "customer") {
+        for (const invoice of invoices.filter((invoice) => invoice.clientId === party.id)) {
+          balance += invoice.totalAmountCents;
+          entries.push({
+            amountCents: invoice.totalAmountCents,
+            balanceCents: balance,
+            creditCents: 0,
+            date: invoice.createdAt,
+            debitCents: invoice.totalAmountCents,
+            description: invoice.title,
+            reference: invoice.invoiceNumber,
+          });
+        }
+        for (const payment of payments.filter((payment) => payment.invoice.clientId === party.id)) {
+          balance -= payment.amountCents;
+          entries.push({
+            amountCents: payment.amountCents,
+            balanceCents: balance,
+            creditCents: payment.amountCents,
+            date: payment.receivedAt,
+            debitCents: 0,
+            description: `Payment ${payment.mode}`,
+            reference: payment.reference ?? "PAYMENT",
+          });
+        }
+      } else {
+        for (const document of supplierBills.filter((document) => document.supplierId === party.id)) {
+          balance += document.totalCents;
+          entries.push({
+            amountCents: document.totalCents,
+            balanceCents: balance,
+            creditCents: 0,
+            date: document.createdAt,
+            debitCents: document.totalCents,
+            description: "Supplier bill",
+            reference: document.documentNumber,
+          });
+        }
+      }
+      entries.sort((a, b) => a.date.getTime() - b.date.getTime() || a.reference.localeCompare(b.reference));
+      let running = 0;
+      const runningEntries = entries.map((entry) => {
+        running += entry.debitCents - entry.creditCents;
+        return { ...entry, balanceCents: running };
+      });
+      return {
+        entries: runningEntries,
+        openingBalanceCents: party.openingBalanceCents,
+        partyId: party.id,
+        partyName: party.name,
+        totalPaidCents: runningEntries.reduce((total, entry) => total + entry.creditCents, 0),
+        totalPayableCents: runningEntries.reduce((total, entry) => total + entry.debitCents, 0),
+        totalRemainingCents: runningEntries.at(-1)?.balanceCents ?? 0,
+      };
+    });
   }
 
   async searchByBarcode(context: ActorContext, barcode: string) {
@@ -711,6 +901,17 @@ export class HardwareService {
     if (!record) throw validation(message);
   }
 
+  private async nextProductSku(tenantId: string, name: string) {
+    const base = slugify(name).toUpperCase().replaceAll("-", "").slice(0, 12) || "ITEM";
+    let sequence = 1;
+    let candidate = `${base}-${sequence.toString().padStart(3, "0")}`;
+    while (await this.repository.findProductBySku(tenantId, candidate)) {
+      sequence += 1;
+      candidate = `${base}-${sequence.toString().padStart(3, "0")}`;
+    }
+    return candidate;
+  }
+
   private async enforce(context: ActorContext, permission: string) {
     await this.permissions.enforce({
       policy: { anyOf: [permission as `${string}.${string}.${string}`, "hardware.plugin.manage", "*"] },
@@ -759,6 +960,7 @@ function toProductSummary(product: ProductRecord, movements: MovementRecord[]): 
     purchaseCostCents: product.purchaseCostCents,
     salesPriceCents: product.salesPriceCents,
     sku: product.sku,
+    stockSetupStatus: metadata.stockSetupStatus === "PENDING" ? "PENDING" : "TRACKED",
     status: "ACTIVE",
     unitCode: product.unit?.code ?? null,
   };
