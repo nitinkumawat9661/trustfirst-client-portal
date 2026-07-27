@@ -5,6 +5,8 @@ import { getPrisma } from "@trustfirst/database";
 import { PublicIntakeReceiptDraftCleanup } from "@/features/intake/public-intake-submit-guard";
 import { ManglamPublicIntakeService } from "@/server/intake/manglam-public-intake-service";
 
+export const dynamic = "force-dynamic";
+
 export default async function ManglamRequirementIntakeThankYouPage({
   searchParams,
 }: {

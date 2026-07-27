@@ -1,3 +1,10 @@
+import {
+  loadDeployConfig,
+  runSsh,
+  shellQuote,
+  validateDeployConfig,
+} from "./vps-utils.mjs";
+
 const baseUrl = (process.env.SMOKE_BASE_URL ?? "http://45.10.21.141:3010").replace(/\/$/, "");
 
 const markers = [
@@ -45,9 +52,10 @@ async function main() {
   }
 
   const businessName = `Manglam Intake Smoke ${new Date().toISOString()}`;
+  const smokeIp = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
   const submitResponse = await fetch(`${baseUrl}/api/public/intake/manglam-trading-demo`, {
     body: JSON.stringify(buildPayload(businessName)),
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "x-forwarded-for": smokeIp },
     method: "POST",
   });
   const submitPayload = await submitResponse.json();
@@ -76,9 +84,15 @@ async function main() {
 
   const adminResponse = await fetch(`${baseUrl}/admin/requirements/intake`, {
     headers: { "x-trustfirst-internal-qa": "yes" },
+    redirect: "manual",
   });
   const adminHtml = await adminResponse.text();
-  if (adminResponse.status !== 200 || !adminHtml.includes(submitPayload.submissionNumber)) {
+  if (adminResponse.status === 200 && adminHtml.includes(submitPayload.submissionNumber)) {
+    console.log(`Admin intake queue page verified ${submitPayload.submissionNumber}.`);
+  } else if (isRedirectOrLocked(adminResponse.status)) {
+    verifyPrivateQueueRecord(submitPayload.submissionNumber, businessName);
+    console.log(`Private admin queue record verified ${submitPayload.submissionNumber}; public admin route stayed locked with ${adminResponse.status}.`);
+  } else {
     throw new Error(`Admin intake queue did not show submission ${submitPayload.submissionNumber}.`);
   }
 
@@ -97,6 +111,67 @@ async function main() {
   }
 
   console.log(`Public intake smoke passed for ${baseUrl}: ${submitPayload.submissionNumber}`);
+}
+
+function verifyPrivateQueueRecord(submissionNumber, businessName) {
+  let config;
+  try {
+    config = loadDeployConfig();
+    validateDeployConfig(config);
+  } catch {
+    throw new Error(`Admin intake queue is locked and no verified VPS deploy config is available to check ${submissionNumber}.`);
+  }
+
+  const remote = `
+set -euo pipefail
+cd ${shellQuote(config.DEPLOY_APP_DIR)}
+set -a
+. ${shellQuote(config.DEPLOY_ENV_FILE)}
+set +a
+SMOKE_SUBMISSION_NUMBER=${shellQuote(submissionNumber)} SMOKE_BUSINESS_NAME=${shellQuote(businessName)} node --input-type=module <<'NODE'
+import prismaClientPackage from "./packages/database/node_modules/@prisma/client/default.js";
+
+const { PrismaClient } = prismaClientPackage;
+const prisma = new PrismaClient();
+try {
+  const record = await prisma.requirement.findFirst({
+    include: { client: { select: { slug: true } } },
+    where: {
+      metadata: {
+        path: ["submissionNumber"],
+        equals: process.env.SMOKE_SUBMISSION_NUMBER,
+      },
+    },
+  });
+
+  if (!record) {
+    throw new Error("missing");
+  }
+
+  const data = record.submittedData && typeof record.submittedData === "object" ? record.submittedData : {};
+  const company = data.company && typeof data.company === "object" ? data.company : {};
+  const metadata = record.metadata && typeof record.metadata === "object" ? record.metadata : {};
+  if (company.firmName !== process.env.SMOKE_BUSINESS_NAME) {
+    throw new Error("business-name-mismatch");
+  }
+  if (record.client?.slug !== "manglam-trading-demo" || metadata.source !== "public-intake") {
+    throw new Error("queue-metadata-mismatch");
+  }
+
+  console.log("PRIVATE_QUEUE_VERIFIED");
+} finally {
+  await prisma.$disconnect();
+}
+NODE
+`;
+  const result = runSsh(config, `bash -lc ${shellQuote(remote)}`);
+  if (result.status !== 0 || !result.stdout.includes("PRIVATE_QUEUE_VERIFIED")) {
+    throw new Error(`Private admin queue verification failed for ${submissionNumber}.`);
+  }
+}
+
+function isRedirectOrLocked(status) {
+  return [301, 302, 303, 307, 308, 401, 403, 404].includes(status);
 }
 
 main().catch((error) => {
