@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   DocumentSequenceKind,
   FinancialAllocationType,
+  FinancialPartyType,
   FinancialTransactionType,
   PaymentProvider,
 } from "@trustfirst/database";
 import {
+  postCustomerPaymentWithAllocations,
+  postFinancialReversal,
   postCustomerPayment,
   postSaleCancellationFinancials,
   postSaleReceivable,
@@ -40,6 +43,11 @@ function txMock() {
         },
         findUnique: async ({ where }: { where: { tenantId_idempotencyKey: { idempotencyKey: string } } }) =>
           transactions.find((transaction) => transaction.idempotencyKey === where.tenantId_idempotencyKey.idempotencyKey) ?? null,
+        update: async ({ data, where }: { data: Record<string, unknown>; where: { id: string } }) => {
+          const transaction = transactions.find((candidate) => candidate.id === where.id);
+          Object.assign(transaction ?? {}, data);
+          return transaction;
+        },
       },
     },
   };
@@ -108,6 +116,56 @@ describe("financial service", () => {
     });
   });
 
+  it("posts one idempotent customer receipt across multiple invoices", async () => {
+    const mock = txMock();
+    const input = {
+      allocations: [
+        { amountCents: 3000, hardwareDocumentId: "doc_1", invoiceId: "inv_1", targetTransactionId: "fin_sale_1" },
+        { amountCents: 2000, hardwareDocumentId: "doc_2", invoiceId: "inv_2", targetTransactionId: "fin_sale_2" },
+      ],
+      amountCents: 5000,
+      createdById: "user_1",
+      idempotencyKey: "multi-payment-1",
+      mode: "BANK_TRANSFER" as const,
+      partyId: "customer_1",
+      provider: PaymentProvider.MANUAL,
+      sourceId: "customer_1",
+      sourceType: "ClientOrganization",
+      tenantId: "tenant_1",
+    };
+
+    const payment = await postCustomerPaymentWithAllocations(mock.tx as never, input);
+    const retry = await postCustomerPaymentWithAllocations(mock.tx as never, input);
+
+    expect(retry).toBe(payment);
+    expect(payment).toMatchObject({
+      amountCents: 5000,
+      paymentMode: "BANK_TRANSFER",
+      type: FinancialTransactionType.CUSTOMER_PAYMENT,
+    });
+    expect(mock.transactions).toHaveLength(1);
+    expect(mock.allocations).toEqual([
+      expect.objectContaining({ amountCents: 3000, toTransactionId: "fin_sale_1", type: FinancialAllocationType.INVOICE_PAYMENT }),
+      expect.objectContaining({ amountCents: 2000, toTransactionId: "fin_sale_2", type: FinancialAllocationType.INVOICE_PAYMENT }),
+    ]);
+  });
+
+  it("rejects mismatched multi-invoice allocation totals", async () => {
+    const mock = txMock();
+
+    await expect(postCustomerPaymentWithAllocations(mock.tx as never, {
+      allocations: [{ amountCents: 3000, targetTransactionId: "fin_sale_1" }],
+      amountCents: 5000,
+      createdById: "user_1",
+      idempotencyKey: "bad-payment-1",
+      mode: "CASH",
+      partyId: "customer_1",
+      sourceId: "customer_1",
+      sourceType: "ClientOrganization",
+      tenantId: "tenant_1",
+    })).rejects.toThrow("Payment allocation total must equal payment amount.");
+  });
+
   it("splits cancellation into receivable reversal and refund-pending liability", async () => {
     const mock = txMock();
 
@@ -137,5 +195,34 @@ describe("financial service", () => {
         type: FinancialTransactionType.CUSTOMER_REFUND_PENDING,
       }),
     ]);
+  });
+
+  it("marks the original payment reversed and posts an opposite-direction reversal", async () => {
+    const mock = txMock();
+    await postFinancialReversal(mock.tx as never, {
+      amountCents: 7000,
+      createdById: "user_1",
+      idempotencyKey: "reverse-payment-1",
+      original: {
+        creditCents: 7000,
+        debitCents: 0,
+        id: "fin_original",
+        partyType: FinancialPartyType.CUSTOMER,
+        transactionNumber: "MS/REC/2026-27/00001",
+        type: FinancialTransactionType.CUSTOMER_PAYMENT,
+      },
+      partyId: "customer_1",
+      reason: "Wrong customer selected",
+      sourceId: "fin_original",
+      sourceNumber: "MS/REC/2026-27/00001",
+      sourceType: "FinancialTransaction",
+      tenantId: "tenant_1",
+    });
+
+    expect(mock.transactions[0]).toMatchObject({
+      creditCents: 0,
+      debitCents: 7000,
+      type: FinancialTransactionType.PAYMENT_REVERSAL,
+    });
   });
 });

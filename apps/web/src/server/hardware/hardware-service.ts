@@ -1176,6 +1176,10 @@ function buildPartyLedger(
   entries.sort((a, b) => a.date.getTime() - b.date.getTime() || a.reference.localeCompare(b.reference));
   let running = 0;
   const runningEntries = entries.map((entry) => {
+    if (entry.reference === "OPENING") {
+      running = entry.balanceCents;
+      return entry;
+    }
     running += entry.debitCents - entry.creditCents;
     return { ...entry, balanceCents: running };
   });

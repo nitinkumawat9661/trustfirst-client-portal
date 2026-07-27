@@ -1,4 +1,6 @@
 export * from "./hardware-repository";
+export * from "./financial-schemas";
+export * from "./financial-service";
 export * from "./hardware-service";
 export * from "./demo-data";
 export * from "./hardware-i18n";

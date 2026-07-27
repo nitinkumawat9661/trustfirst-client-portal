@@ -33,6 +33,19 @@ type CustomerPaymentInput = BasePostingInput & {
   provider?: PaymentProvider;
 };
 
+type FinancialAllocationInput = {
+  amountCents: number;
+  hardwareDocumentId?: string | null;
+  invoiceId?: string | null;
+  targetTransactionId: string;
+};
+
+type MultiAllocationPaymentInput = BasePostingInput & {
+  allocations: FinancialAllocationInput[];
+  mode: PaymentMode;
+  provider?: PaymentProvider;
+};
+
 export async function postSaleReceivable(
   tx: FinancialTransactionClient,
   input: BasePostingInput,
@@ -85,6 +98,37 @@ export async function postCustomerPayment(
   }
 
   return payment;
+}
+
+export async function postCustomerPaymentWithAllocations(
+  tx: FinancialTransactionClient,
+  input: MultiAllocationPaymentInput,
+) {
+  return postPaymentWithAllocations(tx, {
+    ...input,
+    allocationType: FinancialAllocationType.INVOICE_PAYMENT,
+    documentKind: DocumentSequenceKind.RECEIPT,
+    partyType: FinancialPartyType.CUSTOMER,
+    prefix: "MS/REC",
+    type: FinancialTransactionType.CUSTOMER_PAYMENT,
+  });
+}
+
+export async function postCustomerAdvance(
+  tx: FinancialTransactionClient,
+  input: CustomerPaymentInput,
+) {
+  return postFinancialTransaction(tx, {
+    ...input,
+    creditCents: input.amountCents,
+    debitCents: 0,
+    documentKind: DocumentSequenceKind.RECEIPT,
+    partyType: FinancialPartyType.CUSTOMER,
+    paymentMode: input.mode,
+    prefix: "MS/REC",
+    provider: input.provider ?? PaymentProvider.MANUAL,
+    type: FinancialTransactionType.CUSTOMER_ADVANCE,
+  });
 }
 
 export async function postSaleCancellationFinancials(
@@ -195,6 +239,156 @@ export async function postSupplierPayment(
         tenantId: input.tenantId,
         toTransactionId: input.allocationTargetTransactionId,
         type: FinancialAllocationType.SUPPLIER_BILL_PAYMENT,
+      },
+    });
+  }
+
+  return payment;
+}
+
+export async function postSupplierPaymentWithAllocations(
+  tx: FinancialTransactionClient,
+  input: MultiAllocationPaymentInput,
+) {
+  return postPaymentWithAllocations(tx, {
+    ...input,
+    allocationType: FinancialAllocationType.SUPPLIER_BILL_PAYMENT,
+    documentKind: DocumentSequenceKind.PAYMENT_VOUCHER,
+    partyType: FinancialPartyType.SUPPLIER,
+    prefix: "MS/PV",
+    type: FinancialTransactionType.SUPPLIER_PAYMENT,
+  });
+}
+
+export async function postSupplierAdvance(
+  tx: FinancialTransactionClient,
+  input: CustomerPaymentInput,
+) {
+  return postFinancialTransaction(tx, {
+    ...input,
+    creditCents: input.amountCents,
+    debitCents: 0,
+    documentKind: DocumentSequenceKind.PAYMENT_VOUCHER,
+    partyType: FinancialPartyType.SUPPLIER,
+    paymentMode: input.mode,
+    prefix: "MS/PV",
+    provider: input.provider ?? PaymentProvider.MANUAL,
+    type: FinancialTransactionType.SUPPLIER_ADVANCE,
+  });
+}
+
+export async function postCustomerRefundPaid(
+  tx: FinancialTransactionClient,
+  input: CustomerPaymentInput,
+) {
+  return postFinancialTransaction(tx, {
+    ...input,
+    creditCents: 0,
+    debitCents: input.amountCents,
+    documentKind: DocumentSequenceKind.REFUND,
+    partyType: FinancialPartyType.CUSTOMER,
+    paymentMode: input.mode,
+    prefix: "MS/RFD",
+    provider: input.provider ?? PaymentProvider.MANUAL,
+    type: FinancialTransactionType.CUSTOMER_REFUND_PAID,
+  });
+}
+
+export async function postFinancialReversal(
+  tx: FinancialTransactionClient,
+  input: BasePostingInput & {
+    original: {
+      creditCents: number;
+      debitCents: number;
+      id: string;
+      partyType: FinancialPartyType;
+      transactionNumber: string;
+      type: FinancialTransactionType;
+    };
+    reason: string;
+  },
+) {
+  await tx.financialTransaction.update({
+    data: {
+      reversalReason: input.reason,
+      reversedAt: input.occurredAt ?? new Date(),
+      reversedById: input.createdById,
+      status: "REVERSED",
+    },
+    where: { id: input.original.id },
+  });
+
+  const reversalType =
+    input.original.partyType === FinancialPartyType.SUPPLIER
+      ? FinancialTransactionType.SUPPLIER_PAYMENT_REVERSAL
+      : input.original.type === FinancialTransactionType.CUSTOMER_REFUND_PAID
+        ? FinancialTransactionType.REFUND_REVERSAL
+        : FinancialTransactionType.PAYMENT_REVERSAL;
+
+  return postFinancialTransaction(tx, {
+    ...input,
+    amountCents: input.amountCents,
+    creditCents: input.original.debitCents,
+    debitCents: input.original.creditCents,
+    documentKind: DocumentSequenceKind.ADJUSTMENT,
+    metadata: { originalTransactionNumber: input.original.transactionNumber, reason: input.reason },
+    partyType: input.original.partyType,
+    prefix: "MS/REV",
+    type: reversalType,
+  });
+}
+
+async function postPaymentWithAllocations(
+  tx: FinancialTransactionClient,
+  input: MultiAllocationPaymentInput & {
+    allocationType: FinancialAllocationType;
+    documentKind: DocumentSequenceKind;
+    partyType: FinancialPartyType;
+    prefix: string;
+    type: FinancialTransactionType;
+  },
+) {
+  const allocatedCents = input.allocations.reduce((total, allocation) => total + allocation.amountCents, 0);
+  if (allocatedCents !== input.amountCents) {
+    throw new Error("Payment allocation total must equal payment amount.");
+  }
+
+  const existing = await tx.financialTransaction.findUnique({
+    where: {
+      tenantId_idempotencyKey: {
+        idempotencyKey: input.idempotencyKey,
+        tenantId: input.tenantId,
+      },
+    },
+  });
+  if (existing) return existing;
+
+  const payment = await postFinancialTransaction(tx, {
+    ...input,
+    creditCents: input.amountCents,
+    debitCents: 0,
+    documentKind: input.documentKind,
+    partyType: input.partyType,
+    paymentMode: input.mode,
+    prefix: input.prefix,
+    provider: input.provider ?? PaymentProvider.MANUAL,
+    type: input.type,
+  });
+
+  for (const allocation of input.allocations) {
+    await tx.financialAllocation.create({
+      data: {
+        amount: centsToDecimal(allocation.amountCents),
+        amountCents: allocation.amountCents,
+        fromTransactionId: payment.id,
+        hardwareDocumentId: allocation.hardwareDocumentId ?? null,
+        invoiceId: allocation.invoiceId ?? null,
+        metadata: { idempotencyKey: `${input.idempotencyKey}:allocation:${allocation.targetTransactionId}` },
+        sourceId: input.sourceId,
+        sourceType: input.sourceType,
+        tenantId: input.tenantId,
+        toTransactionId: allocation.targetTransactionId,
+        type: input.allocationType,
       },
     });
   }
