@@ -1,5 +1,6 @@
 import { getPrisma } from "@trustfirst/database";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@trustfirst/ui";
+import { Printer } from "lucide-react";
 import Link from "next/link";
 import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
 import { requireCurrentUser } from "@/server/auth/session";
@@ -26,7 +27,7 @@ export default async function HardwareLedgerPage({ searchParams }: { searchParam
         <Tab href="/admin/hardware/ledger?tab=supplier" active={activeTab === "supplier"}>Supplier Ledger</Tab>
       </div>
       <div className="space-y-5">
-        {ledgers.length ? ledgers.map((ledger) => <LedgerCard key={ledger.partyId} ledger={ledger} />) : (
+        {ledgers.length ? ledgers.map((ledger) => <LedgerCard key={ledger.partyId} ledger={ledger} role={activeTab} />) : (
           <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">No ledger entries are available for this tab.</CardContent></Card>
         )}
       </div>
@@ -38,7 +39,7 @@ function Tab({ active, children, href }: { active: boolean; children: React.Reac
   return <Link className={`rounded-md border px-3 py-2 text-sm font-medium ${active ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-muted"}`} href={href}>{children}</Link>;
 }
 
-function LedgerCard({ ledger }: { ledger: PartyLedger }) {
+function LedgerCard({ ledger, role }: { ledger: PartyLedger; role: "customer" | "supplier" }) {
   return (
     <Card>
       <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -50,6 +51,13 @@ function LedgerCard({ ledger }: { ledger: PartyLedger }) {
           <Badge>Total {money(ledger.totalPayableCents)}</Badge>
           <Badge>Paid {money(ledger.totalPaidCents)}</Badge>
           <Badge>Balance {money(ledger.totalRemainingCents)}</Badge>
+          <Link
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-xs font-medium hover:bg-muted"
+            href={`/admin/hardware/ledger/print/${role}/${ledger.partyId}`}
+            target="_blank"
+          >
+            <Printer className="size-3.5" />Print
+          </Link>
         </div>
       </CardHeader>
       <CardContent>
