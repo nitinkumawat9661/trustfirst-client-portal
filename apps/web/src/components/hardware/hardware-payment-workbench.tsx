@@ -51,9 +51,11 @@ export function HardwarePaymentWorkbench({
   const [position, setPosition] = useState<PartyFinancialPosition | null>(null);
   const [allocations, setAllocations] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<{ kind: "error" | "success"; message: string } | null>(null);
+  const [lastPrintTransactionId, setLastPrintTransactionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function loadPosition(nextPartyId: string) {
+    setLastPrintTransactionId(null);
     if (!nextPartyId) {
       setPosition(null);
       setAllocations({});
@@ -82,10 +84,11 @@ export function HardwarePaymentWorkbench({
 
   async function onSubmit(values: PaymentValues) {
     setStatus(null);
+    setLastPrintTransactionId(null);
     const selectedAllocations = Object.entries(allocations)
       .map(([targetTransactionId, value]) => ({ amountCents: rupeesToCents(value), targetTransactionId }))
       .filter((allocation) => allocation.amountCents > 0);
-    const result = await postHardwareJson<{ receiptNumber: string | null }>(
+    const result = await postHardwareJson<{ printTransactionId: string | null; receiptNumber: string | null }>(
       role === "supplier" ? "/api/hardware/financial/supplier-payments" : "/api/hardware/financial/customer-payments",
       {
         allocations: selectedAllocations,
@@ -102,6 +105,7 @@ export function HardwarePaymentWorkbench({
       setStatus({ kind: "error", message: result.message });
       return;
     }
+    setLastPrintTransactionId(result.data.printTransactionId);
     setStatus({ kind: "success", message: `${role === "supplier" ? "Payment voucher" : "Receipt"} ${result.data.receiptNumber ?? ""} posted.`.trim() });
     resetField("amount");
     resetField("excessAsAdvance");
@@ -201,7 +205,16 @@ export function HardwarePaymentWorkbench({
       ) : null}
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
         <Button disabled={!position || isSubmitting} type="submit"><ReceiptText className="size-4" />{isSubmitting ? "Posting..." : "Post"}</Button>
-        <Button disabled type="button" variant="outline"><Printer className="size-4" />Print after post</Button>
+        <Button
+          disabled={!lastPrintTransactionId}
+          onClick={() => {
+            if (lastPrintTransactionId) window.open(`/admin/hardware/payments/print/${lastPrintTransactionId}?format=80mm`, "_blank", "noopener,noreferrer");
+          }}
+          type="button"
+          variant="outline"
+        >
+          <Printer className="size-4" />Print / reprint
+        </Button>
         <Button onClick={() => partyId && void loadPosition(partyId)} type="button" variant="ghost"><RefreshCcw className="size-4" />Refresh</Button>
       </div>
     </form>

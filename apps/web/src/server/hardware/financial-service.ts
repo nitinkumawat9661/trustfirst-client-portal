@@ -19,9 +19,11 @@ import {
 } from "../financial/financial-service";
 import { PermissionResolverService } from "../permissions";
 import type { HardwareCustomerRefundInput, HardwarePartyPaymentInput, HardwarePaymentReversalInput } from "./financial-schemas";
+import type { HardwarePrintProjection } from "./trade-types";
 
 type ActorContext = { tenantId: string; userId: string };
 type PartyRole = "customer" | "supplier";
+type FirmPrintDetails = HardwarePrintProjection["firm"];
 
 export type FinancialOpenItem = {
   documentNumber: string;
@@ -43,6 +45,36 @@ export type PartyFinancialPosition = {
   partyName: string;
   refundableBalanceCents: number;
   totalOutstandingCents: number;
+};
+
+export type HardwareFinancialPrintProjection = {
+  allocations: Array<{
+    amountCents: number;
+    documentNumber: string;
+    invoiceNumber: string | null;
+    targetNumber: string | null;
+  }>;
+  amountInWords: string;
+  firm: FirmPrintDetails;
+  party: {
+    address: string | null;
+    gstin: string | null;
+    name: string;
+    phone: string | null;
+  } | null;
+  signatureLabel: string;
+  transaction: {
+    amountCents: number;
+    externalReference: string | null;
+    id: string;
+    notes: string | null;
+    occurredAt: Date;
+    paymentMode: string | null;
+    sourceNumber: string | null;
+    status: string;
+    transactionNumber: string;
+    type: string;
+  };
 };
 
 export class HardwareFinancialService {
@@ -338,9 +370,110 @@ export class HardwareFinancialService {
         advance,
         allocatedCents: allocationTotal,
         payment,
+        printTransactionId: payment?.id ?? advance?.id ?? null,
         receiptNumber: payment?.transactionNumber ?? advance?.transactionNumber ?? null,
       };
     });
+  }
+
+  async transactionPrintProjection(context: ActorContext, transactionId: string): Promise<HardwareFinancialPrintProjection> {
+    const transaction = await this.prisma.financialTransaction.findFirst({
+      include: {
+        allocationsFrom: {
+          include: {
+            hardwareDocument: { select: { documentNumber: true } },
+            invoice: { select: { invoiceNumber: true } },
+            toTransaction: { select: { sourceNumber: true, transactionNumber: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+        party: {
+          include: {
+            contacts: {
+              orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+              select: { phone: true },
+              take: 1,
+            },
+          },
+        },
+      },
+      where: {
+        id: transactionId,
+        tenantId: context.tenantId,
+        type: {
+          in: [
+            FinancialTransactionType.CUSTOMER_PAYMENT,
+            FinancialTransactionType.CUSTOMER_ADVANCE,
+            FinancialTransactionType.CUSTOMER_REFUND_PAID,
+            FinancialTransactionType.SUPPLIER_PAYMENT,
+            FinancialTransactionType.SUPPLIER_ADVANCE,
+            FinancialTransactionType.SUPPLIER_PAYMENT_REVERSAL,
+            FinancialTransactionType.PAYMENT_REVERSAL,
+            FinancialTransactionType.REFUND_REVERSAL,
+          ],
+        },
+      },
+    });
+    if (!transaction) throw validation("Printable financial transaction was not found.");
+    await this.enforce(
+      context,
+      transaction.partyType === FinancialPartyType.SUPPLIER ? "hardware.purchase.read" : "hardware.sales.read",
+    );
+    const [settings, tenant] = await Promise.all([
+      this.prisma.hardwareBusinessSettings.findUnique({ where: { tenantId: context.tenantId } }),
+      this.prisma.tenant.findUnique({
+        select: { branding: true },
+        where: { id: context.tenantId },
+      }),
+    ]);
+    const branding = asRecord(tenant?.branding);
+    const officialIdentity = asRecord(branding.officialIdentity);
+    const logo = asRecord(branding.logo);
+    const identityLocked = officialIdentity.status === "LOCKED";
+    return {
+      allocations: transaction.allocationsFrom.map((allocation) => ({
+        amountCents: allocation.amountCents,
+        documentNumber: allocation.hardwareDocument?.documentNumber ?? allocation.toTransaction?.sourceNumber ?? "-",
+        invoiceNumber: allocation.invoice?.invoiceNumber ?? null,
+        targetNumber: allocation.toTransaction?.transactionNumber ?? null,
+      })),
+      amountInWords: amountInWords(transaction.amountCents),
+      firm: {
+        address: (settings?.address ?? {}) as Record<string, unknown>,
+        email: settings?.email ?? null,
+        firmName: settings?.firmName ?? "Configured Firm",
+        gstin: settings?.gstin ?? null,
+        legalName: identityLocked && typeof officialIdentity.legalName === "string" ? officialIdentity.legalName : null,
+        logoUrl: identityLocked && typeof logo.assetKey === "string" ? "/api/tenants/branding/logo" : null,
+        logoPlaceholder: settings?.logoPlaceholder ?? null,
+        phone: settings?.phone ?? null,
+        proprietorName:
+          identityLocked && typeof officialIdentity.proprietorName === "string"
+            ? officialIdentity.proprietorName
+            : null,
+        tagline: identityLocked && typeof branding.tagline === "string" ? branding.tagline : null,
+        termsFooter: settings?.termsFooter ?? null,
+      },
+      party: transaction.party ? {
+        address: readString(asRecord(transaction.party.customFields).address),
+        gstin: readString(asRecord(transaction.party.customFields).gstin),
+        name: transaction.party.name,
+        phone: transaction.party.contacts?.[0]?.phone ?? readString(asRecord(transaction.party.customFields).phone),
+      } : null,
+      signatureLabel: transaction.partyType === FinancialPartyType.SUPPLIER ? "Paid by" : "Received by",
+      transaction: {
+        amountCents: transaction.amountCents,
+        externalReference: transaction.externalReference,
+        id: transaction.id,
+        notes: transaction.notes,
+        occurredAt: transaction.occurredAt,
+        paymentMode: transaction.paymentMode,
+        sourceNumber: transaction.sourceNumber,
+        status: transaction.status,
+        transactionNumber: transaction.transactionNumber,
+        type: transaction.type,
+      },
+    };
   }
 
   private async adjustInvoicePaidAmount(
@@ -395,6 +528,39 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function amountInWords(amountCents: number) {
+  const rupees = Math.floor(amountCents / 100);
+  const paise = Math.abs(amountCents % 100);
+  const words = rupees === 0 ? "Zero" : integerToIndianWords(rupees);
+  return paise > 0 ? `${words} rupees and ${integerToIndianWords(paise)} paise only` : `${words} rupees only`;
+}
+
+function integerToIndianWords(value: number): string {
+  if (value === 0) return "Zero";
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const underHundred = (num: number) => num < 20 ? ones[num] : `${tens[Math.floor(num / 10)]}${num % 10 ? ` ${ones[num % 10]}` : ""}`;
+  const underThousand = (num: number) => {
+    const hundred = Math.floor(num / 100);
+    const rest = num % 100;
+    return `${hundred ? `${ones[hundred]} Hundred` : ""}${hundred && rest ? " " : ""}${rest ? underHundred(rest) : ""}`.trim();
+  };
+  const parts: string[] = [];
+  const crore = Math.floor(value / 10_000_000);
+  const lakh = Math.floor((value % 10_000_000) / 100_000);
+  const thousand = Math.floor((value % 100_000) / 1000);
+  const rest = value % 1000;
+  if (crore) parts.push(`${underThousand(crore)} Crore`);
+  if (lakh) parts.push(`${underThousand(lakh)} Lakh`);
+  if (thousand) parts.push(`${underThousand(thousand)} Thousand`);
+  if (rest) parts.push(underThousand(rest));
+  return parts.join(" ");
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function validation(message: string) {
