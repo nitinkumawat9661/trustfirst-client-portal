@@ -5,6 +5,12 @@ import { Printer } from "lucide-react";
 import { useRef, useState } from "react";
 
 type PrintFormat = "58mm" | "80mm" | "a4";
+type PrintMessage = {
+  message?: string;
+  requestId: string;
+  source: "trustfirst-print";
+  status: "ready" | "opened" | "closed" | "error";
+};
 
 export function DirectPrintButton({
   className,
@@ -24,12 +30,21 @@ export function DirectPrintButton({
   const [status, setStatus] = useState<string | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
 
-  async function printViaIframe() {
+  function printViaIframe() {
     cleanupRef.current?.();
     setStatus("Preparing print...");
+
+    const requestId = crypto.randomUUID();
     const iframe = document.createElement("iframe");
+    let timeoutId: number | null = null;
+
     iframe.setAttribute("aria-hidden", "true");
-    iframe.src = withFormat(url, format);
+    iframe.src = withPrintOptions(url, {
+      documentTitle,
+      format,
+      invoiceOnly,
+      requestId,
+    });
     iframe.style.position = "fixed";
     iframe.style.right = "0";
     iframe.style.bottom = "0";
@@ -40,42 +55,41 @@ export function DirectPrintButton({
     iframe.style.pointerEvents = "none";
 
     const cleanup = () => {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      window.removeEventListener("message", handleMessage);
       iframe.remove();
       cleanupRef.current = null;
     };
-    cleanupRef.current = cleanup;
 
-    iframe.addEventListener("load", () => {
-      void printLoadedFrame(iframe, cleanup);
-    }, { once: true });
-    document.body.appendChild(iframe);
-  }
+    const handleMessage = (event: MessageEvent<unknown>) => {
+      if (!isPrintMessage(event.data) || event.data.requestId !== requestId) return;
 
-  async function printLoadedFrame(iframe: HTMLIFrameElement, cleanup: () => void) {
-    const printWindow = iframe.contentWindow;
-    const printDocument = iframe.contentDocument;
-    if (!printWindow || !printDocument) {
-      setStatus("Print could not start. Use retry after the printable document opens.");
-      cleanup();
-      return;
-    }
-    try {
-      await waitForPrintableDocument(printDocument);
-      preparePrintableDocument(printDocument, { documentTitle, invoiceOnly });
-      printWindow.onafterprint = () => {
+      if (event.data.status === "ready") {
+        setStatus("Printable invoice ready. Opening system print dialog...");
+        return;
+      }
+      if (event.data.status === "opened") {
+        setStatus("System print dialog opened. Reprint creates no new transaction.");
+        return;
+      }
+      if (event.data.status === "closed") {
         setStatus("Print dialog closed.");
         window.setTimeout(cleanup, 250);
-      };
-      printWindow.focus();
-      printWindow.print();
-      window.setTimeout(() => {
-        if (cleanupRef.current) cleanupRef.current();
-      }, 120_000);
-      setStatus("System print dialog opened. Reprint creates no new transaction.");
-    } catch {
+        return;
+      }
+
+      setStatus(event.data.message ?? "Print could not start. Please retry.");
       cleanup();
-      setStatus("Print could not start. Open the printable page and use Print again.");
-    }
+    };
+
+    cleanupRef.current = cleanup;
+    window.addEventListener("message", handleMessage);
+    document.body.appendChild(iframe);
+
+    timeoutId = window.setTimeout(() => {
+      setStatus("Printable invoice did not respond. Please retry after refreshing the page.");
+      cleanup();
+    }, 120_000);
   }
 
   return (
@@ -88,107 +102,31 @@ export function DirectPrintButton({
   );
 }
 
-async function waitForPrintableDocument(document: Document) {
-  const fonts = "fonts" in document ? (document as Document & { fonts: FontFaceSet }).fonts.ready : Promise.resolve();
-  const images = Array.from(document.images).map((image) => image.complete ? Promise.resolve() : new Promise<void>((resolve) => {
-    image.onload = () => resolve();
-    image.onerror = () => resolve();
-  }));
-  await Promise.all([fonts, ...images]);
+function isPrintMessage(value: unknown): value is PrintMessage {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<PrintMessage>;
+  return candidate.source === "trustfirst-print"
+    && typeof candidate.requestId === "string"
+    && (candidate.status === "ready"
+      || candidate.status === "opened"
+      || candidate.status === "closed"
+      || candidate.status === "error");
 }
 
-function preparePrintableDocument(
-  document: Document,
-  options: { documentTitle: string | undefined; invoiceOnly: boolean },
+function withPrintOptions(
+  url: string,
+  options: {
+    documentTitle: string | undefined;
+    format: PrintFormat;
+    invoiceOnly: boolean;
+    requestId: string;
+  },
 ) {
-  if (options.documentTitle) {
-    document.title = sanitizeDocumentTitle(options.documentTitle);
-  }
-
-  if (!options.invoiceOnly) return;
-
-  const style = document.createElement("style");
-  style.dataset.invoicePrintIsolation = "true";
-  style.textContent = `
-    @media print {
-      @page { size: A4 portrait; margin: 8mm; }
-      html, body {
-        width: auto !important;
-        height: auto !important;
-        min-height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: visible !important;
-        background: #fff !important;
-      }
-      body { display: block !important; }
-      main {
-        width: auto !important;
-        height: auto !important;
-        min-height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: visible !important;
-        background: #fff !important;
-      }
-      .print-sheet {
-        width: 100% !important;
-        max-width: none !important;
-        height: auto !important;
-        min-height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: visible !important;
-        box-shadow: none !important;
-      }
-      .no-print,
-      [data-app-shell],
-      [data-sync-widget],
-      [data-floating-ui],
-      [role="dialog"] {
-        display: none !important;
-      }
-      footer {
-        break-inside: avoid !important;
-        page-break-inside: avoid !important;
-      }
-    }
-  `;
-  document.head.appendChild(style);
-
-  const footer = document.querySelector("footer");
-  if (!footer) return;
-
-  footer.className = "print-break-avoid";
-  footer.setAttribute(
-    "style",
-    "margin-top:12px;border-top:1px solid #a1a1aa;padding-top:8px;font-size:10px;line-height:1.45;color:#000;",
-  );
-  footer.innerHTML = `
-    <div style="font-weight:600;margin-bottom:3px;">Terms</div>
-    <ol style="margin:0;padding-left:16px;">
-      <li>This is a computer-generated invoice and does not require a signature.</li>
-      <li>Goods once sold will be returned or exchanged only as per store policy.</li>
-      <li>Please verify the goods and quantities at the time of delivery.</li>
-      <li>All disputes are subject to Sikar jurisdiction only.</li>
-      <li>E. &amp; O.E.</li>
-    </ol>
-    <div style="margin-top:5px;">Legal proprietor: KRISHAN KUMAR</div>
-  `;
-}
-
-function sanitizeDocumentTitle(value: string) {
-  return value
-    .trim()
-    .replace(/[\\/:*?"<>|]+/g, "-")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 180) || "MANGALAM-SANITARY-INVOICE";
-}
-
-function withFormat(url: string, format: PrintFormat) {
   const parsed = new URL(url, window.location.origin);
-  parsed.searchParams.set("format", format);
+  parsed.searchParams.set("format", options.format);
+  parsed.searchParams.set("autoprint", "1");
+  parsed.searchParams.set("requestId", options.requestId);
+  if (options.documentTitle) parsed.searchParams.set("title", options.documentTitle);
+  if (options.invoiceOnly) parsed.searchParams.set("invoiceOnly", "1");
   return parsed.toString();
 }
