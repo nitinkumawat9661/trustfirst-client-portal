@@ -13,6 +13,12 @@ import {
 } from "@trustfirst/database";
 import { allocateDocumentNumber } from "../billing/document-sequence";
 import { AppError } from "../domain/errors";
+import {
+  postCustomerPayment,
+  postSaleCancellationFinancials,
+  postSaleReceivable,
+  postSaleReturnCredit,
+} from "../financial/financial-service";
 import { MANGALAM_TENANT_SLUG } from "../domain/host-routing";
 import { PermissionResolverService } from "../permissions";
 import { currentIndiaBusinessDay } from "./business-time";
@@ -332,6 +338,20 @@ export class HardwareTradeService {
           type: HardwareTradeDocumentType.SALES_ORDER,
         }) as Prisma.HardwareTradeDocumentUncheckedCreateInput,
       });
+      const saleReceivable = await postSaleReceivable(tx, {
+        amountCents: totalCents,
+        createdById: context.userId,
+        hardwareDocumentId: document.id,
+        idempotencyKey: `${input.idempotencyKey}:sale-receivable`,
+        invoiceId: invoice.id,
+        notes: input.notes ?? null,
+        occurredAt: now,
+        partyId: input.customerId ?? null,
+        sourceId: document.id,
+        sourceNumber: document.documentNumber,
+        sourceType: "HardwareTradeDocument",
+        tenantId: context.tenantId,
+      });
       for (const item of trackedItems) {
         await tx.hardwareInventoryMovement.create({
           data: stripUndefined({
@@ -361,6 +381,22 @@ export class HardwareTradeService {
             recordedById: context.userId,
             tenantId: context.tenantId,
           },
+        });
+        await postCustomerPayment(tx, {
+          allocationTargetTransactionId: saleReceivable.id,
+          amountCents: input.paidAmountCents,
+          createdById: context.userId,
+          hardwareDocumentId: document.id,
+          idempotencyKey: `${input.idempotencyKey}:customer-payment`,
+          invoiceId: invoice.id,
+          mode: input.paymentMode ?? "CASH",
+          notes: input.notes ?? null,
+          occurredAt: now,
+          partyId: input.customerId ?? null,
+          sourceId: payment.id,
+          sourceNumber: invoice.invoiceNumber,
+          sourceType: "PaymentRecord",
+          tenantId: context.tenantId,
         });
       }
       await tx.hardwareTradeTimelineEvent.create({
@@ -544,6 +580,23 @@ export class HardwareTradeService {
             where: { id: payment.id },
           });
         }
+        await postSaleCancellationFinancials(tx, {
+          amountCents: document.billingInvoice.totalAmountCents,
+          createdById: context.userId,
+          hardwareDocumentId: document.id,
+          idempotencyKey: `${input.idempotencyKey}:sale-cancellation`,
+          invoiceId: document.billingInvoiceId,
+          notes: input.reason,
+          occurredAt: now,
+          paidAmountCents: document.billingInvoice.paidAmountCents,
+          partyId: document.customerId,
+          reason: input.reason,
+          sourceId: document.id,
+          sourceNumber: document.documentNumber,
+          sourceType: "HardwareTradeDocument",
+          tenantId: context.tenantId,
+          totalAmountCents: document.billingInvoice.totalAmountCents,
+        });
       }
       await tx.hardwareTradeTimelineEvent.create({
         data: {
@@ -688,6 +741,21 @@ export class HardwareTradeService {
           totalCents: totals.totalCents,
           type: HardwareTradeDocumentType.SALE_RETURN,
         } as Prisma.HardwareTradeDocumentUncheckedCreateInput,
+      });
+      await postSaleReturnCredit(tx, {
+        amountCents: totals.totalCents,
+        createdById: context.userId,
+        hardwareDocumentId: returnDocument.id,
+        idempotencyKey: `${input.idempotencyKey}:sale-return-credit`,
+        invoiceId: document.billingInvoiceId,
+        notes: input.reason,
+        occurredAt: now,
+        partyId: document.customerId,
+        refundType: input.refundType,
+        sourceId: returnDocument.id,
+        sourceNumber: returnDocument.documentNumber,
+        sourceType: "HardwareTradeDocument",
+        tenantId: context.tenantId,
       });
       for (const item of returnItems.filter((candidate) => !isStockSetupPending(originalItems.get(readString(asRecord(candidate.metadata).originalItemId) ?? "")?.product?.metadata))) {
         await tx.hardwareInventoryMovement.create({

@@ -1,5 +1,7 @@
 import {
   ClientLifecycleStage,
+  FinancialPartyType,
+  FinancialTransactionStatus,
   HardwareInventoryMovementType,
   HardwareTradeDocumentStatus,
   HardwareTradeDocumentType,
@@ -534,7 +536,15 @@ export class HardwareService {
   async ledger(context: ActorContext, role: HardwarePartyRole, partyId?: string): Promise<PartyLedger[]> {
     await this.enforce(context, role === "supplier" ? "hardware.purchase.read" : "hardware.sales.read");
     const parties = (await this.listParties(context, role)).filter((party) => !partyId || party.id === partyId);
-    const [invoices, saleReturns, supplierBills, payments] = await Promise.all([
+    const [financialTransactions, invoices, saleReturns, supplierBills, payments] = await Promise.all([
+      this.prisma.financialTransaction.findMany({
+        orderBy: { occurredAt: "asc" },
+        where: {
+          partyType: role === "supplier" ? FinancialPartyType.SUPPLIER : FinancialPartyType.CUSTOMER,
+          status: FinancialTransactionStatus.POSTED,
+          tenantId: context.tenantId,
+        },
+      }),
       this.prisma.invoice.findMany({
         orderBy: { createdAt: "asc" },
         where: {
@@ -578,6 +588,22 @@ export class HardwareService {
         description: "Opening balance",
         reference: "OPENING",
       }];
+      const durableEntries = financialTransactions.filter((transaction) => transaction.partyId === party.id);
+      if (durableEntries.length > 0) {
+        for (const transaction of durableEntries) {
+          balance += transaction.debitCents - transaction.creditCents;
+          entries.push({
+            amountCents: transaction.amountCents,
+            balanceCents: balance,
+            creditCents: transaction.creditCents,
+            date: transaction.occurredAt,
+            debitCents: transaction.debitCents,
+            description: humanize(transaction.type),
+            reference: transaction.sourceNumber ?? transaction.transactionNumber,
+          });
+        }
+        return buildPartyLedger(party, entries);
+      }
       if (role === "customer") {
         for (const invoice of invoices.filter((invoice) => invoice.clientId === party.id)) {
           balance += invoice.totalAmountCents;
@@ -631,21 +657,7 @@ export class HardwareService {
           });
         }
       }
-      entries.sort((a, b) => a.date.getTime() - b.date.getTime() || a.reference.localeCompare(b.reference));
-      let running = 0;
-      const runningEntries = entries.map((entry) => {
-        running += entry.debitCents - entry.creditCents;
-        return { ...entry, balanceCents: running };
-      });
-      return {
-        entries: runningEntries,
-        openingBalanceCents: party.openingBalanceCents,
-        partyId: party.id,
-        partyName: party.name,
-        totalPaidCents: runningEntries.reduce((total, entry) => total + entry.creditCents, 0),
-        totalPayableCents: runningEntries.reduce((total, entry) => total + entry.debitCents, 0),
-        totalRemainingCents: runningEntries.at(-1)?.balanceCents ?? 0,
-      };
+      return buildPartyLedger(party, entries);
     });
   }
 
@@ -1157,8 +1169,34 @@ export function stockForProduct(movements: Array<{ quantity: number; type: Hardw
   }, 0);
 }
 
+function buildPartyLedger(
+  party: HardwarePartySummary,
+  entries: PartyLedger["entries"],
+): PartyLedger {
+  entries.sort((a, b) => a.date.getTime() - b.date.getTime() || a.reference.localeCompare(b.reference));
+  let running = 0;
+  const runningEntries = entries.map((entry) => {
+    running += entry.debitCents - entry.creditCents;
+    return { ...entry, balanceCents: running };
+  });
+
+  return {
+    entries: runningEntries,
+    openingBalanceCents: party.openingBalanceCents,
+    partyId: party.id,
+    partyName: party.name,
+    totalPaidCents: runningEntries.reduce((total, entry) => total + entry.creditCents, 0),
+    totalPayableCents: runningEntries.reduce((total, entry) => total + entry.debitCents, 0),
+    totalRemainingCents: runningEntries.at(-1)?.balanceCents ?? 0,
+  };
+}
+
 function slugify(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+}
+
+function humanize(value: string) {
+  return value.toLowerCase().replaceAll("_", " ").replace(/\b\w/gu, (letter) => letter.toUpperCase());
 }
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {

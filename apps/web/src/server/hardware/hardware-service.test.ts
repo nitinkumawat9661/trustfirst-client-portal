@@ -416,6 +416,7 @@ describe("HardwareService", () => {
             { contacts: [], customFields: { hardwarePartyRole: "supplier", openingBalanceCents: 2000 }, id: "sup_1", invoices: [], name: "Supplier", supplierHardwareDocuments: [] },
           ],
         },
+        financialTransaction: { findMany: async () => [] },
         hardwareTradeDocument: {
           findMany: async (input?: { where?: { type?: HardwareTradeDocumentType } }) =>
             input?.where?.type === HardwareTradeDocumentType.SUPPLIER_BILL
@@ -446,6 +447,7 @@ describe("HardwareService", () => {
             { contacts: [], customFields: { hardwarePartyRole: "customer", openingBalanceCents: 0 }, id: "cust_1", invoices: [], name: "Customer", supplierHardwareDocuments: [] },
           ],
         },
+        financialTransaction: { findMany: async () => [] },
         hardwareTradeDocument: {
           findMany: async (input?: { where?: { type?: HardwareTradeDocumentType } }) =>
             input?.where?.type === HardwareTradeDocumentType.SALE_RETURN

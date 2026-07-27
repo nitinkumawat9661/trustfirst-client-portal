@@ -215,7 +215,10 @@ enum CommercialDocumentTimelineVerb {
 
 enum DocumentSequenceKind {
   INVOICE
+  PAYMENT_VOUCHER
   RECEIPT
+  REFUND
+  ADJUSTMENT
 }
 enum InvoiceStatus {
   DRAFT
@@ -242,6 +245,47 @@ enum PaymentProvider {
   PHONEPE
   UPI_QR
   MANUAL
+}
+
+enum FinancialPartyType {
+  CUSTOMER
+  SUPPLIER
+  TENANT
+}
+
+enum FinancialTransactionType {
+  SALE_RECEIVABLE
+  SALE_CANCELLATION_REVERSAL
+  SALE_RETURN_CREDIT
+  CUSTOMER_PAYMENT
+  CUSTOMER_ADVANCE
+  ADVANCE_ALLOCATION
+  CUSTOMER_REFUND_PENDING
+  CUSTOMER_REFUND_PAID
+  PAYMENT_REVERSAL
+  REFUND_REVERSAL
+  MANUAL_DEBIT_ADJUSTMENT
+  MANUAL_CREDIT_ADJUSTMENT
+  PURCHASE_PAYABLE
+  PURCHASE_RETURN_CREDIT
+  SUPPLIER_PAYMENT
+  SUPPLIER_ADVANCE
+  SUPPLIER_REFUND_RECEIVED
+  SUPPLIER_PAYMENT_REVERSAL
+}
+
+enum FinancialTransactionStatus {
+  POSTED
+  REVERSED
+}
+
+enum FinancialAllocationType {
+  INVOICE_PAYMENT
+  ADVANCE_TO_INVOICE
+  REFUND_SETTLEMENT
+  PAYMENT_REVERSAL
+  SUPPLIER_BILL_PAYMENT
+  SUPPLIER_ADVANCE_TO_BILL
 }
 
 enum BillingTimelineVerb {
@@ -337,6 +381,8 @@ model User {
   rejectedCommercialDocuments CommercialDocument[] @relation("CommercialDocumentRejector")
   ownedInvoices     Invoice[]             @relation("InvoiceOwner")
   invoicePayments   PaymentRecord[]       @relation("PaymentRecorder")
+  financialTransactionsCreated FinancialTransaction[] @relation("FinancialTransactionCreatedBy")
+  financialTransactionsReversed FinancialTransaction[] @relation("FinancialTransactionReversedBy")
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
@@ -426,6 +472,8 @@ model Tenant {
   payments        PaymentRecord[]
   documentSequences DocumentSequence[]
   billingTimelineEvents BillingTimelineEvent[]
+  financialTransactions FinancialTransaction[]
+  financialAllocations FinancialAllocation[]
   hardwareCategories HardwareProductCategory[]
   hardwareBrands HardwareBrand[]
   hardwareUnits HardwareUnit[]
@@ -660,6 +708,7 @@ model ClientOrganization {
   commercialDocuments CommercialDocument[]
   billingProfiles BillingProfile[]
   invoices        Invoice[]
+  financialTransactions FinancialTransaction[]
   suppliedHardwareMovements HardwareInventoryMovement[] @relation("HardwareMovementSupplier")
   customerHardwareMovements HardwareInventoryMovement[] @relation("HardwareMovementCustomer")
   supplierHardwareDocuments HardwareTradeDocument[] @relation("HardwareTradeSupplier")
@@ -1267,6 +1316,8 @@ model Invoice {
   commercialDocument   CommercialDocument? @relation(fields: [commercialDocumentId], references: [id], onDelete: SetNull)
   owner                User?               @relation("InvoiceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   payments             PaymentRecord[]
+  financialTransactions FinancialTransaction[]
+  financialAllocations FinancialAllocation[]
   timeline             BillingTimelineEvent[]
   comments             InvoiceComment[]
   attachments          InvoiceAttachment[]
@@ -1305,6 +1356,85 @@ model PaymentRecord {
   @@index([tenantId, provider])
   @@index([tenantId, mode])
   @@index([receiptDocumentId])
+}
+
+model FinancialTransaction {
+  id                   String                     @id @default(cuid())
+  tenantId             String
+  transactionNumber    String
+  idempotencyKey       String
+  type                 FinancialTransactionType
+  status               FinancialTransactionStatus @default(POSTED)
+  partyType            FinancialPartyType
+  partyId              String?
+  amount               Decimal                    @db.Decimal(18, 2)
+  amountCents          Int
+  debitCents           Int                        @default(0)
+  creditCents          Int                        @default(0)
+  paymentMode          PaymentMode?
+  externalReference    String?
+  sourceType           String?
+  sourceId             String?
+  sourceNumber         String?
+  invoiceId            String?
+  hardwareDocumentId   String?
+  reversalOfId         String?
+  reversedAt           DateTime?
+  reversedById         String?
+  reversalReason       String?                    @db.Text
+  createdById          String?
+  occurredAt           DateTime                   @default(now())
+  notes                String?                    @db.Text
+  metadata             Json                       @default("{}")
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  tenant               Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  party                ClientOrganization?        @relation(fields: [partyId], references: [id], onDelete: SetNull)
+  invoice              Invoice?                   @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  hardwareDocument     HardwareTradeDocument?     @relation(fields: [hardwareDocumentId], references: [id], onDelete: SetNull)
+  reversalOf           FinancialTransaction?      @relation("FinancialTransactionReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversalTransactions FinancialTransaction[]     @relation("FinancialTransactionReversal")
+  createdBy            User?                      @relation("FinancialTransactionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  reversedBy           User?                      @relation("FinancialTransactionReversedBy", fields: [reversedById], references: [id], onDelete: SetNull)
+  allocationsFrom      FinancialAllocation[]      @relation("FinancialAllocationFrom")
+  allocationsTo        FinancialAllocation[]      @relation("FinancialAllocationTo")
+
+  @@unique([tenantId, transactionNumber])
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, partyType, partyId, occurredAt])
+  @@index([tenantId, type, status, occurredAt])
+  @@index([tenantId, sourceType, sourceId])
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, hardwareDocumentId])
+  @@index([tenantId, reversalOfId])
+}
+
+model FinancialAllocation {
+  id                 String                  @id @default(cuid())
+  tenantId           String
+  fromTransactionId  String
+  toTransactionId    String?
+  invoiceId          String?
+  hardwareDocumentId String?
+  type               FinancialAllocationType
+  amount             Decimal                 @db.Decimal(18, 2)
+  amountCents        Int
+  sourceType         String?
+  sourceId           String?
+  notes              String?                 @db.Text
+  metadata           Json                    @default("{}")
+  createdAt          DateTime                @default(now())
+  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fromTransaction    FinancialTransaction    @relation("FinancialAllocationFrom", fields: [fromTransactionId], references: [id], onDelete: Restrict)
+  toTransaction      FinancialTransaction?   @relation("FinancialAllocationTo", fields: [toTransactionId], references: [id], onDelete: Restrict)
+  invoice            Invoice?                @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  hardwareDocument   HardwareTradeDocument?  @relation(fields: [hardwareDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, fromTransactionId])
+  @@index([tenantId, toTransactionId])
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, hardwareDocumentId])
+  @@index([tenantId, sourceType, sourceId])
 }
 
 model BillingTimelineEvent {
@@ -1559,6 +1689,8 @@ model HardwareTradeDocument {
   billingInvoice   Invoice?                     @relation(fields: [billingInvoiceId], references: [id], onDelete: SetNull)
   items            HardwareTradeDocumentItem[]
   timeline         HardwareTradeTimelineEvent[]
+  financialTransactions FinancialTransaction[]
+  financialAllocations FinancialAllocation[]
 
   @@unique([tenantId, documentNumber])
   @@index([tenantId, type, status])

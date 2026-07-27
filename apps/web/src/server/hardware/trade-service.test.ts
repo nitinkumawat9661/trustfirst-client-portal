@@ -375,6 +375,15 @@ describe("HardwareTradeService", () => {
             auditEvent: { createMany: async () => created.push("audit") },
             billingTimelineEvent: { createMany: async () => created.push("billingTimeline") },
             documentSequence: { upsert: async () => ({ lastValue: 1 }) },
+            financialAllocation: { create: async () => created.push("financialAllocation") },
+            financialTransaction: {
+              create: async () => {
+                const id = `fin_${created.filter((entry) => entry === "financialTransaction").length + 1}`;
+                created.push("financialTransaction");
+                return { id };
+              },
+              findUnique: async () => null,
+            },
             hardwareInventoryMovement: { create: async () => created.push("movement") },
             hardwareTradeDocument: {
               create: async ({ data }: { data: { documentNumber: string; paymentStatus: string; totalCents: number } }) => {
@@ -420,7 +429,7 @@ describe("HardwareTradeService", () => {
     );
 
     expect(result).toMatchObject({ invoiceNumber: "MS/INV/2026-27/00001", paymentStatus: "paid" });
-    expect(created).toEqual(expect.arrayContaining(["invoice", "document", "movement", "payment"]));
+    expect(created).toEqual(expect.arrayContaining(["invoice", "document", "movement", "payment", "financialTransaction", "financialAllocation"]));
   });
 
   it("cancels a confirmed sale by reversing stock and voiding the linked invoice", async () => {
