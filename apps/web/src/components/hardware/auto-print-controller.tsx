@@ -22,6 +22,7 @@ export function AutoPrintController({
     startedRef.current = true;
 
     let finished = false;
+    const targetWindow = window.opener ?? (window.parent !== window ? window.parent : null);
     const postStatus = (status: PrintStatus, message?: string) => {
       const payload = {
         source: "trustfirst-print",
@@ -29,13 +30,14 @@ export function AutoPrintController({
         status,
         ...(message ? { message } : {}),
       };
-      window.parent.postMessage(payload, "*");
+      targetWindow?.postMessage(payload, "*");
     };
 
     const finish = () => {
       if (finished) return;
       finished = true;
       postStatus("closed");
+      if (window.opener) window.setTimeout(() => window.close(), 300);
     };
 
     async function startPrint() {
@@ -44,17 +46,19 @@ export function AutoPrintController({
         await waitForPrintableDocument(document);
         preparePrintableDocument(document, { documentTitle, invoiceOnly });
         window.addEventListener("afterprint", finish, { once: true });
-        postStatus("opened");
         window.setTimeout(() => {
           try {
             window.focus();
+            postStatus("opened");
             window.print();
           } catch {
             postStatus("error", "The browser blocked the system print dialog.");
+            if (window.opener) window.setTimeout(() => window.close(), 300);
           }
-        }, 50);
+        }, 100);
       } catch {
         postStatus("error", "The printable document could not be prepared.");
+        if (window.opener) window.setTimeout(() => window.close(), 300);
       }
     }
 
