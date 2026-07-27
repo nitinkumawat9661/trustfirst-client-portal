@@ -148,6 +148,60 @@ export async function postSaleReturnCredit(
   });
 }
 
+export async function postPurchasePayable(
+  tx: FinancialTransactionClient,
+  input: BasePostingInput,
+) {
+  return postFinancialTransaction(tx, {
+    ...input,
+    creditCents: 0,
+    debitCents: input.amountCents,
+    documentKind: DocumentSequenceKind.ADJUSTMENT,
+    partyType: FinancialPartyType.SUPPLIER,
+    prefix: "MS/AP",
+    type: FinancialTransactionType.PURCHASE_PAYABLE,
+  });
+}
+
+export async function postSupplierPayment(
+  tx: FinancialTransactionClient,
+  input: CustomerPaymentInput,
+) {
+  const payment = await postFinancialTransaction(tx, {
+    ...input,
+    creditCents: input.amountCents,
+    debitCents: 0,
+    documentKind: DocumentSequenceKind.PAYMENT_VOUCHER,
+    partyType: FinancialPartyType.SUPPLIER,
+    paymentMode: input.mode,
+    prefix: "MS/PV",
+    provider: input.provider ?? PaymentProvider.MANUAL,
+    type: input.allocationTargetTransactionId
+      ? FinancialTransactionType.SUPPLIER_PAYMENT
+      : FinancialTransactionType.SUPPLIER_ADVANCE,
+  });
+
+  if (input.allocationTargetTransactionId) {
+    await tx.financialAllocation.create({
+      data: {
+        amount: centsToDecimal(input.amountCents),
+        amountCents: input.amountCents,
+        fromTransactionId: payment.id,
+        hardwareDocumentId: input.hardwareDocumentId ?? null,
+        invoiceId: input.invoiceId ?? null,
+        metadata: { idempotencyKey: `${input.idempotencyKey}:allocation` },
+        sourceId: input.sourceId,
+        sourceType: input.sourceType,
+        tenantId: input.tenantId,
+        toTransactionId: input.allocationTargetTransactionId,
+        type: FinancialAllocationType.SUPPLIER_BILL_PAYMENT,
+      },
+    });
+  }
+
+  return payment;
+}
+
 async function postFinancialTransaction(
   tx: FinancialTransactionClient,
   input: BasePostingInput & {

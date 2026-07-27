@@ -302,6 +302,69 @@ describe("HardwareTradeService", () => {
     expect(movements).toHaveLength(0);
   });
 
+  it("posts supplier payable and payment when a paid purchase is confirmed", async () => {
+    const financial: string[] = [];
+    const now = new Date();
+    const document = {
+      customerId: null,
+      discountCents: 0,
+      documentNumber: "HPE-2026-0001",
+      id: "doc_purchase_1",
+      items: [
+        {
+          description: "PVC Pipe",
+          discountCents: 0,
+          lineTotalCents: 5000,
+          metadata: {},
+          product: { metadata: {}, unit: null },
+          productId: "prod_1",
+          quantity: 5,
+          taxCents: 0,
+          taxRateBps: 0,
+          unitAmountCents: 1000,
+        },
+      ],
+      metadata: { paymentMode: "Cash", referenceNumber: "SUP-001" },
+      paymentStatus: "unlinked",
+      roundOffCents: 0,
+      status: HardwareTradeDocumentStatus.DRAFT,
+      subtotalCents: 5000,
+      supplierId: "supplier_1",
+      taxCents: 0,
+      totalCents: 5000,
+      type: HardwareTradeDocumentType.PURCHASE_ENTRY,
+      updatedAt: now,
+    };
+    const service = new HardwareTradeService(
+      prismaMock({
+        $transaction: async (callback: (tx: Record<string, unknown>) => Promise<unknown>) =>
+          callback({
+            auditEvent: { create: async () => ({}) },
+            documentSequence: { upsert: async () => ({ lastValue: financial.length + 1 }) },
+            financialAllocation: { create: async () => { financial.push("allocation"); return {}; } },
+            financialTransaction: {
+              create: async () => {
+                const id = `fin_${financial.length + 1}`;
+                financial.push("transaction");
+                return { id };
+              },
+              findUnique: async () => null,
+            },
+            hardwareInventoryMovement: { create: async () => ({}) },
+            hardwareTradeDocument: { update: async () => ({ ...document, status: HardwareTradeDocumentStatus.CONFIRMED }) },
+            hardwareTradeTimelineEvent: { create: async () => ({}) },
+          }),
+        hardwareInventoryMovement: { findMany: async () => [] },
+        hardwareStockLocation: { findFirst: async () => ({ id: "loc_1" }) },
+        hardwareTradeDocument: { findFirst: async () => document },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await service.confirm({ tenantId: "tenant_1", userId: "user_1" }, "doc_purchase_1", { locationId: "loc_1" });
+
+    expect(financial).toEqual(["transaction", "transaction", "allocation"]);
+  });
+
   it("blocks duplicate draft invoice numbers for hardware documents", async () => {
     const now = new Date();
     const service = new HardwareTradeService(

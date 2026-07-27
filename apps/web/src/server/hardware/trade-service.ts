@@ -7,6 +7,7 @@ import {
   HardwareTradeDocumentStatus,
   HardwareTradeTimelineVerb,
   InvoiceStatus,
+  PaymentMode,
   PaymentProvider,
   type Prisma,
   type PrismaClient,
@@ -15,9 +16,11 @@ import { allocateDocumentNumber } from "../billing/document-sequence";
 import { AppError } from "../domain/errors";
 import {
   postCustomerPayment,
+  postPurchasePayable,
   postSaleCancellationFinancials,
   postSaleReceivable,
   postSaleReturnCredit,
+  postSupplierPayment,
 } from "../financial/financial-service";
 import { MANGALAM_TENANT_SLUG } from "../domain/host-routing";
 import { PermissionResolverService } from "../permissions";
@@ -168,6 +171,47 @@ export class HardwareTradeService {
     const stockItems = document.items.filter((item) => !isStockSetupPending(item.product?.metadata));
     return this.repository.confirm({
       actorId: context.userId,
+      afterConfirm: async (tx, confirmedDocument) => {
+        if (
+          confirmedDocument.type !== HardwareTradeDocumentType.PURCHASE_ENTRY &&
+          confirmedDocument.type !== HardwareTradeDocumentType.SUPPLIER_BILL
+        ) {
+          return;
+        }
+
+        const now = new Date();
+        const payable = await postPurchasePayable(tx, {
+          amountCents: confirmedDocument.totalCents,
+          createdById: context.userId,
+          hardwareDocumentId: confirmedDocument.id,
+          idempotencyKey: `${confirmedDocument.id}:purchase-payable`,
+          notes: readString(asRecord(confirmedDocument.metadata).notes) ?? null,
+          occurredAt: now,
+          partyId: confirmedDocument.supplierId,
+          sourceId: confirmedDocument.id,
+          sourceNumber: confirmedDocument.documentNumber,
+          sourceType: "HardwareTradeDocument",
+          tenantId: context.tenantId,
+        });
+        const paymentMode = paymentModeFromMetadata(confirmedDocument.metadata);
+        if (paymentMode) {
+          await postSupplierPayment(tx, {
+            allocationTargetTransactionId: payable.id,
+            amountCents: confirmedDocument.totalCents,
+            createdById: context.userId,
+            hardwareDocumentId: confirmedDocument.id,
+            idempotencyKey: `${confirmedDocument.id}:supplier-payment`,
+            mode: paymentMode,
+            notes: readString(asRecord(confirmedDocument.metadata).referenceNumber) ?? null,
+            occurredAt: now,
+            partyId: confirmedDocument.supplierId,
+            sourceId: confirmedDocument.id,
+            sourceNumber: confirmedDocument.documentNumber,
+            sourceType: "HardwareTradeDocument",
+            tenantId: context.tenantId,
+          });
+        }
+      },
       documentId,
       movements: nonStockDocument ? [] : stockItems.map((item) =>
         stripUndefined({
@@ -1259,6 +1303,17 @@ function taxRateFromConfig(config: Prisma.JsonValue) {
     return rate;
   }
   return 0;
+}
+
+function paymentModeFromMetadata(metadata: Prisma.JsonValue) {
+  const value = readString(asRecord(metadata).paymentMode);
+  if (!value || value === "Credit") return null;
+  if (value === "Bank Transfer") return PaymentMode.BANK_TRANSFER;
+  if (value === "Cash") return PaymentMode.CASH;
+  if (value === "UPI") return PaymentMode.UPI;
+  if (value === "Cheque") return PaymentMode.CHEQUE;
+  if (value === "Card") return PaymentMode.CARD;
+  return PaymentMode.OTHER;
 }
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {

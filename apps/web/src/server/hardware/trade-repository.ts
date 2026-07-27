@@ -24,6 +24,10 @@ const tradeInclude = {
   timeline: { orderBy: { occurredAt: "desc" as const }, take: 30 },
 };
 
+type HardwareTradeDocumentWithRelations = Prisma.HardwareTradeDocumentGetPayload<{
+  include: typeof tradeInclude;
+}>;
+
 export class PrismaHardwareTradeRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -94,6 +98,10 @@ export class PrismaHardwareTradeRepository {
 
   confirm(input: {
     actorId: string;
+    afterConfirm?: (
+      tx: Prisma.TransactionClient,
+      document: HardwareTradeDocumentWithRelations,
+    ) => Promise<void>;
     documentId: string;
     movements: Prisma.HardwareInventoryMovementUncheckedCreateInput[];
     tenantId: string;
@@ -106,6 +114,9 @@ export class PrismaHardwareTradeRepository {
       });
       for (const movement of input.movements) {
         await tx.hardwareInventoryMovement.create({ data: movement });
+      }
+      if (input.afterConfirm) {
+        await input.afterConfirm(tx, document);
       }
       await tx.hardwareTradeTimelineEvent.create({
         data: {
