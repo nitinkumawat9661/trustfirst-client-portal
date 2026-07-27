@@ -13,6 +13,7 @@ import { postHardwareJson } from "./hardware-api-client";
 type LocationOption = { id: string; name: string };
 type LookupOption = { id: string; name: string };
 type UnitOption = { code: string; id: string; name: string };
+type DiscountType = "percent" | "flat";
 type PaperFormat = "58mm" | "80mm" | "a4";
 type FirmPrintDetails = {
   address: string | null;
@@ -25,7 +26,8 @@ type FirmPrintDetails = {
 };
 type PosLine = {
   barcode: string | null;
-  discountPercent: string;
+  discountType: DiscountType;
+  discountValue: string;
   gstRate: string;
   hsnCode: string | null;
   productId: string;
@@ -39,7 +41,8 @@ type PostedSale = { documentId: string; documentNumber: string; invoiceId: strin
 
 const emptyLine: PosLine = {
   barcode: null,
-  discountPercent: "0",
+  discountType: "percent",
+  discountValue: "0",
   gstRate: "0",
   hsnCode: null,
   productId: "",
@@ -124,12 +127,16 @@ export function QuickPosForm({
       idempotencyKey,
       invoiceDiscountCents: totals.invoiceDiscountCents,
       items: lines.map((line) => {
-        const grossCents = Math.round(Number(line.quantity) * Number(line.rate) * 100);
+        const discountCents = calculateLineAmounts(line).discountCents;
+        const discountValue = Number(line.discountValue) || 0;
         return {
-          discountCents: Math.round(grossCents * Number(line.discountPercent) / 100),
+          discountCents,
           metadata: {
             barcode: line.barcode,
-            discountPercent: Number(line.discountPercent) || 0,
+            discountFlatCents: line.discountType === "flat" ? discountCents : null,
+            discountPercent: line.discountType === "percent" ? discountValue : null,
+            discountType: line.discountType,
+            discountValue,
             hsnCode: line.hsnCode,
             sku: line.sku,
             unitCode: line.unitCode,
@@ -245,6 +252,7 @@ export function QuickPosForm({
           </CardHeader>
           <CardContent className="space-y-4">
             {lines.map((line, index) => {
+              const amounts = calculateLineAmounts(line);
               return (
                 <fieldset className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-12" key={index}>
                   <legend className="px-1 text-xs font-semibold text-muted-foreground">Item {index + 1}</legend>
@@ -268,13 +276,29 @@ export function QuickPosForm({
                   </div>
                   <NumberField label="Qty" value={line.quantity} onChange={(value) => updateLine(index, { quantity: value })} className="md:col-span-1" />
                   <NumberField label="Rate" value={line.rate} onChange={(value) => updateLine(index, { rate: value })} className="md:col-span-2" />
-                  <NumberField label="Disc. %" value={line.discountPercent} onChange={(value) => updateLine(index, { discountPercent: value })} className="md:col-span-1" />
+                  <div className="grid gap-2 text-sm font-medium md:col-span-2">
+                    <span>Item discount</span>
+                    <div className="grid grid-cols-[minmax(0,1fr)_68px] gap-2">
+                      <Input inputMode="decimal" min="0" step="0.01" type="number" value={line.discountValue} onChange={(event) => updateLine(index, { discountValue: event.target.value })} />
+                      <select aria-label={`Discount type for item ${index + 1}`} className={selectClassName} value={line.discountType} onChange={(event) => updateLine(index, { discountType: event.target.value as DiscountType })}>
+                        <option value="percent">%</option>
+                        <option value="flat">₹</option>
+                      </select>
+                    </div>
+                  </div>
                   <NumberField label="GST %" value={line.gstRate} onChange={(value) => updateLine(index, { gstRate: value })} className="md:col-span-1" />
                   <div className="flex items-end md:col-span-2">
                     <Button aria-label={`Remove item ${index + 1}`} className="w-full" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))} type="button" variant="ghost">
                       <Trash2 className="size-4" />
                     </Button>
                   </div>
+                  <dl className="grid gap-2 rounded-md bg-muted/60 p-3 text-xs md:col-span-12 sm:grid-cols-5">
+                    <LineAmount label="Gross" value={amounts.grossCents} />
+                    <LineAmount label="Discount" value={-amounts.discountCents} />
+                    <LineAmount label="Taxable" value={amounts.taxableCents} />
+                    <LineAmount label="GST" value={amounts.taxCents} />
+                    <LineAmount label="Line total" value={amounts.lineTotalCents} strong />
+                  </dl>
                 </fieldset>
               );
             })}
@@ -612,6 +636,7 @@ type BillPreviewLine = {
   barcode: string | null;
   cgstCents: number;
   discountCents: number;
+  discountLabel: string;
   gstRate: string;
   hsnCode: string | null;
   lineTotalCents: number;
@@ -700,7 +725,7 @@ function ReceiptMarkup({ bill, compact }: { bill: BillPreview; compact: boolean 
               <td className="py-1 pr-1">
                 <div className="font-medium">{line.name}</div>
                 <div className="text-[9px]">{[line.sku, line.barcode, line.unitCode].filter(Boolean).join(" / ")}</div>
-                {compact ? <div className="text-[9px]">GST {line.gstRate}% · Disc {money(line.discountCents)}</div> : null}
+                {compact ? <div className="text-[9px]">GST {line.gstRate}% · Disc {line.discountLabel}</div> : null}
               </td>
               {!compact ? <td>{line.hsnCode ?? "-"}</td> : null}
               <td className="text-right">{line.quantity}</td>
@@ -740,20 +765,49 @@ function NumberField({ className, label, onChange, value }: { className?: string
   return <label className={`grid gap-2 text-sm font-medium ${className ?? ""}`}>{label}<Input inputMode="decimal" min="0" step="0.01" type="number" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
+function LineAmount({ label, strong, value }: { label: string; strong?: boolean; value: number }) {
+  return (
+    <div>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={strong ? "font-semibold text-foreground" : "font-medium"}>{money(value)}</dd>
+    </div>
+  );
+}
+
 function TotalRow({ label, value }: { label: string; value: number }) {
   return <div className="flex justify-between gap-4"><span className="text-muted-foreground">{label}</span><span>{money(value)}</span></div>;
 }
 
+function calculateLineAmounts(line: PosLine) {
+  const grossCents = Math.round((Number(line.quantity) || 0) * (Number(line.rate) || 0) * 100);
+  const discountInput = Number(line.discountValue) || 0;
+  const rawDiscountCents = line.discountType === "flat"
+    ? Math.round(discountInput * 100)
+    : Math.round(grossCents * discountInput / 100);
+  const discountCents = Math.min(Math.max(rawDiscountCents, 0), grossCents);
+  const taxableCents = Math.max(grossCents - discountCents, 0);
+  const taxCents = Math.round(taxableCents * (Number(line.gstRate) || 0) / 100);
+  return {
+    discountCents,
+    grossCents,
+    lineTotalCents: taxableCents + taxCents,
+    taxableCents,
+    taxCents,
+  };
+}
+
+function discountLabel(line: PosLine, discountCents: number) {
+  const value = Number(line.discountValue) || 0;
+  return line.discountType === "flat" ? money(discountCents) : `${value}%`;
+}
+
 function calculateTotals(lines: PosLine[], paid: string, invoiceDiscount: string) {
   const totals = lines.reduce((result, line) => {
-    const gross = Math.round((Number(line.quantity) || 0) * (Number(line.rate) || 0) * 100);
-    const discount = Math.round(gross * (Number(line.discountPercent) || 0) / 100);
-    const taxable = Math.max(gross - discount, 0);
-    const tax = Math.round(taxable * (Number(line.gstRate) || 0) / 100);
+    const amounts = calculateLineAmounts(line);
     return {
-      discountCents: result.discountCents + discount,
-      subtotalCents: result.subtotalCents + gross,
-      taxCents: result.taxCents + tax,
+      discountCents: result.discountCents + amounts.discountCents,
+      subtotalCents: result.subtotalCents + amounts.grossCents,
+      taxCents: result.taxCents + amounts.taxCents,
     };
   }, { discountCents: 0, subtotalCents: 0, taxCents: 0 });
   const invoiceDiscountCents = Math.min(Math.round((Number(invoiceDiscount) || 0) * 100), totals.subtotalCents - totals.discountCents + totals.taxCents);
@@ -771,7 +825,7 @@ function calculateTotals(lines: PosLine[], paid: string, invoiceDiscount: string
 }
 
 function canSave(lines: PosLine[]) {
-  return lines.every((line) => line.productId && Number(line.quantity) > 0 && Number(line.rate) >= 0);
+  return lines.every((line) => line.productId && Number(line.quantity) > 0 && Number(line.rate) >= 0 && Number(line.discountValue) >= 0);
 }
 
 function money(amountCents: number) {
@@ -792,27 +846,24 @@ function buildBillPreview(input: {
   totals: ReturnType<typeof calculateTotals>;
 }): BillPreview {
   const lines = input.lines.map((line) => {
-    const quantity = Number(line.quantity) || 0;
     const rateCents = Math.round((Number(line.rate) || 0) * 100);
-    const grossCents = quantity * rateCents;
-    const discountCents = Math.round(grossCents * (Number(line.discountPercent) || 0) / 100);
-    const taxableCents = Math.max(grossCents - discountCents, 0);
-    const taxCents = Math.round(taxableCents * (Number(line.gstRate) || 0) / 100);
-    const cgstCents = Math.floor(taxCents / 2);
+    const amounts = calculateLineAmounts(line);
+    const cgstCents = Math.floor(amounts.taxCents / 2);
     return {
       barcode: line.barcode,
       cgstCents,
-      discountCents,
+      discountCents: amounts.discountCents,
+      discountLabel: discountLabel(line, amounts.discountCents),
       gstRate: line.gstRate || "0",
       hsnCode: line.hsnCode,
-      lineTotalCents: taxableCents + taxCents,
+      lineTotalCents: amounts.lineTotalCents,
       name: line.productName || "Item pending",
       quantity: line.quantity || "0",
       rateCents,
-      sgstCents: taxCents - cgstCents,
+      sgstCents: amounts.taxCents - cgstCents,
       sku: line.sku,
-      taxableCents,
-      taxCents,
+      taxableCents: amounts.taxableCents,
+      taxCents: amounts.taxCents,
       unitCode: line.unitCode,
     };
   });
@@ -864,6 +915,7 @@ function buildTestPrintPreview(input: { cashierName: string; firm: FirmPrintDeta
       barcode: "TEST",
       cgstCents: 0,
       discountCents: 0,
+      discountLabel: "0%",
       gstRate: "0",
       hsnCode: null,
       lineTotalCents: 0,
@@ -976,7 +1028,7 @@ function receiptHtml(bill: BillPreview, compact: boolean) {
       <td>
         <strong>${index + 1}. ${escapeHtml(line.name)}</strong>
         <div class="item-meta">${escapeHtml([line.sku, line.barcode, line.unitCode].filter(Boolean).join(" / "))}</div>
-        ${compact ? `<div class="item-meta">GST ${escapeHtml(line.gstRate)}% | Disc ${escapeHtml(money(line.discountCents))}</div>` : ""}
+        ${compact ? `<div class="item-meta">GST ${escapeHtml(line.gstRate)}% | Disc ${escapeHtml(line.discountLabel)}</div>` : ""}
       </td>
       ${compact ? "" : `<td>${escapeHtml(line.hsnCode ?? "-")}</td>`}
       <td class="right">${escapeHtml(line.quantity)}</td>

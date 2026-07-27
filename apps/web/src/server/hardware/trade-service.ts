@@ -282,6 +282,10 @@ export class HardwareTradeService {
     });
     const itemTotals = calculateTradeTotals(normalizedItems, input.roundOffCents ?? 0);
     const invoiceDiscountCents = input.invoiceDiscountCents ?? 0;
+    const invoiceDiscountBaseCents = itemTotals.subtotalCents - itemTotals.discountCents + itemTotals.taxCents;
+    if (invoiceDiscountCents > invoiceDiscountBaseCents) {
+      throw validation("Invoice discount cannot exceed the bill amount after item discounts and GST.");
+    }
     const totalCents = Math.max(itemTotals.totalCents - invoiceDiscountCents, 0);
     if (input.clientTotalCents !== totalCents) {
       throw validation("Bill total changed on the server. Review the bill and submit again.");
@@ -1364,10 +1368,14 @@ export class HardwareTradeService {
           cgstCents,
           description: item.description,
           discountCents: item.discountCents,
+          discountFlatCents: readNumber(itemMetadata.discountFlatCents),
           discountPercent: readNumber(itemMetadata.discountPercent),
+          discountType: readString(itemMetadata.discountType),
+          discountValue: readNumber(itemMetadata.discountValue),
           hsnCode: readString(itemMetadata.hsnCode) ?? readString(productMetadata.hsnCode),
           igstCents: taxMode === "inter-state" ? item.taxCents : 0,
           lineTotalCents: item.lineTotalCents,
+          productGstRateBps: readNumber(itemMetadata.productGstRateBps),
           quantity: item.quantity,
           sgstCents,
           taxCents: item.taxCents,

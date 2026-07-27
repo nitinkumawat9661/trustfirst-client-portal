@@ -8,6 +8,7 @@ import {
 import { describe, expect, it } from "vitest";
 import { movementTypeForDocument } from "./trade-repository";
 import { calculateTradeTotals } from "./trade-calculations";
+import { quickPosSaleSchema } from "./trade-schemas";
 import { HardwareTradeService } from "./trade-service";
 
 function prismaMock(overrides: Partial<PrismaClient> = {}) {
@@ -373,6 +374,56 @@ describe("HardwareTradeService", () => {
       { amountCents: 3000, kind: "transaction" },
       { amountCents: 3000, kind: "allocation" },
     ]);
+  });
+
+  it("rejects item discounts that exceed the gross line amount", () => {
+    const result = quickPosSaleSchema.safeParse({
+      clientTotalCents: 0,
+      idempotencyKey: "discount-validation-test",
+      items: [{
+        discountCents: 10_001,
+        productId: "p1",
+        quantity: 1,
+        taxRateBps: 1800,
+        unitAmountCents: 10_000,
+      }],
+      locationId: "location_1",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toContain("cannot exceed");
+  });
+
+  it("rejects manipulated item discount metadata", () => {
+    const percentResult = quickPosSaleSchema.safeParse({
+      clientTotalCents: 0,
+      idempotencyKey: "discount-percent-validation-test",
+      items: [{
+        discountCents: 0,
+        metadata: { discountType: "percent", discountValue: 101 },
+        productId: "p1",
+        quantity: 1,
+        taxRateBps: 0,
+        unitAmountCents: 10_000,
+      }],
+      locationId: "location_1",
+    });
+    const flatResult = quickPosSaleSchema.safeParse({
+      clientTotalCents: 0,
+      idempotencyKey: "discount-flat-validation-test",
+      items: [{
+        discountCents: 0,
+        metadata: { discountType: "flat", discountValue: 101 },
+        productId: "p1",
+        quantity: 1,
+        taxRateBps: 0,
+        unitAmountCents: 10_000,
+      }],
+      locationId: "location_1",
+    });
+
+    expect(percentResult.success).toBe(false);
+    expect(flatResult.success).toBe(false);
   });
 
   it("records a partial purchase return with supplier credit and stock-out movement", async () => {

@@ -91,10 +91,14 @@ export type HardwarePrintProjection = {
     cgstCents: number;
     description: string;
     discountCents: number;
+    discountFlatCents: number | null;
     discountPercent: number | null;
+    discountType: string | null;
+    discountValue: number | null;
     hsnCode: string | null;
     igstCents: number;
     lineTotalCents: number;
+    productGstRateBps: number | null;
     quantity: number;
     sgstCents: number;
     taxCents: number;

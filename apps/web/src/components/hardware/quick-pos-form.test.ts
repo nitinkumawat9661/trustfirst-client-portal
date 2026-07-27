@@ -20,7 +20,8 @@ describe("quick POS print preview helpers", () => {
   it("keeps preview totals aligned with the posted total contract", () => {
     const lines = [{
       barcode: "890000000001",
-      discountPercent: "10",
+      discountType: "percent" as const,
+      discountValue: "10",
       gstRate: "18",
       hsnCode: "3917",
       productId: "product_1",
@@ -28,6 +29,18 @@ describe("quick POS print preview helpers", () => {
       quantity: "2",
       rate: "100",
       sku: "TEST-SKU",
+      unitCode: "PCS",
+    }, {
+      barcode: null,
+      discountType: "flat" as const,
+      discountValue: "50",
+      gstRate: "18",
+      hsnCode: "8481",
+      productId: "product_2",
+      productName: "FLAT DISCOUNT ITEM",
+      quantity: "1",
+      rate: "200",
+      sku: "FLAT-SKU",
       unitCode: "PCS",
     }];
 
@@ -58,6 +71,11 @@ describe("quick POS print preview helpers", () => {
     expect(preview.grandTotalCents).toBe(totals.totalCents);
     expect(preview.balanceCents).toBe(totals.balanceCents);
     expect(preview.lines[0]?.sku).toBe("TEST-SKU");
+    expect(preview.lines[0]?.discountCents).toBe(2000);
+    expect(preview.lines[0]?.discountLabel).toBe("10%");
+    expect(preview.lines[1]?.discountCents).toBe(5000);
+    expect(preview.lines[1]?.discountLabel).toContain("₹50");
+    expect(preview.discountCents).toBe(7000);
   });
 
   it("emits paper-specific CSS for thermal and A4 printing", () => {

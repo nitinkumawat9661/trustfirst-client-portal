@@ -10,6 +10,46 @@ export const hardwareTradeItemSchema = z.object({
   quantity: z.number().int().positive(),
   taxRateBps: z.number().int().min(0).max(10_000).optional(),
   unitAmountCents: z.number().int().nonnegative(),
+}).superRefine((item, context) => {
+  const grossCents = item.quantity * item.unitAmountCents;
+  const discountCents = item.discountCents ?? 0;
+  const discountType = typeof item.metadata?.discountType === "string" ? item.metadata.discountType : null;
+  const discountValue = typeof item.metadata?.discountValue === "number" ? item.metadata.discountValue : null;
+  if (discountCents > grossCents) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Item discount cannot exceed the gross line amount.",
+      path: ["discountCents"],
+    });
+  }
+  if (grossCents - discountCents < 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Item discount cannot create a negative taxable amount.",
+      path: ["discountCents"],
+    });
+  }
+  if (discountValue !== null && discountValue < 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Item discount cannot be negative.",
+      path: ["metadata", "discountValue"],
+    });
+  }
+  if (discountType === "percent" && discountValue !== null && discountValue > 100) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Percentage item discount cannot exceed 100%.",
+      path: ["metadata", "discountValue"],
+    });
+  }
+  if (discountType === "flat" && discountValue !== null && Math.round(discountValue * 100) > grossCents) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Flat item discount cannot exceed the gross line amount.",
+      path: ["metadata", "discountValue"],
+    });
+  }
 });
 
 export const hardwareTradeDocumentSchema = z.object({

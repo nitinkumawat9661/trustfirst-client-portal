@@ -26,6 +26,8 @@ export default async function HardwarePrintPreviewPage({
     userId: user.id,
   });
   const taxMode = projection.document.metadata.taxMode === "inter-state" ? "inter-state" : "intra-state";
+  const isQuotation = projection.document.type === "SALES_QUOTATION";
+  const quotationGstIncluded = !isQuotation || projection.document.metadata.quotationGstIncluded === true || projection.document.taxCents > 0;
   const documentDate =
     typeof projection.document.metadata.documentDate === "string"
       ? projection.document.metadata.documentDate
@@ -109,6 +111,9 @@ export default async function HardwarePrintPreviewPage({
               <><p className="font-semibold uppercase">Reference</p><p className="mt-1">{projection.document.metadata.referenceNumber}</p></>
             ) : null}
             <p className="mt-2">Tax treatment: {taxMode === "inter-state" ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)"}</p>
+            {isQuotation ? (
+              <p className="mt-1 font-semibold">{quotationGstIncluded ? "GST included as shown below." : "GST not included."}</p>
+            ) : null}
           </div>
         </section>
 
@@ -132,12 +137,16 @@ export default async function HardwarePrintPreviewPage({
               {projection.items.map((item, index) => (
                 <tr className="border-b border-zinc-300 align-top" key={`${item.description}-${index}`}>
                   <td className="px-2 py-2">{index + 1}</td>
-                  <td className="px-2 py-2 font-medium">{item.description}{format !== "a4" ? <div className="text-[9px]">HSN {item.hsnCode ?? "-"} · GST {item.taxRateBps / 100}%</div> : null}</td>
+                  <td className="px-2 py-2 font-medium">
+                    {item.description}
+                    {format !== "a4" ? <div className="text-[9px]">HSN {item.hsnCode ?? "-"} · GST {item.taxRateBps / 100}%</div> : null}
+                    {isQuotation && !quotationGstIncluded && item.productGstRateBps !== null ? <div className="text-[9px] font-normal">Product GST ref {item.productGstRateBps / 100}%</div> : null}
+                  </td>
                   {format === "a4" ? <td className="px-2 py-2">{item.hsnCode ?? "Pending"}</td> : null}
                   <td className="px-2 py-2 text-right">{item.quantity}</td>
                   <td className="px-2 py-2">{item.unitCode ?? "-"}</td>
                   <td className="px-2 py-2 text-right">{money(item.unitAmountCents)}</td>
-                  <td className="px-2 py-2 text-right">{item.discountPercent === null ? money(item.discountCents) : `${item.discountPercent}%`}</td>
+                  <td className="px-2 py-2 text-right">{discountDisplay(item)}</td>
                   <td className="px-2 py-2 text-right">{money(item.taxableCents)}</td>
                   {format === "a4" ? <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td> : null}
                   <td className="px-2 py-2 text-right font-medium">{money(item.lineTotalCents)}</td>
@@ -150,7 +159,9 @@ export default async function HardwarePrintPreviewPage({
         <section className={`print-break-avoid mt-5 grid gap-6 ${format === "a4" ? "sm:grid-cols-[minmax(0,1fr)_280px]" : ""}`}>
           <div>
             <p className="text-xs font-semibold uppercase">Tax summary</p>
-            {projection.gstSummary.length ? (
+            {isQuotation && !quotationGstIncluded ? (
+              <p className="mt-2 text-xs font-semibold">GST not included in this quotation. Item HSN/GST references are shown only for product identification.</p>
+            ) : projection.gstSummary.length ? (
               <table className="mt-2 w-full max-w-md text-xs">
                 <thead className="border-b border-zinc-400 text-left"><tr><th className="py-1">Rate</th><th>Taxable</th><th>CGST</th><th>SGST</th><th>IGST</th></tr></thead>
                 <tbody>{projection.gstSummary.map((row) => {
@@ -186,6 +197,13 @@ export default async function HardwarePrintPreviewPage({
       </section>
     </main>
   );
+}
+
+function discountDisplay(item: HardwarePrintProjection["items"][number]) {
+  if (item.discountType === "flat") return money(item.discountCents);
+  if (item.discountType === "percent" && item.discountValue !== null) return `${item.discountValue}%`;
+  if (item.discountPercent !== null) return `${item.discountPercent}%`;
+  return money(item.discountCents);
 }
 
 function AmountRow({ label, value }: { label: string; value: number }) {

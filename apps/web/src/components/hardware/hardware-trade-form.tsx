@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@trustfirst/ui";
 import { Plus, Save, ScanLine, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import type { HardwarePartySummary, HardwareProductSummary } from "@/server/hardware";
@@ -19,14 +19,14 @@ const tradeFormSchema = z.object({
   documentType: z.enum(["PURCHASE_ENTRY", "PURCHASE_ORDER", "SALES_ORDER", "SALES_QUOTATION", "SUPPLIER_BILL"]),
   items: z.array(z.object({
     barcode: z.string(),
-    discountPercent: z.string().refine((value) => Number(value) >= 0 && Number(value) <= 100, {
-      message: "Use 0 to 100.",
-    }),
+    discountType: z.enum(["percent", "flat"]),
+    discountValue: numericString,
     gstRate: z.string().refine((value) => Number(value) >= 0 && Number(value) <= 100, {
       message: "Use 0 to 100.",
     }),
     hsnCode: z.string(),
     productId: z.string().min(1, "Select a product."),
+    productGstRate: z.string(),
     quantity: z.string().refine((value) => Number.isInteger(Number(value)) && Number(value) > 0, {
       message: "Quantity must be a positive whole number.",
     }),
@@ -38,6 +38,7 @@ const tradeFormSchema = z.object({
     message: "Paid amount must be zero or higher.",
   }),
   paymentMode: z.enum(["Cash", "UPI", "Bank Transfer", "Cheque", "Card", "Other", "Credit"]),
+  quotationIncludesGst: z.boolean(),
   referenceNumber: z.string().max(120),
   roundOff: z.string().refine((value) => value === "" || (Number.isFinite(Number(value)) && Math.abs(Number(value)) <= 100), {
     message: "Round-off must be between -100 and 100.",
@@ -50,10 +51,12 @@ type TradeMode = "purchase" | "quotation" | "sale";
 
 const emptyItem = {
   barcode: "",
-  discountPercent: "0",
+  discountType: "percent" as const,
+  discountValue: "0",
   gstRate: "0",
   hsnCode: "",
   productId: "",
+  productGstRate: "0",
   quantity: "1",
   unitCode: "",
   unitRate: "",
@@ -84,6 +87,7 @@ export function HardwareTradeForm({
       partyId: "",
       paidAmount: "",
       paymentMode: mode === "purchase" ? "Credit" : "Cash",
+      quotationIncludesGst: false,
       referenceNumber: "",
       roundOff: "0",
       taxMode: "intra-state",
@@ -92,6 +96,7 @@ export function HardwareTradeForm({
   });
   const { append, fields, remove } = useFieldArray({ control, name: "items" });
   const watchedItems = useWatch({ control, name: "items" });
+  const quotationIncludesGst = useWatch({ control, name: "quotationIncludesGst" });
   const watchedRoundOff = useWatch({ control, name: "roundOff" });
   const totals = useMemo(() => calculatePreview(watchedItems, watchedRoundOff), [watchedItems, watchedRoundOff]);
   const disabledReason =
@@ -101,13 +106,25 @@ export function HardwareTradeForm({
         ? `Add at least one ${mode === "purchase" ? "supplier" : "customer"} before creating a document.`
         : null;
 
+  useEffect(() => {
+    if (mode !== "quotation") return;
+    watchedItems?.forEach((item, index) => {
+      const product = products.find((candidate) => candidate.id === item.productId);
+      const productGstRate = product?.gstRateBps === null || product?.gstRateBps === undefined ? "0" : String(product.gstRateBps / 100);
+      setValue(`items.${index}.productGstRate`, productGstRate);
+      setValue(`items.${index}.gstRate`, quotationIncludesGst ? productGstRate : "0", { shouldValidate: true });
+    });
+  }, [mode, products, quotationIncludesGst, setValue, watchedItems]);
+
   function applyProduct(index: number, productId: string) {
     const product = products.find((candidate) => candidate.id === productId);
     if (!product) return;
     const rateCents = mode === "purchase" ? product.purchaseCostCents : product.salesPriceCents;
+    const productGstRate = product.gstRateBps === null ? "0" : String(product.gstRateBps / 100);
     setValue(`items.${index}.barcode`, product.barcode ?? "");
-    setValue(`items.${index}.gstRate`, product.gstRateBps === null ? "0" : String(product.gstRateBps / 100));
+    setValue(`items.${index}.gstRate`, mode === "quotation" && !quotationIncludesGst ? "0" : productGstRate);
     setValue(`items.${index}.hsnCode`, product.hsnCode ?? "");
+    setValue(`items.${index}.productGstRate`, productGstRate);
     setValue(`items.${index}.unitCode`, product.unitCode ?? "");
     setValue(`items.${index}.unitRate`, rateCents ? String(rateCents / 100) : "");
   }
@@ -126,13 +143,17 @@ export function HardwareTradeForm({
       currency: "INR",
       ...(mode === "purchase" ? { supplierId: values.partyId } : { customerId: values.partyId }),
       items: values.items.map((item) => {
-        const grossCents = Math.round(Number(item.quantity) * Number(item.unitRate) * 100);
-        const discountCents = Math.round(grossCents * Number(item.discountPercent) / 100);
+        const amounts = calculateItemPreview(item);
+        const discountValue = Number(item.discountValue) || 0;
         return {
-          discountCents,
+          discountCents: amounts.discountCents,
           metadata: {
-            discountPercent: Number(item.discountPercent),
+            discountFlatCents: item.discountType === "flat" ? amounts.discountCents : null,
+            discountPercent: item.discountType === "percent" ? discountValue : null,
+            discountType: item.discountType,
+            discountValue,
             hsnCode: item.hsnCode || null,
+            productGstRateBps: Math.round(Number(item.productGstRate || 0) * 100),
             unitCode: item.unitCode || null,
           },
           productId: item.productId,
@@ -147,6 +168,7 @@ export function HardwareTradeForm({
         paymentMode: values.paymentMode,
         referenceNumber: values.referenceNumber || null,
         taxMode: values.taxMode,
+        ...(mode === "quotation" ? { quotationGstIncluded: values.quotationIncludesGst } : {}),
       },
       roundOffCents: Math.round(Number(values.roundOff || 0) * 100),
       type: values.documentType,
@@ -197,6 +219,12 @@ export function HardwareTradeForm({
               <option value="inter-state">Inter-state (IGST)</option>
             </select>
           </FormField>
+          {mode === "quotation" ? (
+            <label className="flex items-center gap-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-medium">
+              <input className="size-4 accent-primary" type="checkbox" {...register("quotationIncludesGst")} />
+              Include GST in quotation
+            </label>
+          ) : null}
           {mode !== "quotation" ? (
             <FormField label="Payment mode">
               <select className={selectClassName} {...register("paymentMode")}>
@@ -218,7 +246,10 @@ export function HardwareTradeForm({
           <Button onClick={() => append({ ...emptyItem })} size="sm" type="button" variant="outline"><Plus className="size-4" />Add line</Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          {fields.map((field, index) => (
+          {fields.map((field, index) => {
+            const itemPreview = calculateItemPreview(watchedItems?.[index]);
+            const itemProductGstRate = watchedItems?.[index]?.productGstRate ?? "0";
+            return (
             <fieldset className="grid gap-3 rounded-md border border-border p-3 lg:grid-cols-12" key={field.id}>
               <legend className="px-1 text-xs font-semibold text-muted-foreground">Item {index + 1}</legend>
               <div className="lg:col-span-2">
@@ -264,9 +295,15 @@ export function HardwareTradeForm({
                   <Input inputMode="decimal" min="0" step="0.01" type="number" {...register(`items.${index}.unitRate`)} />
                 </FormField>
               </div>
-              <div className="lg:col-span-1">
-                <FormField error={errors.items?.[index]?.discountPercent?.message} label="Disc. %">
-                  <Input inputMode="decimal" min="0" max="100" step="0.01" type="number" {...register(`items.${index}.discountPercent`)} />
+              <div className="lg:col-span-2">
+                <FormField error={errors.items?.[index]?.discountValue?.message} label="Item discount">
+                  <div className="grid grid-cols-[minmax(0,1fr)_68px] gap-2">
+                    <Input inputMode="decimal" min="0" step="0.01" type="number" {...register(`items.${index}.discountValue`)} />
+                    <select aria-label={`Discount type for item ${index + 1}`} className={selectClassName} {...register(`items.${index}.discountType`)}>
+                      <option value="percent">%</option>
+                      <option value="flat">₹</option>
+                    </select>
+                  </div>
                 </FormField>
               </div>
               <div className="lg:col-span-1">
@@ -282,8 +319,22 @@ export function HardwareTradeForm({
               <div className="lg:col-span-3">
                 <FormField label="HSN / SAC"><Input {...register(`items.${index}.hsnCode`)} /></FormField>
               </div>
+              <input type="hidden" {...register(`items.${index}.productGstRate`)} />
+              <dl className="grid gap-2 rounded-md bg-muted/60 p-3 text-xs lg:col-span-12 sm:grid-cols-5">
+                <LineAmount label="Gross" value={itemPreview.grossCents} />
+                <LineAmount label="Discount" value={-itemPreview.discountCents} />
+                <LineAmount label="Taxable" value={itemPreview.taxableCents} />
+                <LineAmount label="GST" value={itemPreview.taxCents} />
+                <LineAmount label="Line total" value={itemPreview.lineTotalCents} strong />
+              </dl>
+              {mode === "quotation" ? (
+                <p className="text-xs text-muted-foreground lg:col-span-12">
+                  Product reference: HSN {watchedItems?.[index]?.hsnCode || "-"} · configured GST {itemProductGstRate || "0"}%. {quotationIncludesGst ? "GST is included in this quotation." : "GST not included."}
+                </p>
+              ) : null}
             </fieldset>
-          ))}
+          );
+          })}
         </CardContent>
       </Card>
 
@@ -326,17 +377,41 @@ function TotalRow({ label, value }: { label: string; value: number }) {
   return <div className="flex justify-between gap-4"><dt className="text-muted-foreground">{label}</dt><dd>{money(value)}</dd></div>;
 }
 
+function LineAmount({ label, strong, value }: { label: string; strong?: boolean; value: number }) {
+  return (
+    <div>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={strong ? "font-semibold text-foreground" : "font-medium"}>{money(value)}</dd>
+    </div>
+  );
+}
+
+function calculateItemPreview(item: TradeFormValues["items"][number] | undefined) {
+  const grossCents = Math.round((Number(item?.quantity) || 0) * (Number(item?.unitRate) || 0) * 100);
+  const discountInput = Number(item?.discountValue) || 0;
+  const rawDiscountCents = item?.discountType === "flat"
+    ? Math.round(discountInput * 100)
+    : Math.round(grossCents * discountInput / 100);
+  const discountCents = Math.min(Math.max(rawDiscountCents, 0), grossCents);
+  const taxableCents = Math.max(grossCents - discountCents, 0);
+  const taxCents = Math.round(taxableCents * (Number(item?.gstRate) || 0) / 100);
+  return {
+    discountCents,
+    grossCents,
+    lineTotalCents: taxableCents + taxCents,
+    taxableCents,
+    taxCents,
+  };
+}
+
 function calculatePreview(items: TradeFormValues["items"] | undefined, roundOff: string | undefined) {
   const result = (items ?? []).reduce((totals, item) => {
-    const gross = Math.round((Number(item.quantity) || 0) * (Number(item.unitRate) || 0) * 100);
-    const discount = Math.round(gross * (Number(item.discountPercent) || 0) / 100);
-    const taxable = Math.max(gross - discount, 0);
-    const tax = Math.round(taxable * (Number(item.gstRate) || 0) / 100);
+    const preview = calculateItemPreview(item);
     return {
-      discountCents: totals.discountCents + discount,
-      grossCents: totals.grossCents + gross,
-      taxCents: totals.taxCents + tax,
-      taxableCents: totals.taxableCents + taxable,
+      discountCents: totals.discountCents + preview.discountCents,
+      grossCents: totals.grossCents + preview.grossCents,
+      taxCents: totals.taxCents + preview.taxCents,
+      taxableCents: totals.taxableCents + preview.taxableCents,
     };
   }, { discountCents: 0, grossCents: 0, taxCents: 0, taxableCents: 0 });
   const roundOffCents = Math.round((Number(roundOff) || 0) * 100);
