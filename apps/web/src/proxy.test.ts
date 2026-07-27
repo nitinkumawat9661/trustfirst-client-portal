@@ -14,6 +14,25 @@ describe("host boundary proxy decisions", () => {
     expect(response?.headers.get("location")).not.toContain("client.trustfirstsolutions.in");
   });
 
+  it("allows the approved Mangalam public intake route on the public host", () => {
+    const response = enforceHostBoundary(
+      request("https://mangalamsanitary.in/intake/manglam-trading-demo"),
+      "MANGALAM_PUBLIC",
+    );
+
+    expect(response).toBeNull();
+  });
+
+  it("keeps other intake routes off the Mangalam public host", () => {
+    const response = enforceHostBoundary(
+      request("https://mangalamsanitary.in/intake/other-tenant"),
+      "MANGALAM_PUBLIC",
+    );
+
+    expect(response?.status).toBe(307);
+    expect(response?.headers.get("location")).toBe("https://mangalamsanitary.in/");
+  });
+
   it("renders Mangalam ERP signin on the ERP host without cross-host redirect", () => {
     const response = enforceHostBoundary(
       request("https://app.mangalamsanitary.in/signin"),

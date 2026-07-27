@@ -9,6 +9,10 @@ const trustFirstPagePrefixes = [
   "/intake",
 ];
 
+const mangalamPublicIntakePagePrefixes = [
+  "/intake/manglam-trading-demo",
+];
+
 const trustFirstApiPrefixes = [
   "/api/client",
   "/api/crm",
@@ -77,7 +81,10 @@ export function enforceHostBoundary(
       );
     }
 
-    if (matchesAnyPrefix(pathname, trustFirstPagePrefixes)) {
+    if (
+      matchesAnyPrefix(pathname, trustFirstPagePrefixes) &&
+      !matchesAnyPrefix(pathname, mangalamPublicIntakePagePrefixes)
+    ) {
       return redirectAcrossSurface(
         request,
         CANONICAL_ORIGINS.mangalamPublic,
