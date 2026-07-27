@@ -2,7 +2,7 @@
 
 ## Summary
 
-- Timestamp: 2026-07-03T07:36:55.395Z
+- Timestamp: 2026-07-27T07:17:47.878Z
 - .env.deploy.local created: yes
 - Host masked: 45.10.x.x
 - Port: 22
@@ -15,7 +15,7 @@
 - Required trusted fingerprint: SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0
 - Decision: verified by trusted fingerprint match
 - Known_hosts repaired: yes
-- Backup path: C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260703073651
+- Backup path: C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260727071744
 - Deployment attempted: no
 - CafeLuxe untouched: yes
 
@@ -36,7 +36,7 @@ A host-key mismatch can mean the VPS was rebuilt, the provider rotated host keys
 ## Raw known_hosts Lookup
 
 ```text
-# Host 45.10.21.141 found: line 6
+# Host 45.10.21.141 found: line 7
 45.10.21.141 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHfng3mX7BxZIM7llpJvK2jGZLyDRAOZ7w7kHLSSUTgi
 ```
 
@@ -45,28 +45,28 @@ A host-key mismatch can mean the VPS was rebuilt, the provider rotated host keys
 ```text
 ## Windows OpenSSH ssh-keyscan
 ### ed25519
-# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.15
+# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.16
 choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com
 
 ### rsa
-# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.15
+# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.16
 choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com
 
 ### ecdsa
-# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.15
+# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.16
 choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com
 
 ## Git for Windows ssh-keyscan
 ### ed25519
-# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.15
+# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.16
 45.10.21.141 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHfng3mX7BxZIM7llpJvK2jGZLyDRAOZ7w7kHLSSUTgi
 
 ### rsa
-# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.15
+# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.16
 45.10.21.141 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDst9tJQ7nsUceZlLbF4VDWrOdHZMR5FDz4psWrwcjcHWJIMSNMAdb3/UbMmA2zjJeYbS3b4CGok0c8m85iMhhG8RriiUdOXLOqBz5zIt55pb+FCOoh5b5rCTyuaazAak6Cs5T1LwSCdIdaaPCzZk9Ku/x2mXJMkE/RWZfvwWjj8xHpPc+mesxyw2SKD9l6cRF41xAFqZ5qqkz+bLW4VO4spUDr3wb8+Wf4Avk27RzI6qbRRa7HYH1xCIkPpVBKBMuLK6+RQzERC6v/8Sb8HL41tQ0mJS26SeXsvy0p1GoJUr/05yJUDsKo+rEOcf4kLmo3K9gAAxOfuLruSV0AGoTXpexSNHQ8hWsPlFDA7EQgL2gOgOhvWP+iW7jQzLePDGKdN72jkGwBC9XEd3loVhiqhlBbEJvkj1z/7Tt4/sFJ84kQn/bE24tko9RUy0ugGYuUEgd9DYP5r8xes9fbcvuUNoF8WPzfmLTctdyh9Rdc9ge467UGU8ca/uDPahG+e2s=
 
 ### ecdsa
-# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.15
+# 45.10.21.141:22 SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.16
 45.10.21.141 ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBGJy8Qb535xJ0DjgfcSvLRB8E6f4LtPUpcEzN8xibf9ETA+5mbqNsXOcSP+bfzdzubQeT97bMmoQiEQ+VlshM6Q=
 ```
 
@@ -74,7 +74,7 @@ choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com
 
 ```text
 zonetichosting
-Linux zonetichosting 5.15.0-181-generic #191-Ubuntu SMP Fri May 22 19:09:02 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+Linux zonetichosting 5.15.0-185-generic #195-Ubuntu SMP Fri Jun 19 17:11:50 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
 ```
 
 ## Notes
