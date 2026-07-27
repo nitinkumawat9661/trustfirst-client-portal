@@ -99,7 +99,7 @@ async function waitForPrintableDocument(document: Document) {
 
 function preparePrintableDocument(
   document: Document,
-  options: { documentTitle?: string; invoiceOnly: boolean },
+  options: { documentTitle: string | undefined; invoiceOnly: boolean },
 ) {
   if (options.documentTitle) {
     document.title = sanitizeDocumentTitle(options.documentTitle);
