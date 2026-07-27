@@ -34,6 +34,9 @@ const tradeFormSchema = z.object({
     unitRate: numericString,
   })).min(1),
   partyId: z.string().min(1, "Select a party."),
+  paidAmount: z.string().refine((value) => value === "" || Number(value) >= 0, {
+    message: "Paid amount must be zero or higher.",
+  }),
   paymentMode: z.enum(["Cash", "UPI", "Bank Transfer", "Cheque", "Card", "Other", "Credit"]),
   referenceNumber: z.string().max(120),
   roundOff: z.string().refine((value) => value === "" || (Number.isFinite(Number(value)) && Math.abs(Number(value)) <= 100), {
@@ -79,6 +82,7 @@ export function HardwareTradeForm({
       documentType: defaultDocumentType(mode),
       items: [{ ...emptyItem }],
       partyId: "",
+      paidAmount: "",
       paymentMode: mode === "purchase" ? "Credit" : "Cash",
       referenceNumber: "",
       roundOff: "0",
@@ -139,6 +143,7 @@ export function HardwareTradeForm({
       }),
       metadata: {
         documentDate: values.documentDate,
+        paidAmountCents: mode === "purchase" ? Math.round(Number(values.paidAmount || 0) * 100) : undefined,
         paymentMode: values.paymentMode,
         referenceNumber: values.referenceNumber || null,
         taxMode: values.taxMode,
@@ -197,6 +202,11 @@ export function HardwareTradeForm({
               <select className={selectClassName} {...register("paymentMode")}>
                 {["Cash", "UPI", "Bank Transfer", "Cheque", "Card", "Other", "Credit"].map((option) => <option key={option}>{option}</option>)}
               </select>
+            </FormField>
+          ) : null}
+          {mode === "purchase" ? (
+            <FormField error={errors.paidAmount?.message} label="Paid amount (INR)">
+              <Input inputMode="decimal" min="0" step="0.01" type="number" {...register("paidAmount")} />
             </FormField>
           ) : null}
         </CardContent>

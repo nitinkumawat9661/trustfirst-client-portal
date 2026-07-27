@@ -104,11 +104,16 @@ export class PrismaHardwareTradeRepository {
     ) => Promise<void>;
     documentId: string;
     movements: Prisma.HardwareInventoryMovementUncheckedCreateInput[];
+    paymentStatus?: string | undefined;
     tenantId: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
       const document = await tx.hardwareTradeDocument.update({
-        data: { confirmedAt: new Date(), status: HardwareTradeDocumentStatus.CONFIRMED },
+        data: {
+          confirmedAt: new Date(),
+          ...(input.paymentStatus ? { paymentStatus: input.paymentStatus } : {}),
+          status: HardwareTradeDocumentStatus.CONFIRMED,
+        },
         include: tradeInclude,
         where: { id: input.documentId, tenantId: input.tenantId },
       });

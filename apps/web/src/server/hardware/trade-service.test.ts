@@ -302,8 +302,8 @@ describe("HardwareTradeService", () => {
     expect(movements).toHaveLength(0);
   });
 
-  it("posts supplier payable and payment when a paid purchase is confirmed", async () => {
-    const financial: string[] = [];
+  it("posts supplier payable and only the entered partial payment when purchase is confirmed", async () => {
+    const financial: Array<{ amountCents?: number; kind: string; paymentStatus?: string | undefined }> = [];
     const now = new Date();
     const document = {
       customerId: null,
@@ -324,7 +324,7 @@ describe("HardwareTradeService", () => {
           unitAmountCents: 1000,
         },
       ],
-      metadata: { paymentMode: "Cash", referenceNumber: "SUP-001" },
+      metadata: { paidAmountCents: 3000, paymentMode: "Cash", referenceNumber: "SUP-001" },
       paymentStatus: "unlinked",
       roundOffCents: 0,
       status: HardwareTradeDocumentStatus.DRAFT,
@@ -341,17 +341,22 @@ describe("HardwareTradeService", () => {
           callback({
             auditEvent: { create: async () => ({}) },
             documentSequence: { upsert: async () => ({ lastValue: financial.length + 1 }) },
-            financialAllocation: { create: async () => { financial.push("allocation"); return {}; } },
+            financialAllocation: { create: async ({ data }: { data: { amountCents: number } }) => { financial.push({ amountCents: data.amountCents, kind: "allocation" }); return {}; } },
             financialTransaction: {
-              create: async () => {
+              create: async ({ data }: { data: { amountCents: number } }) => {
                 const id = `fin_${financial.length + 1}`;
-                financial.push("transaction");
+                financial.push({ amountCents: data.amountCents, kind: "transaction" });
                 return { id };
               },
               findUnique: async () => null,
             },
             hardwareInventoryMovement: { create: async () => ({}) },
-            hardwareTradeDocument: { update: async () => ({ ...document, status: HardwareTradeDocumentStatus.CONFIRMED }) },
+            hardwareTradeDocument: {
+              update: async ({ data }: { data: { paymentStatus?: string } }) => {
+                financial.push({ kind: "document-update", paymentStatus: data.paymentStatus });
+                return { ...document, paymentStatus: data.paymentStatus ?? document.paymentStatus, status: HardwareTradeDocumentStatus.CONFIRMED };
+              },
+            },
             hardwareTradeTimelineEvent: { create: async () => ({}) },
           }),
         hardwareInventoryMovement: { findMany: async () => [] },
@@ -362,7 +367,12 @@ describe("HardwareTradeService", () => {
 
     await service.confirm({ tenantId: "tenant_1", userId: "user_1" }, "doc_purchase_1", { locationId: "loc_1" });
 
-    expect(financial).toEqual(["transaction", "transaction", "allocation"]);
+    expect(financial).toEqual([
+      { kind: "document-update", paymentStatus: "partial" },
+      { amountCents: 5000, kind: "transaction" },
+      { amountCents: 3000, kind: "transaction" },
+      { amountCents: 3000, kind: "allocation" },
+    ]);
   });
 
   it("blocks duplicate draft invoice numbers for hardware documents", async () => {

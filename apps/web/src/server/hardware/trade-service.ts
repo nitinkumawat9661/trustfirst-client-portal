@@ -169,6 +169,7 @@ export class HardwareTradeService {
       await this.ensureStockAvailable(context.tenantId, document, input.locationId);
     }
     const stockItems = document.items.filter((item) => !isStockSetupPending(item.product?.metadata));
+    const purchasePaidAmountCents = purchasePaymentAmountFromMetadata(document.metadata, document.totalCents);
     return this.repository.confirm({
       actorId: context.userId,
       afterConfirm: async (tx, confirmedDocument) => {
@@ -194,10 +195,10 @@ export class HardwareTradeService {
           tenantId: context.tenantId,
         });
         const paymentMode = paymentModeFromMetadata(confirmedDocument.metadata);
-        if (paymentMode) {
+        if (paymentMode && purchasePaidAmountCents > 0) {
           await postSupplierPayment(tx, {
             allocationTargetTransactionId: payable.id,
-            amountCents: confirmedDocument.totalCents,
+            amountCents: purchasePaidAmountCents,
             createdById: context.userId,
             hardwareDocumentId: confirmedDocument.id,
             idempotencyKey: `${confirmedDocument.id}:supplier-payment`,
@@ -229,6 +230,13 @@ export class HardwareTradeService {
           unitPriceCents: salesTypes.has(document.type) || document.type === HardwareTradeDocumentType.SALE_RETURN ? item.unitAmountCents : undefined,
         }) as Prisma.HardwareInventoryMovementUncheckedCreateInput,
       ),
+      paymentStatus: purchaseTypes.has(document.type)
+        ? purchasePaidAmountCents >= document.totalCents
+          ? "paid"
+          : purchasePaidAmountCents > 0
+            ? "partial"
+            : "unpaid"
+        : undefined,
       tenantId: context.tenantId,
     });
   }
@@ -1314,6 +1322,21 @@ function paymentModeFromMetadata(metadata: Prisma.JsonValue) {
   if (value === "Cheque") return PaymentMode.CHEQUE;
   if (value === "Card") return PaymentMode.CARD;
   return PaymentMode.OTHER;
+}
+
+function purchasePaymentAmountFromMetadata(metadata: Prisma.JsonValue, totalCents: number) {
+  const metadataRecord = asRecord(metadata);
+  const paymentMode = paymentModeFromMetadata(metadata);
+  if (!paymentMode) return 0;
+  const paidAmountCents = readNumber(metadataRecord.paidAmountCents);
+  const amount = paidAmountCents === null ? totalCents : paidAmountCents;
+  if (!Number.isInteger(amount) || amount < 0) {
+    throw validation("Paid amount must be zero or higher.");
+  }
+  if (amount > totalCents) {
+    throw validation("Paid amount cannot exceed purchase total.");
+  }
+  return amount;
 }
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
