@@ -2,7 +2,7 @@
 
 ## Summary
 
-- Timestamp: 2026-07-27T08:34:56.441Z
+- Timestamp: 2026-07-27T09:27:32.184Z
 - .env.deploy.local created: yes
 - Host masked: 45.10.x.x
 - Port: 22
@@ -15,8 +15,8 @@
 - Required trusted fingerprint: SHA256:w8MD7ergBNR3mKezePOVLyxvn/C/cFmBtWCUrC+p7W0
 - Decision: verified by trusted fingerprint match
 - Known_hosts repaired: yes
-- Backup path: C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260727083452
-- Deployment attempted: no
+- Backup path: C:\Users\DELL\.ssh\known_hosts.trustfirst-backup-20260727092728
+- Deployment attempted: yes
 - CafeLuxe untouched: yes
 
 ## Existing known_hosts Fingerprints
