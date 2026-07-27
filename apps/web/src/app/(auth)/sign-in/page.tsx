@@ -60,7 +60,7 @@ export default async function SignInPage({
   const { callbackUrl } = await searchParams;
 
   if (surface === "MANGALAM_PUBLIC") {
-    redirect(`${CANONICAL_ORIGINS.mangalamErp}/sign-in`);
+    redirect(`${CANONICAL_ORIGINS.mangalamErp}/signin`);
   }
 
   const defaultDestination = defaultSignInDestination(surface);

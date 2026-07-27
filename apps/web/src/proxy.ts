@@ -41,7 +41,8 @@ export default auth((request) => {
   );
 
   if (isProtected && !request.auth?.user?.id) {
-    const signInUrl = new URL("/sign-in", request.nextUrl);
+    const signInPath = surface === "MANGALAM_ERP" ? "/signin" : "/sign-in";
+    const signInUrl = new URL(signInPath, request.nextUrl);
 
     signInUrl.searchParams.set(
       "callbackUrl",

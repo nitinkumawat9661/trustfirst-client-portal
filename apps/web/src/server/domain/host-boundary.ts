@@ -51,16 +51,15 @@ export function enforceHostBoundary(
    * only intentionally public APIs may be reachable.
    */
   if (surface === "MANGALAM_PUBLIC") {
-    if (pathname === "/signin") {
+    if (pathname === "/signin" || pathname === "/sign-in") {
       return redirectAcrossSurface(
         request,
         CANONICAL_ORIGINS.mangalamErp,
-        "/sign-in",
+        "/signin",
       );
     }
 
     if (
-      pathname === "/sign-in" ||
       pathname === "/admin" ||
       pathname.startsWith("/admin/")
     ) {
@@ -103,14 +102,6 @@ export function enforceHostBoundary(
    * from the tenant ERP hostname.
    */
   if (surface === "MANGALAM_ERP") {
-    if (pathname === "/signin") {
-      return redirectAcrossSurface(
-        request,
-        CANONICAL_ORIGINS.mangalamErp,
-        "/sign-in",
-      );
-    }
-
     if (
       pathname === "/client" ||
       (pathname.startsWith("/client/") && !pathname.startsWith("/client/hardware"))

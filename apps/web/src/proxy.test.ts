@@ -5,18 +5,27 @@ import { enforceHostBoundary } from "./server/domain/host-boundary";
 describe("host boundary proxy decisions", () => {
   it("redirects Mangalam public signin aliases only to the Mangalam ERP sign-in", () => {
     const response = enforceHostBoundary(
-      request("https://manglam.in/signin"),
+      request("https://mangalamsanitary.in/signin"),
       "MANGALAM_PUBLIC",
     );
 
     expect(response?.status).toBe(307);
-    expect(response?.headers.get("location")).toBe("https://app.mangalamsanitary.in/sign-in");
+    expect(response?.headers.get("location")).toBe("https://app.mangalamsanitary.in/signin");
     expect(response?.headers.get("location")).not.toContain("client.trustfirstsolutions.in");
+  });
+
+  it("renders Mangalam ERP signin on the ERP host without cross-host redirect", () => {
+    const response = enforceHostBoundary(
+      request("https://app.mangalamsanitary.in/signin"),
+      "MANGALAM_ERP",
+    );
+
+    expect(response).toBeNull();
   });
 
   it("keeps Mangalam ERP client portal paths inside Mangalam ERP", () => {
     const response = enforceHostBoundary(
-      request("https://app.manglam.in/client/documents"),
+      request("https://app.mangalamsanitary.in/client/documents"),
       "MANGALAM_ERP",
     );
 

@@ -140,11 +140,16 @@ export class HardwareTradeService {
         const product = products.get(item.productId);
         if (!product) throw validation("Product was not found.");
         const line = calculateTradeTotals([item]);
+        const itemMetadata = asRecord(item.metadata);
+        const productMetadata = asRecord(product.metadata);
         return {
           description: product.name,
           discountCents: item.discountCents ?? 0,
           lineTotalCents: line.totalCents,
-          metadata: (item.metadata ?? {}) as Prisma.InputJsonValue,
+          metadata: {
+            ...itemMetadata,
+            hsnCode: readString(itemMetadata.hsnCode) ?? readString(productMetadata.hsnCode),
+          } as Prisma.InputJsonValue,
           productId: item.productId,
           quantity: item.quantity,
           taxCents: line.taxCents,
@@ -320,9 +325,12 @@ export class HardwareTradeService {
           lineItems: normalizedItems.map((item) => {
             const product = products.get(item.productId);
             const line = calculateTradeTotals([item]);
+            const itemMetadata = asRecord(item.metadata);
+            const productMetadata = asRecord(product?.metadata);
             return {
               description: product?.name ?? "Item",
               discountCents: item.discountCents ?? 0,
+              hsnCode: readString(itemMetadata.hsnCode) ?? readString(productMetadata.hsnCode),
               productId: item.productId,
               quantity: item.quantity,
               taxCents: line.taxCents,
@@ -360,11 +368,16 @@ export class HardwareTradeService {
             create: normalizedItems.map((item) => {
               const product = products.get(item.productId);
               const line = calculateTradeTotals([item]);
+              const itemMetadata = asRecord(item.metadata);
+              const productMetadata = asRecord(product?.metadata);
               return {
                 description: product?.name ?? "Item",
                 discountCents: item.discountCents ?? 0,
                 lineTotalCents: line.totalCents,
-                metadata: (item.metadata ?? {}) as Prisma.InputJsonValue,
+                metadata: {
+                  ...itemMetadata,
+                  hsnCode: readString(itemMetadata.hsnCode) ?? readString(productMetadata.hsnCode),
+                } as Prisma.InputJsonValue,
                 productId: item.productId,
                 quantity: item.quantity,
                 taxCents: line.taxCents,

@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 type AppShellProps = {
+  brandName?: string | undefined;
   children: ReactNode;
   mode: "admin" | "client";
 };
@@ -22,14 +23,14 @@ const nav = {
   ],
 };
 
-export function AppShell({ children, mode }: AppShellProps) {
+export function AppShell({ brandName = "TrustFirst", children, mode }: AppShellProps) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <aside className="fixed inset-x-0 top-0 z-10 border-b border-border bg-background/95 backdrop-blur md:inset-y-0 md:left-0 md:right-auto md:w-64 md:border-b-0 md:border-r">
         <div className="flex h-16 items-center justify-between px-4 md:h-auto md:flex-col md:items-start md:gap-8 md:p-6">
           <Link className="flex items-center gap-2 font-semibold" href="/">
             <ShieldCheck className="size-6 text-primary" />
-            TrustFirst
+            {brandName}
           </Link>
           <Badge>{mode}</Badge>
         </div>

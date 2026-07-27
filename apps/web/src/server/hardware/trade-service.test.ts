@@ -551,6 +551,8 @@ describe("HardwareTradeService", () => {
 
   it("posts a quick POS sale atomically with invoice, stock movement, and payment", async () => {
     const created: string[] = [];
+    const tradeDocuments: Array<Record<string, unknown>> = [];
+    const invoices: Array<Record<string, unknown>> = [];
     const service = new HardwareTradeService(
       prismaMock({
         $transaction: async (callback: (tx: Record<string, unknown>) => Promise<unknown>) =>
@@ -569,15 +571,17 @@ describe("HardwareTradeService", () => {
             },
             hardwareInventoryMovement: { create: async () => created.push("movement") },
             hardwareTradeDocument: {
-              create: async ({ data }: { data: { documentNumber: string; paymentStatus: string; totalCents: number } }) => {
+              create: async ({ data }: { data: Record<string, unknown> }) => {
                 created.push("document");
+                tradeDocuments.push(data);
                 return { id: "doc_1", ...data };
               },
             },
             hardwareTradeTimelineEvent: { create: async () => created.push("tradeTimeline") },
             invoice: {
-              create: async ({ data }: { data: { invoiceNumber: string; totalAmountCents: number } }) => {
+              create: async ({ data }: { data: Record<string, unknown> }) => {
                 created.push("invoice");
+                invoices.push(data);
                 return { id: "inv_1", ...data };
               },
             },
@@ -588,7 +592,7 @@ describe("HardwareTradeService", () => {
           findMany: async () => [{ quantity: 5, type: HardwareInventoryMovementType.STOCK_IN }],
         },
         hardwareProduct: {
-          findMany: async () => [{ gstTaxConfig: { rateBps: 1800 }, id: "prod_1", metadata: {}, name: "Tap" }],
+          findMany: async () => [{ gstTaxConfig: { rateBps: 1800 }, id: "prod_1", metadata: { hsnCode: "8481" }, name: "Tap" }],
         },
         hardwareStockLocation: { findFirst: async () => ({ id: "loc_1" }) },
         hardwareTradeDocument: {
@@ -613,6 +617,13 @@ describe("HardwareTradeService", () => {
 
     expect(result).toMatchObject({ invoiceNumber: "MS/INV/2026-27/00001", paymentStatus: "paid" });
     expect(created).toEqual(expect.arrayContaining(["invoice", "document", "movement", "payment", "financialTransaction", "financialAllocation"]));
+    expect(invoices[0]?.lineItems).toEqual([
+      expect.objectContaining({ hsnCode: "8481", taxRateBps: 1800, taxCents: 180 }),
+    ]);
+    expect((tradeDocuments[0]?.items as { create: Array<{ metadata: Record<string, unknown>; taxRateBps: number }> }).create[0]).toMatchObject({
+      metadata: { hsnCode: "8481" },
+      taxRateBps: 1800,
+    });
   });
 
   it("cancels a confirmed sale by reversing stock and voiding the linked invoice", async () => {

@@ -21,7 +21,7 @@ export default async function Home() {
   const session = await auth();
 
   if (surface === "MANGALAM_ERP") {
-    redirect(session?.user?.id ? "/admin" : "/sign-in");
+    redirect(session?.user?.id ? "/admin" : "/signin");
   }
 
   if (surface === "TRUSTFIRST_PORTAL") {

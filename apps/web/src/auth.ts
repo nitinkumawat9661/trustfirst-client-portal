@@ -4,6 +4,7 @@ import { getPrisma } from "@trustfirst/database";
 import { AuthenticationService } from "@/server/auth/auth-service";
 import { credentialsLoginSchema } from "@/server/auth/schemas";
 import { authSessionCookieName, shouldUseSecureAuthCookies } from "@/server/auth/cookie-policy";
+import { safeAuthRedirect } from "@/server/auth/redirect-policy";
 import type { Permission } from "@/server/authorization/authorization";
 import { readRequestMetadata } from "@/server/security/request-metadata";
 
@@ -70,6 +71,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      return safeAuthRedirect(url, baseUrl);
+    },
     async jwt({ token, user }) {
       if (user) {
         token.activeTenantId = user.activeTenantId;

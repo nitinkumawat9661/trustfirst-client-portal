@@ -26,6 +26,7 @@ type AdminDashboardShellProps = {
   children: ReactNode;
   offlineScope: OfflineQueueScope;
   permissions: readonly string[];
+  signOutCallbackUrl: string;
   userName: string;
 };
 
@@ -34,6 +35,7 @@ export function AdminDashboardShell({
   children,
   offlineScope,
   permissions,
+  signOutCallbackUrl,
   userName,
 }: AdminDashboardShellProps) {
   const pathname = usePathname();
@@ -103,7 +105,7 @@ export function AdminDashboardShell({
               {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
             </Button>
             <NotificationBell open={notificationsOpen} onOpenChange={setNotificationsOpen} />
-            <UserMenu open={userMenuOpen} onOpenChange={setUserMenuOpen} userName={userName} />
+            <UserMenu open={userMenuOpen} onOpenChange={setUserMenuOpen} signOutCallbackUrl={signOutCallbackUrl} userName={userName} />
           </div>
         </header>
         <main className="px-3 py-5 sm:px-6 lg:px-8">
@@ -258,7 +260,17 @@ function NotificationBell({ open, onOpenChange }: { open: boolean; onOpenChange:
   );
 }
 
-function UserMenu({ open, onOpenChange, userName }: { open: boolean; onOpenChange: (open: boolean) => void; userName: string }) {
+function UserMenu({
+  open,
+  onOpenChange,
+  signOutCallbackUrl,
+  userName,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  signOutCallbackUrl: string;
+  userName: string;
+}) {
   return (
     <div className="relative">
       <Button aria-expanded={open} aria-label="User menu" onClick={() => onOpenChange(!open)} size="sm" type="button" variant="outline">
@@ -269,7 +281,7 @@ function UserMenu({ open, onOpenChange, userName }: { open: boolean; onOpenChang
       {open ? (
         <div className="absolute right-0 mt-2 w-52 rounded-md border border-border bg-card p-2 shadow-lg">
           <Link className="flex min-h-10 items-center rounded-md px-3 text-sm hover:bg-muted" href="/admin/settings" onClick={() => onOpenChange(false)}>Settings</Link>
-          <button className="flex min-h-10 w-full items-center rounded-md px-3 text-left text-sm hover:bg-muted" onClick={() => signOut({ callbackUrl: "/sign-in" })} type="button">Sign out</button>
+          <button className="flex min-h-10 w-full items-center rounded-md px-3 text-left text-sm hover:bg-muted" onClick={() => signOut({ callbackUrl: signOutCallbackUrl })} type="button">Sign out</button>
         </div>
       ) : null}
     </div>
