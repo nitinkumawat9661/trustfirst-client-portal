@@ -43,7 +43,7 @@ TrustFirst Client Portal is deployed on the authorized shared VPS for the Mangal
 - `npm run runtime:health`: passed
 - `npm run vps:smoke`: passed against `https://client.trustfirstsolutions.in`
 - `SMOKE_BASE_URL=https://client.trustfirstsolutions.in npm run intake:smoke`: passed
-- Latest intake smoke submission: `PUB-REQ-2026-0014`
+- Latest intake smoke submission: `PUB-REQ-2026-0017`
 - Public intake page: HTTP `200`
 - Auth.js session endpoint: HTTP `200`
 - Anonymous admin lockdown: HTTP `307`
