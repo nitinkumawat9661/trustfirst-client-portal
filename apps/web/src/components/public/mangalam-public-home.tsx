@@ -12,6 +12,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { manglamTradingConfiguration } from "@/server/config-packs/manglam-profile";
+import { CANONICAL_ORIGINS } from "@/server/domain/host-routing";
 
 const categories = [
   {
@@ -64,15 +65,26 @@ export function MangalamPublicHome() {
             </div>
           </Link>
 
-          <Button
-            asChild
-            className="hidden bg-[#c69a49] text-black hover:bg-[#d8ae61] sm:inline-flex"
-          >
-            <Link href="/receipt">
-              Check Bill / Receipt
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
+          <div className="hidden items-center gap-2 sm:flex">
+            <Button
+              asChild
+              className="border-white/20 bg-transparent text-white hover:bg-white/10"
+              variant="outline"
+            >
+              <Link href={`${CANONICAL_ORIGINS.mangalamErp}/sign-in`}>
+                ERP Login
+              </Link>
+            </Button>
+            <Button
+              asChild
+              className="bg-[#c69a49] text-black hover:bg-[#d8ae61]"
+            >
+              <Link href="/receipt">
+                Check Bill / Receipt
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -113,7 +125,7 @@ export function MangalamPublicHome() {
                 size="lg"
                 variant="outline"
               >
-                <Link href="#categories">Explore Categories</Link>
+                <Link href={`${CANONICAL_ORIGINS.mangalamErp}/sign-in`}>ERP Login</Link>
               </Button>
             </div>
           </div>

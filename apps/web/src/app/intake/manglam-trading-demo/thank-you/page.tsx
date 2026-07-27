@@ -29,7 +29,7 @@ export default async function ManglamRequirementIntakeThankYouPage({
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm leading-6 text-muted-foreground">
-              A confirmation page is shown only after TrustFirst saves your requirement in the database.
+              A confirmation page is shown only after Mangalam Sanitary ERP saves your requirement in the database.
             </p>
             <Button asChild>
               <Link href="/intake/manglam-trading-demo?error=submit">Retry intake form</Link>
@@ -51,7 +51,7 @@ export default async function ManglamRequirementIntakeThankYouPage({
             Thank you
           </CardTitle>
           <CardDescription>
-            Your details have been received by TrustFirst.
+            Your details have been received by Mangalam Sanitary.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -70,11 +70,11 @@ export default async function ManglamRequirementIntakeThankYouPage({
             </div>
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
-            Please send this Submission ID to TrustFirst on WhatsApp.
+            Please send this Submission ID to Mangalam Sanitary on WhatsApp.
           </p>
           {receipt.possibleDuplicate ? (
             <p className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-              This looks similar to a recent submission. TrustFirst will verify the latest details in the admin queue.
+              This looks similar to a recent submission. Mangalam Sanitary will verify the latest details in the ERP queue.
             </p>
           ) : null}
           <Button asChild variant="outline">

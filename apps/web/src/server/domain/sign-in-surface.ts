@@ -7,7 +7,9 @@ export function defaultSignInDestination(surface: AppSurface) {
 }
 
 export function signInBrandForSurface(surface: AppSurface): SignInBrand {
-  return surface === "MANGALAM_ERP" ? "MANGALAM" : "TRUSTFIRST";
+  return surface === "MANGALAM_ERP" || surface === "MANGALAM_PUBLIC"
+    ? "MANGALAM"
+    : "TRUSTFIRST";
 }
 
 export function safeSignInCallback(value: string | undefined, fallback: string) {

@@ -6,6 +6,22 @@ export const CANONICAL_ORIGINS = {
   trustFirstPortal: "https://client.trustfirstsolutions.in",
 } as const;
 
+export const CONFIGURED_HOSTS = {
+  mangalamPublic: [
+    "mangalamsanitary.in",
+    "www.mangalamsanitary.in",
+    "manglam.in",
+    "www.manglam.in",
+  ],
+  mangalamErp: [
+    "app.mangalamsanitary.in",
+    "app.manglam.in",
+  ],
+  trustFirstPortal: [
+    "client.trustfirstsolutions.in",
+  ],
+} as const;
+
 export type AppSurface =
   | "MANGALAM_PUBLIC"
   | "MANGALAM_ERP"
@@ -15,14 +31,20 @@ export type AppSurface =
 const surfaceByHost: Readonly<Record<string, AppSurface>> = {
   "mangalamsanitary.in": "MANGALAM_PUBLIC",
   "www.mangalamsanitary.in": "MANGALAM_PUBLIC",
+  "manglam.in": "MANGALAM_PUBLIC",
+  "www.manglam.in": "MANGALAM_PUBLIC",
   "app.mangalamsanitary.in": "MANGALAM_ERP",
+  "app.manglam.in": "MANGALAM_ERP",
   "client.trustfirstsolutions.in": "TRUSTFIRST_PORTAL",
 };
 
 const tenantByHost: Readonly<Record<string, string>> = {
   "mangalamsanitary.in": MANGALAM_TENANT_SLUG,
   "www.mangalamsanitary.in": MANGALAM_TENANT_SLUG,
+  "manglam.in": MANGALAM_TENANT_SLUG,
+  "www.manglam.in": MANGALAM_TENANT_SLUG,
   "app.mangalamsanitary.in": MANGALAM_TENANT_SLUG,
+  "app.manglam.in": MANGALAM_TENANT_SLUG,
 };
 
 export function normalizeRequestHost(value: string | null | undefined) {

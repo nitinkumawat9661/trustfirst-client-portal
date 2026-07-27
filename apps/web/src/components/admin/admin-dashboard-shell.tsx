@@ -45,7 +45,7 @@ export function AdminDashboardShell({
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("trustfirst.theme");
+    const stored = window.localStorage.getItem("business-workspace.theme");
     const initial = stored === "dark" ? "dark" : "light";
     document.documentElement.classList.toggle("dark", initial === "dark");
     queueMicrotask(() => setTheme(initial));
@@ -73,7 +73,7 @@ export function AdminDashboardShell({
   function toggleTheme() {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
-    window.localStorage.setItem("trustfirst.theme", next);
+    window.localStorage.setItem("business-workspace.theme", next);
     document.documentElement.classList.toggle("dark", next === "dark");
   }
 

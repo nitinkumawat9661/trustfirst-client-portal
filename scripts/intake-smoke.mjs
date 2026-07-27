@@ -66,8 +66,8 @@ async function main() {
   for (const marker of [
     submitPayload.submissionNumber,
     businessName,
-    "Your details have been received by TrustFirst.",
-    "Please send this Submission ID to TrustFirst on WhatsApp.",
+    "Your details have been received by Mangalam Sanitary.",
+    "Please send this Submission ID to Mangalam Sanitary on WhatsApp.",
   ]) {
     if (!thankYouHtml.includes(marker)) {
       throw new Error(`Thank-you page missing marker: ${marker}`);

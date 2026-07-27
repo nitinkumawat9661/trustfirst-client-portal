@@ -281,7 +281,7 @@ function MangalamSignIn({ callbackUrl }: { callbackUrl: string }) {
             </Card>
 
             <p className="mt-6 text-center text-xs text-zinc-400">
-              Secure ERP workspace · Powered by TrustFirst Solutions
+              Secure Mangalam Sanitary ERP workspace
             </p>
           </div>
         </section>
@@ -332,7 +332,7 @@ function MangalamSignIn({ callbackUrl }: { callbackUrl: string }) {
             </div>
 
             <p className="text-xs tracking-wide text-zinc-500">
-              Black/gold ERP access · Secure sessions · Tenant protected
+              Black/gold ERP access · Secure sessions · Mangalam protected
             </p>
           </div>
         </section>

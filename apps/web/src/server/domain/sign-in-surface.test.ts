@@ -10,6 +10,7 @@ describe("sign-in surface decisions", () => {
 
   it("selects host-specific sign-in branding", () => {
     expect(signInBrandForSurface("MANGALAM_ERP")).toBe("MANGALAM");
+    expect(signInBrandForSurface("MANGALAM_PUBLIC")).toBe("MANGALAM");
     expect(signInBrandForSurface("TRUSTFIRST_PORTAL")).toBe("TRUSTFIRST");
     expect(signInBrandForSurface("UNKNOWN")).toBe("TRUSTFIRST");
   });
