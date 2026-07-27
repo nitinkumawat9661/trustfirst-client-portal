@@ -7,6 +7,7 @@ export * from "./hardware-service";
 export * from "./demo-data";
 export * from "./hardware-i18n";
 export * from "./http";
+export * from "./import-files";
 export * from "./plugin-manifest";
 export * from "./schemas";
 export * from "./trade-calculations";

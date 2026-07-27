@@ -1,14 +1,17 @@
 import {
   ClientLifecycleStage,
+  AuditAction,
   FinancialPartyType,
   FinancialTransactionStatus,
   HardwareInventoryMovementType,
+  HardwareTimelineVerb,
   HardwareTradeDocumentStatus,
   HardwareTradeDocumentType,
   InvoiceStatus,
   type Prisma,
   type PrismaClient,
 } from "@trustfirst/database";
+import { createHash } from "node:crypto";
 import { AppError } from "../domain/errors";
 import { PermissionResolverService } from "../permissions";
 import { currentIndiaBusinessDay } from "./business-time";
@@ -47,6 +50,31 @@ type MovementRecord = {
   productId: string;
   quantity: number;
   type: HardwareInventoryMovementType;
+};
+type ImportAction = "create" | "skip" | "update";
+type NormalizedImportRow = {
+  action: ImportAction;
+  active: boolean;
+  barcode: string | null;
+  brand: string | null;
+  category: string | null;
+  errors: Array<{ field?: string; message: string; row: number }>;
+  existingMetadata?: Prisma.JsonValue | undefined;
+  existingProductId?: string | undefined;
+  gstRateBps: number;
+  hsnCode: string | null;
+  minimumStock: number;
+  mrpCents: number;
+  name: string;
+  openingStock: number;
+  purchaseCostCents: number;
+  row: number;
+  salesPriceCents: number;
+  shouldCreateOpeningStock: boolean;
+  sku: string;
+  stockLocation: string | null;
+  unit: string | null;
+  warnings: string[];
 };
 
 export class HardwareService {
@@ -671,77 +699,186 @@ export class HardwareService {
 
   async importPreview(context: ActorContext, input: HardwareImportPreviewInput): Promise<HardwareImportPreview> {
     await this.enforce(context, "hardware.catalog.manage");
-    const errors = input.rows.flatMap((row, index) => {
-      const rowNumber = index + 1;
-      if (!row.sku || !row.name) return [{ message: "SKU and name are required.", row: rowNumber }];
-      return [];
-    });
-    return { errors, validRows: input.rows.length - errors.length };
+    return this.prepareImport(context, input);
   }
 
   async executeImport(context: ActorContext, input: HardwareImportExecuteInput): Promise<HardwareImportSummary> {
     await this.enforce(context, "hardware.catalog.manage");
-    const errors: Array<{ message: string; row: number }> = [];
-    let createdRows = 0;
-    let skippedRows = 0;
-
-    for (const [index, row] of input.rows.entries()) {
-      const rowNumber = index + 1;
-      const sku = readText(row.sku);
-      const name = readText(row.name);
-      const barcode = readText(row.barcode);
-      const salesPriceCents = readNumber(row.salesPriceCents);
-      const purchaseCostCents = readNumber(row.purchaseCostCents);
-      const lowStockThreshold = readNumber(row.lowStockThreshold);
-
-      if (!sku || !name) {
-        errors.push({ message: "SKU and name are required.", row: rowNumber });
-        continue;
-      }
-      if ([salesPriceCents, purchaseCostCents, lowStockThreshold].some((value) => value !== undefined && value < 0)) {
-        errors.push({ message: "Numeric import values cannot be negative.", row: rowNumber });
-        continue;
-      }
-      if (input.rows.slice(0, index).some((candidate) => readText(candidate.sku) === sku)) {
-        errors.push({ message: "Duplicate SKU exists inside this import file.", row: rowNumber });
-        continue;
-      }
-      if (barcode && input.rows.slice(0, index).some((candidate) => readText(candidate.barcode) === barcode)) {
-        errors.push({ message: "Duplicate barcode exists inside this import file.", row: rowNumber });
-        continue;
-      }
-
-      const duplicateSku = await this.repository.findProductBySku(context.tenantId, sku);
-      const duplicateBarcode = barcode
-        ? await this.repository.findProductByBarcode(context.tenantId, barcode)
-        : null;
-
-      if (duplicateSku || duplicateBarcode) {
-        const message = duplicateSku ? "Duplicate SKU was found." : "Duplicate barcode was found.";
-        if (input.duplicateMode === "skip") {
-          skippedRows += 1;
-        } else {
-          errors.push({ message, row: rowNumber });
-        }
-        continue;
-      }
-
-      await this.repository.createProduct({
-        actorId: context.userId,
-        data: stripUndefined({
-          barcode,
-          lowStockThreshold: lowStockThreshold ?? 0,
-          name,
-          purchaseCostCents: purchaseCostCents ?? 0,
-          salesPriceCents: salesPriceCents ?? 0,
-          sku,
-          tenantId: context.tenantId,
-        }) as Prisma.HardwareProductUncheckedCreateInput,
-      });
-      createdRows += 1;
+    const idempotencyKey = input.idempotencyKey?.trim();
+    const existingImport = idempotencyKey
+      ? await this.prisma.auditEvent.findFirst({
+          select: { id: true },
+          where: {
+            action: AuditAction.HARDWARE_CATALOG_UPDATED,
+            targetId: idempotencyKey,
+            targetType: "HardwareProductImport",
+            tenantId: context.tenantId,
+          },
+        })
+      : null;
+    const preview = await this.prepareImport(context, input);
+    if (existingImport) {
+      return {
+        ...preview,
+        createdRows: 0,
+        dryRun: false,
+        skippedRows: preview.validRows,
+        updatedRows: 0,
+      };
+    }
+    if (preview.errors.length > 0) {
+      return {
+        ...preview,
+        createdRows: 0,
+        dryRun: Boolean(input.dryRun),
+        skippedRows: preview.rows.filter((row) => row.action === "skip").length,
+        updatedRows: 0,
+      };
+    }
+    if (input.dryRun) {
+      return {
+        ...preview,
+        createdRows: 0,
+        dryRun: true,
+        skippedRows: preview.rows.filter((row) => row.action === "skip").length,
+        updatedRows: 0,
+      };
     }
 
-    return { createdRows, errors, skippedRows, validRows: input.rows.length - errors.length };
+    const normalizedRows = await this.normalizedImportRows(context, input);
+    const actionableRows = normalizedRows.filter((row) => row.action !== "skip");
+    const importId = idempotencyKey ?? preview.importId;
+    const result = await this.prisma.$transaction(async (tx) => {
+      let createdRows = 0;
+      let updatedRows = 0;
+      for (const row of actionableRows) {
+        const categoryId = row.category ? (await tx.hardwareProductCategory.upsert({
+          create: { name: row.category, slug: slugify(row.category), tenantId: context.tenantId },
+          update: {},
+          where: { tenantId_slug: { slug: slugify(row.category), tenantId: context.tenantId } },
+        })).id : undefined;
+        const brandId = row.brand ? (await tx.hardwareBrand.upsert({
+          create: { name: row.brand, slug: slugify(row.brand), tenantId: context.tenantId },
+          update: {},
+          where: { tenantId_slug: { slug: slugify(row.brand), tenantId: context.tenantId } },
+        })).id : undefined;
+        const unitId = row.unit ? (await tx.hardwareUnit.upsert({
+          create: { code: row.unit.toUpperCase(), name: row.unit.toUpperCase(), tenantId: context.tenantId },
+          update: {},
+          where: { tenantId_code: { code: row.unit.toUpperCase(), tenantId: context.tenantId } },
+        })).id : undefined;
+        const productData = stripUndefined({
+          archivedAt: row.active ? null : new Date(),
+          barcode: row.barcode,
+          brandId,
+          categoryId,
+          gstTaxConfig: { rateBps: row.gstRateBps },
+          lowStockThreshold: row.minimumStock,
+          metadata: {
+            ...asRecord(row.existingMetadata),
+            hsnCode: row.hsnCode,
+            importId,
+            mrpCents: row.mrpCents,
+            stockSetupStatus: row.openingStock > 0 ? "TRACKED" : "PENDING",
+          } as Prisma.InputJsonValue,
+          name: row.name,
+          purchaseCostCents: row.purchaseCostCents,
+          salesPriceCents: row.salesPriceCents,
+          sku: row.sku,
+          tenantId: context.tenantId,
+          unitId,
+        }) as Prisma.HardwareProductUncheckedCreateInput;
+        const product = row.existingProductId
+          ? await tx.hardwareProduct.update({
+              data: stripUndefined({
+                archivedAt: productData.archivedAt,
+                barcode: productData.barcode,
+                brandId: productData.brandId,
+                categoryId: productData.categoryId,
+                gstTaxConfig: productData.gstTaxConfig,
+                lowStockThreshold: productData.lowStockThreshold,
+                metadata: productData.metadata,
+                name: productData.name,
+                purchaseCostCents: productData.purchaseCostCents,
+                salesPriceCents: productData.salesPriceCents,
+                unitId: productData.unitId,
+              }) as Prisma.HardwareProductUncheckedUpdateInput,
+              where: { id: row.existingProductId },
+            })
+          : await tx.hardwareProduct.create({ data: productData });
+        if (row.existingProductId) {
+          updatedRows += 1;
+        } else {
+          createdRows += 1;
+        }
+        await tx.hardwareTimelineEvent.create({
+          data: {
+            actorId: context.userId,
+            metadata: { importId, row: row.row },
+            productId: product.id,
+            summary: `${row.existingProductId ? "Updated" : "Imported"} product ${product.sku}`,
+            tenantId: context.tenantId,
+            verb: row.existingProductId ? HardwareTimelineVerb.PRODUCT_UPDATED : HardwareTimelineVerb.PRODUCT_CREATED,
+          },
+        });
+        if (row.openingStock > 0 && row.shouldCreateOpeningStock) {
+          const location = await this.ensureImportLocation(tx, context.tenantId, row.stockLocation);
+          await tx.hardwareInventoryMovement.create({
+            data: {
+              locationId: location.id,
+              metadata: { importId, row: row.row, source: "product_import" } as Prisma.InputJsonValue,
+              notes: "Opening stock from product import",
+              productId: product.id,
+              quantity: row.openingStock,
+              referenceId: importId,
+              referenceType: "hardware_product_import_opening_stock",
+              tenantId: context.tenantId,
+              type: HardwareInventoryMovementType.STOCK_IN,
+              unitCostCents: row.purchaseCostCents,
+              unitPriceCents: row.salesPriceCents,
+            },
+          });
+          await tx.auditEvent.create({
+            data: {
+              action: AuditAction.HARDWARE_STOCK_MOVED,
+              actorId: context.userId,
+              metadata: { importId, quantity: row.openingStock, row: row.row },
+              targetId: product.id,
+              targetType: "HardwareProduct",
+              tenantId: context.tenantId,
+            },
+          });
+        }
+      }
+      await tx.hardwareTimelineEvent.create({
+        data: {
+          actorId: context.userId,
+          metadata: { createdRows, importId, mode: input.mode, updatedRows },
+          summary: `Imported ${createdRows} product${createdRows === 1 ? "" : "s"} and updated ${updatedRows}`,
+          tenantId: context.tenantId,
+          verb: HardwareTimelineVerb.IMPORT_PREVIEWED,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          action: AuditAction.HARDWARE_CATALOG_UPDATED,
+          actorId: context.userId,
+          metadata: { createdRows, importId, mode: input.mode, rowCount: input.rows.length, updatedRows },
+          targetId: importId,
+          targetType: "HardwareProductImport",
+          tenantId: context.tenantId,
+        },
+      });
+      return { createdRows, updatedRows };
+    });
+
+    return {
+      ...preview,
+      createdRows: result.createdRows,
+      dryRun: false,
+      skippedRows: preview.rows.filter((row) => row.action === "skip").length,
+      updatedRows: result.updatedRows,
+    };
   }
 
   async demoReadiness(context: ActorContext): Promise<HardwareDemoReadiness> {
@@ -1026,6 +1163,158 @@ export class HardwareService {
     };
   }
 
+  private async prepareImport(context: ActorContext, input: HardwareImportPreviewInput): Promise<HardwareImportPreview> {
+    const rows = await this.normalizedImportRows(context, input);
+    const errors = rows.flatMap((row) => row.errors);
+    const importId = input.importId?.trim() || importFingerprint(context.tenantId, rows);
+    return {
+      errors,
+      importId,
+      mode: input.mode,
+      rows: rows.map((row) => ({
+        action: row.action,
+        barcode: row.barcode,
+        brand: row.brand,
+        category: row.category,
+        name: row.name,
+        openingStock: row.openingStock,
+        row: row.row,
+        sku: row.sku,
+        stockLocation: row.stockLocation,
+        unit: row.unit,
+        warnings: row.warnings,
+      })),
+      validRows: rows.filter((row) => row.errors.length === 0 && row.action !== "skip").length,
+    };
+  }
+
+  private async normalizedImportRows(context: ActorContext, input: HardwareImportPreviewInput): Promise<NormalizedImportRow[]> {
+    const products = await this.prisma.hardwareProduct.findMany({
+      select: { barcode: true, id: true, metadata: true, sku: true },
+      where: { archivedAt: null, tenantId: context.tenantId },
+    });
+    const movements = await this.repository.allMovements(context.tenantId);
+    const skuSeen = new Map<string, number>();
+    const barcodeSeen = new Map<string, number>();
+    return input.rows.map((rawRow, index) => {
+      const row = readImportRow(rawRow);
+      const rowNumber = index + 1;
+      const sku = normalizeSku(readImportText(row, ["sku", "item sku", "product sku"]));
+      const name = readImportText(row, ["product name", "name", "item name"]);
+      const barcode = readImportText(row, ["barcode", "bar code", "ean", "upc"]) ?? null;
+      const category = readImportText(row, ["category", "product category"]) ?? null;
+      const brand = readImportText(row, ["brand", "make"]) ?? null;
+      const unit = readImportText(row, ["unit", "uom", "unit code"])?.toUpperCase() ?? null;
+      const hsnCode = readImportText(row, ["hsn", "hsn code"]) ?? null;
+      const stockLocation = readImportText(row, ["stock location", "location", "godown"]) ?? null;
+      const gstRateBps = readImportRateBps(row);
+      const purchaseCostCents = readMoneyCents(row, ["purchase rate", "purchase cost", "purchase price"], ["purchaseCostCents", "purchase cost cents"]);
+      const salesPriceCents = readMoneyCents(row, ["sale rate", "sales rate", "selling price", "sale price"], ["salesPriceCents", "sale price cents"]);
+      const mrpCents = readMoneyCents(row, ["mrp"], ["mrpCents", "mrp cents"]);
+      const openingStock = readNonNegativeInteger(row, ["opening stock", "stock", "opening quantity"]);
+      const minimumStock = readNonNegativeInteger(row, ["minimum stock", "minimum qty", "low stock threshold", "min stock"]);
+      const active = readActiveStatus(readImportText(row, ["active status", "status", "active"]));
+      const errors: NormalizedImportRow["errors"] = [];
+      const warnings: string[] = [];
+
+      for (const [field, value] of Object.entries({ barcode, brand, category, hsnCode, name, sku, stockLocation, unit })) {
+        if (value && isSpreadsheetFormula(value)) {
+          errors.push({ field, message: "Spreadsheet formulas are not allowed in import text fields.", row: rowNumber });
+        }
+      }
+      if (!sku) errors.push({ field: "sku", message: "SKU is required.", row: rowNumber });
+      if (!name) errors.push({ field: "name", message: "Product name is required.", row: rowNumber });
+      if (sku && skuSeen.has(sku)) {
+        errors.push({ field: "sku", message: `Duplicate SKU exists inside this import file. First seen on row ${skuSeen.get(sku)}.`, row: rowNumber });
+      } else if (sku) {
+        skuSeen.set(sku, rowNumber);
+      }
+      if (barcode && barcodeSeen.has(barcode)) {
+        errors.push({ field: "barcode", message: `Duplicate barcode exists inside this import file. First seen on row ${barcodeSeen.get(barcode)}.`, row: rowNumber });
+      } else if (barcode) {
+        barcodeSeen.set(barcode, rowNumber);
+      }
+      if (hsnCode && !/^\d{4,8}$/u.test(hsnCode)) {
+        errors.push({ field: "hsn", message: "HSN must be 4 to 8 digits.", row: rowNumber });
+      }
+      if (gstRateBps === undefined) {
+        errors.push({ field: "gstRate", message: "GST rate must be a valid percentage between 0 and 100.", row: rowNumber });
+      }
+      for (const [field, value] of Object.entries({ minimumStock, mrpCents, openingStock, purchaseCostCents, salesPriceCents })) {
+        if (value === undefined) errors.push({ field, message: "Numeric value must be zero or greater.", row: rowNumber });
+      }
+
+      const existingBySku = sku ? products.find((product) => product.sku.toLowerCase() === sku.toLowerCase()) : undefined;
+      const existingByBarcode = barcode ? products.find((product) => product.barcode?.toLowerCase() === barcode.toLowerCase()) : undefined;
+      if (existingByBarcode && existingBySku && existingByBarcode.id !== existingBySku.id) {
+        errors.push({ field: "barcode", message: "Barcode belongs to another product in this tenant.", row: rowNumber });
+      }
+      let action: ImportAction = "create";
+      if (existingByBarcode && !existingBySku) {
+        if ("duplicateMode" in input && input.duplicateMode === "skip") {
+          action = "skip";
+          warnings.push("Existing barcode will be skipped.");
+        } else {
+          errors.push({ field: "barcode", message: "Duplicate barcode was found.", row: rowNumber });
+        }
+      }
+      if (input.mode === "update") {
+        if (!existingBySku) {
+          errors.push({ field: "sku", message: "Update mode requires an existing product with this SKU.", row: rowNumber });
+        }
+        action = "update";
+      } else if (existingBySku) {
+        if (input.mode === "upsert") {
+          action = "update";
+        } else if ("duplicateMode" in input && input.duplicateMode === "skip") {
+          action = "skip";
+          warnings.push("Existing SKU will be skipped.");
+        } else {
+          errors.push({ field: "sku", message: "Duplicate SKU was found.", row: rowNumber });
+        }
+      }
+      const hasMovements = existingBySku ? movements.some((movement) => movement.productId === existingBySku.id) : false;
+      if (existingBySku && (openingStock ?? 0) > 0 && hasMovements) {
+        warnings.push("Opening stock will not be added because this existing product already has stock movements.");
+      }
+
+      return {
+        action,
+        active,
+        barcode,
+        brand,
+        category,
+        errors,
+        existingMetadata: existingBySku?.metadata,
+        existingProductId: existingBySku?.id,
+        gstRateBps: gstRateBps ?? 0,
+        hsnCode,
+        minimumStock: minimumStock ?? 0,
+        mrpCents: mrpCents ?? 0,
+        name: name ?? "",
+        openingStock: openingStock ?? 0,
+        purchaseCostCents: purchaseCostCents ?? 0,
+        row: rowNumber,
+        salesPriceCents: salesPriceCents ?? 0,
+        shouldCreateOpeningStock: !existingBySku || !hasMovements,
+        sku: sku ?? "",
+        stockLocation,
+        unit,
+        warnings,
+      };
+    });
+  }
+
+  private ensureImportLocation(tx: Prisma.TransactionClient, tenantId: string, name: string | null) {
+    const locationName = name ?? "Main Godown";
+    const code = slugify(locationName).replaceAll("-", "_").toUpperCase().slice(0, 40) || "MAIN";
+    return tx.hardwareStockLocation.upsert({
+      create: { code, name: locationName, tenantId },
+      update: {},
+      where: { tenantId_code: { code, tenantId } },
+    });
+  }
+
   private async validateOptionalLinks(tenantId: string, input: HardwareProductInput) {
     if (input.categoryId) await this.assertExists("hardwareProductCategory", tenantId, input.categoryId, "Category was not found.");
     if (input.brandId) await this.assertExists("hardwareBrand", tenantId, input.brandId, "Brand was not found.");
@@ -1110,6 +1399,31 @@ function readText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function readImportRow(row: Record<string, unknown>) {
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [normalizeImportKey(key), value]));
+}
+
+function readImportText(row: Record<string, unknown>, aliases: string[]) {
+  for (const alias of aliases) {
+    const value = row[normalizeImportKey(alias)];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return undefined;
+}
+
+function normalizeImportKey(key: string) {
+  return key.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "");
+}
+
+function normalizeSku(value: string | undefined) {
+  return value?.trim().replace(/\s+/gu, "-").toUpperCase();
+}
+
+function isSpreadsheetFormula(value: string) {
+  return /^[=+\-@]/u.test(value.trim());
+}
+
 function normalizeComparable(value: string) {
   return value.trim().replace(/\s+/gu, " ").toLowerCase();
 }
@@ -1129,12 +1443,78 @@ function readNumber(value: unknown) {
   return undefined;
 }
 
+function readImportNumber(row: Record<string, unknown>, aliases: string[]) {
+  for (const alias of aliases) {
+    const raw = row[normalizeImportKey(alias)];
+    const value = typeof raw === "string" ? raw.replace(/[,\s]/gu, "").replace(/%$/u, "") : raw;
+    const parsed = readNumber(value);
+    if (parsed !== undefined) return parsed;
+  }
+  return undefined;
+}
+
+function readMoneyCents(row: Record<string, unknown>, rupeeAliases: string[], centAliases: string[]) {
+  const cents = readImportNumber(row, centAliases);
+  if (cents !== undefined) return Number.isInteger(cents) && cents >= 0 ? cents : undefined;
+  const rupees = readImportNumber(row, rupeeAliases);
+  if (rupees === undefined) return 0;
+  if (rupees < 0) return undefined;
+  return Math.round(rupees * 100);
+}
+
+function readNonNegativeInteger(row: Record<string, unknown>, aliases: string[]) {
+  const value = readImportNumber(row, aliases);
+  if (value === undefined) return 0;
+  return Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+function readImportRateBps(row: Record<string, unknown>) {
+  const bps = readImportNumber(row, ["gst rate bps", "gstRateBps"]);
+  if (bps !== undefined) return Number.isInteger(bps) && bps >= 0 && bps <= 10_000 ? bps : undefined;
+  const rate = readImportNumber(row, ["gst rate", "gst", "tax rate"]);
+  if (rate === undefined) return 0;
+  return rate >= 0 && rate <= 100 ? Math.round(rate * 100) : undefined;
+}
+
+function readActiveStatus(value: string | undefined) {
+  if (!value) return true;
+  return !["archived", "false", "inactive", "no", "0"].includes(value.trim().toLowerCase());
+}
+
 function validateGstTaxConfig(config: Record<string, unknown> | undefined) {
   const rate = config?.rateBps;
   if (rate === undefined) return;
   if (typeof rate !== "number" || !Number.isInteger(rate) || rate < 0 || rate > 10_000) {
     throw validation("GST rate must be between 0 and 10000 basis points.");
   }
+}
+
+function importFingerprint(tenantId: string, rows: NormalizedImportRow[]) {
+  const hash = createHash("sha256")
+    .update(tenantId)
+    .update(JSON.stringify(rows.map((row) => ({
+      action: row.action,
+      active: row.active,
+      barcode: row.barcode,
+      brand: row.brand,
+      category: row.category,
+      existingProductId: row.existingProductId,
+      gstRateBps: row.gstRateBps,
+      hsnCode: row.hsnCode,
+      minimumStock: row.minimumStock,
+      mrpCents: row.mrpCents,
+      name: row.name,
+      openingStock: row.openingStock,
+      purchaseCostCents: row.purchaseCostCents,
+      row: row.row,
+      salesPriceCents: row.salesPriceCents,
+      sku: row.sku,
+      stockLocation: row.stockLocation,
+      unit: row.unit,
+    }))))
+    .digest("hex")
+    .slice(0, 24);
+  return `hardware-import-${hash}`;
 }
 
 function toProductSummary(product: ProductRecord, movements: MovementRecord[]): HardwareProductSummary {

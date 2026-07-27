@@ -60,13 +60,30 @@ export type InventoryDashboard = {
 };
 
 export type HardwareImportPreview = {
-  errors: Array<{ message: string; row: number }>;
+  errors: Array<{ field?: string; message: string; row: number }>;
+  importId: string;
+  mode: "create" | "update" | "upsert";
+  rows: Array<{
+    action: "create" | "skip" | "update";
+    barcode: string | null;
+    brand: string | null;
+    category: string | null;
+    name: string;
+    openingStock: number;
+    row: number;
+    sku: string;
+    stockLocation: string | null;
+    unit: string | null;
+    warnings: string[];
+  }>;
   validRows: number;
 };
 
 export type HardwareImportSummary = HardwareImportPreview & {
   createdRows: number;
+  dryRun: boolean;
   skippedRows: number;
+  updatedRows: number;
 };
 
 export type HardwareCsvExportContract = {

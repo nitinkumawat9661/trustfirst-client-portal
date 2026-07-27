@@ -115,10 +115,15 @@ export const hardwareMovementSchema = z.object({
 
 export const hardwareImportPreviewSchema = z.object({
   rows: z.array(z.record(z.string(), z.unknown())).max(500),
+  dryRun: z.boolean().optional(),
+  importId: z.string().max(120).optional(),
+  mode: z.enum(["create", "update", "upsert"]).default("create"),
 });
 
 export const hardwareImportExecuteSchema = hardwareImportPreviewSchema.extend({
   duplicateMode: z.enum(["reject", "skip"]).default("reject"),
+  dryRun: z.boolean().default(false),
+  idempotencyKey: z.string().min(12).max(120).optional(),
 });
 
 export const hardwareBusinessSettingsSchema = z.object({

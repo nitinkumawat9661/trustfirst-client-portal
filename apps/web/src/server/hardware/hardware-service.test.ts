@@ -58,16 +58,23 @@ describe("HardwareService", () => {
   });
 
   it("validates import preview rows", async () => {
-    const service = new HardwareService(prismaMock());
-    await expect(
-      service.importPreview(
-        { tenantId: "tenant_1", userId: "user_1" },
-        { rows: [{ name: "Pipe" }, { sku: "SKU-1", name: "Tap" }] },
-      ),
-    ).resolves.toEqual({ errors: [{ message: "SKU and name are required.", row: 1 }], validRows: 1 });
+    const service = new HardwareService(prismaMock({
+      hardwareInventoryMovement: { findMany: async () => [] },
+      hardwareProduct: { findMany: async () => [] },
+    } as unknown as Partial<PrismaClient>));
+    const preview = await service.importPreview(
+      { tenantId: "tenant_1", userId: "user_1" },
+      { mode: "create", rows: [{ name: "Pipe" }, { sku: "SKU-1", name: "Tap" }] },
+    );
+    expect(preview).toMatchObject({
+      errors: [{ field: "sku", message: "SKU is required.", row: 1 }],
+      mode: "create",
+      validRows: 1,
+    });
+    expect(preview.importId).toMatch(/^hardware-import-/u);
   });
 
-  it("executes product imports with duplicate SKU and barcode handling", async () => {
+  it("previews product imports with duplicate SKU and barcode handling", async () => {
     const created: Array<Record<string, unknown>> = [];
     const service = new HardwareService(
       prismaMock({
@@ -88,7 +95,12 @@ describe("HardwareService", () => {
             },
             hardwareTimelineEvent: { create: async () => ({}) },
           }),
+        hardwareInventoryMovement: { findMany: async () => [] },
         hardwareProduct: {
+          findMany: async () => [
+            { barcode: null, id: "existing_sku", metadata: {}, sku: "DUP-SKU" },
+            { barcode: "DUP-BAR", id: "existing_barcode", metadata: {}, sku: "OTHER-SKU" },
+          ],
           findFirst: async ({ where }: { where: { barcode?: string; sku?: string } }) => {
             if (where.sku === "DUP-SKU" || where.barcode === "DUP-BAR") return { id: "existing" };
             return null;
@@ -101,6 +113,8 @@ describe("HardwareService", () => {
       { tenantId: "tenant_1", userId: "user_1" },
       {
         duplicateMode: "skip",
+        dryRun: false,
+        mode: "create",
         rows: [
           { barcode: "111", name: "Angle Valve", sku: "ANG-VALVE" },
           { barcode: "222", name: "", sku: "BAD" },
@@ -110,13 +124,11 @@ describe("HardwareService", () => {
       },
     );
 
-    expect(created).toHaveLength(1);
-    expect(summary).toEqual({
-      createdRows: 1,
-      errors: [{ message: "SKU and name are required.", row: 2 }],
-      skippedRows: 2,
-      validRows: 3,
-    });
+    expect(created).toHaveLength(0);
+    expect(summary.createdRows).toBe(0);
+    expect(summary.errors).toEqual([{ field: "name", message: "Product name is required.", row: 2 }]);
+    expect(summary.skippedRows).toBe(2);
+    expect(summary.validRows).toBe(1);
   });
 
   it("rejects invalid import rows before execution", async () => {
@@ -136,7 +148,8 @@ describe("HardwareService", () => {
             },
             hardwareTimelineEvent: { create: async () => ({}) },
           }),
-        hardwareProduct: { findFirst: async () => null },
+        hardwareInventoryMovement: { findMany: async () => [] },
+        hardwareProduct: { findFirst: async () => null, findMany: async () => [] },
       } as unknown as Partial<PrismaClient>),
     );
 
@@ -144,6 +157,8 @@ describe("HardwareService", () => {
       { tenantId: "tenant_1", userId: "user_1" },
       {
         duplicateMode: "reject",
+        dryRun: false,
+        mode: "create",
         rows: [
           { barcode: "111", name: "Pipe", purchaseCostCents: -1, sku: "P-1" },
           { barcode: "222", name: "Tap", sku: "DUP-IN-FILE" },
@@ -152,11 +167,105 @@ describe("HardwareService", () => {
       },
     );
 
-    expect(summary.createdRows).toBe(1);
+    expect(summary.createdRows).toBe(0);
     expect(summary.errors).toEqual([
-      { message: "Numeric import values cannot be negative.", row: 1 },
-      { message: "Duplicate SKU exists inside this import file.", row: 3 },
+      { field: "purchaseCostCents", message: "Numeric value must be zero or greater.", row: 1 },
+      { field: "sku", message: "Duplicate SKU exists inside this import file. First seen on row 2.", row: 3 },
     ]);
+  });
+
+  it("imports product rows transactionally with opening stock movements", async () => {
+    const createdProducts: Array<Record<string, unknown>> = [];
+    const movements: Array<Record<string, unknown>> = [];
+    const service = new HardwareService(
+      prismaMock({
+        auditEvent: { findFirst: async () => null },
+        $transaction: async (
+          callback: (tx: {
+            auditEvent: { create: (input: { data: Record<string, unknown> }) => Promise<unknown> };
+            hardwareBrand: { upsert: () => Promise<{ id: string }> };
+            hardwareInventoryMovement: { create: (input: { data: Record<string, unknown> }) => Promise<unknown> };
+            hardwareProduct: { create: (input: { data: Record<string, unknown> }) => Promise<Record<string, unknown>>; update: () => Promise<Record<string, unknown>> };
+            hardwareProductCategory: { upsert: () => Promise<{ id: string }> };
+            hardwareStockLocation: { upsert: () => Promise<{ id: string }> };
+            hardwareTimelineEvent: { create: () => Promise<unknown> };
+            hardwareUnit: { upsert: () => Promise<{ id: string }> };
+          }) => Promise<unknown>,
+        ) =>
+          callback({
+            auditEvent: { create: async () => ({}) },
+            hardwareBrand: { upsert: async () => ({ id: "brand_1" }) },
+            hardwareInventoryMovement: {
+              create: async ({ data }) => {
+                movements.push(data);
+                return { id: "movement_1", ...data };
+              },
+            },
+            hardwareProduct: {
+              create: async ({ data }) => {
+                createdProducts.push(data);
+                return { id: "product_1", ...data };
+              },
+              update: async () => ({ id: "product_existing" }),
+            },
+            hardwareProductCategory: { upsert: async () => ({ id: "category_1" }) },
+            hardwareStockLocation: { upsert: async () => ({ id: "location_1" }) },
+            hardwareTimelineEvent: { create: async () => ({}) },
+            hardwareUnit: { upsert: async () => ({ id: "unit_1" }) },
+          }),
+        hardwareInventoryMovement: { findMany: async () => [] },
+        hardwareProduct: { findMany: async () => [] },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const summary = await service.executeImport(
+      { tenantId: "tenant_1", userId: "user_1" },
+      {
+        duplicateMode: "reject",
+        dryRun: false,
+        idempotencyKey: "import-key-12345",
+        mode: "create",
+        rows: [{
+          "Brand": "Jaquar",
+          "Category": "Taps",
+          "GST rate": "18%",
+          "HSN": "8481",
+          "Minimum stock": "4",
+          "Opening stock": "12",
+          "Product name": "Bib Tap",
+          "Purchase rate": "900",
+          "SKU": "BT-001",
+          "Sale rate": "1250",
+          "Stock location": "Main Godown",
+          "Unit": "PCS",
+        }],
+      },
+    );
+
+    expect(summary.errors).toEqual([]);
+    expect(summary.createdRows).toBe(1);
+    expect(summary.updatedRows).toBe(0);
+    expect(createdProducts[0]).toMatchObject({
+      brandId: "brand_1",
+      categoryId: "category_1",
+      gstTaxConfig: { rateBps: 1800 },
+      lowStockThreshold: 4,
+      name: "Bib Tap",
+      purchaseCostCents: 90000,
+      salesPriceCents: 125000,
+      sku: "BT-001",
+      tenantId: "tenant_1",
+      unitId: "unit_1",
+    });
+    expect(movements[0]).toMatchObject({
+      locationId: "location_1",
+      productId: "product_1",
+      quantity: 12,
+      referenceId: "import-key-12345",
+      referenceType: "hardware_product_import_opening_stock",
+      tenantId: "tenant_1",
+      type: HardwareInventoryMovementType.STOCK_IN,
+    });
   });
 
   it("blocks duplicate barcodes and invalid GST rates when creating products", async () => {
