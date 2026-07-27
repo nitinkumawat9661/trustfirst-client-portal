@@ -90,7 +90,7 @@ export function HardwareDocumentActions({
                 reason: "OTHER",
                 reasonDetails: correctionReason?.trim(),
               }
-          : undefined,
+            : undefined,
     );
     setPending(null);
     if (!result.ok) {
@@ -161,9 +161,22 @@ export function HardwareDocumentActions({
             <PencilLine className="size-4" />Correct bill
           </Button>
         ) : null}
-        <DirectPrintButton format="a4" label="Print" url={`/admin/hardware/print/${document.id}`} />
+        <DirectPrintButton
+          documentTitle={printDocumentTitle(document)}
+          format="a4"
+          invoiceOnly={document.type === "SALES_ORDER"}
+          label="Print"
+          url={`/print/hardware/${document.id}`}
+        />
       </div>
       {error ? <p className="text-xs text-red-700" role="alert">{error}</p> : null}
     </div>
   );
+}
+
+function printDocumentTitle(document: HardwareTradeSummary) {
+  const label = document.type === "SALES_ORDER"
+    ? "TAX-INVOICE"
+    : document.type.replaceAll("_", "-");
+  return `MANGALAM-SANITARY-${label}-${document.documentNumber}`;
 }
