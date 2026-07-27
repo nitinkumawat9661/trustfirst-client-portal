@@ -71,11 +71,16 @@ if [ "$APP_DIR" != "/var/www/trustfirst-client-portal" ] || [ "$ENV_FILE" != "/e
   echo "Refusing non-isolated TrustFirst release paths." >&2
   exit 1
 fi
+need_sudo() {
+  if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi
+}
+
 if [ ! -f "$ENV_FILE" ]; then
   echo "Missing TrustFirst env file." >&2
   exit 1
 fi
-mkdir -p "$RELEASE_ROOT" "$APP_DIR"
+need_sudo mkdir -p "$RELEASE_ROOT" "$APP_DIR"
+need_sudo chown -R "$(id -un):$(id -gn)" "$RELEASE_ROOT"
 rm -rf "$REL"
 mkdir -p "$REL"
 tar -xf "$ARCHIVE" -C "$REL"
