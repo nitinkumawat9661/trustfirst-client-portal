@@ -37,7 +37,9 @@ export function AutoPrintController({
       if (finished) return;
       finished = true;
       postStatus("closed");
-      if (window.opener) window.setTimeout(() => window.close(), 300);
+      // Keep the standalone invoice window open. Chromium may fire afterprint
+      // before the native Save as PDF file dialog has finished. Closing the
+      // source window here can abort the save operation.
     };
 
     async function startPrint() {
@@ -53,12 +55,10 @@ export function AutoPrintController({
             window.print();
           } catch {
             postStatus("error", "The browser blocked the system print dialog.");
-            if (window.opener) window.setTimeout(() => window.close(), 300);
           }
         }, 100);
       } catch {
         postStatus("error", "The printable document could not be prepared.");
-        if (window.opener) window.setTimeout(() => window.close(), 300);
       }
     }
 
