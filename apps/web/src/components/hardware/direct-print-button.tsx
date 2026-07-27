@@ -30,38 +30,38 @@ export function DirectPrintButton({
   const [status, setStatus] = useState<string | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
 
-  function printViaIframe() {
+  function openSystemPrint() {
     cleanupRef.current?.();
     setStatus("Preparing print...");
 
     const requestId = crypto.randomUUID();
-    const iframe = document.createElement("iframe");
-    let timeoutId: number | null = null;
-
-    iframe.setAttribute("aria-hidden", "true");
-    iframe.src = withPrintOptions(url, {
+    const printUrl = withPrintOptions(url, {
       documentTitle,
       format,
       invoiceOnly,
       requestId,
     });
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    iframe.style.opacity = "0";
-    iframe.style.pointerEvents = "none";
+    const printWindow = window.open(
+      printUrl,
+      `trustfirst-print-${requestId}`,
+      "popup=yes,width=1100,height=820,resizable=yes,scrollbars=yes",
+    );
 
+    if (!printWindow) {
+      setStatus("Popup blocked. Allow popups for this site, then press Print again.");
+      return;
+    }
+
+    let timeoutId: number | null = null;
     const cleanup = () => {
       if (timeoutId !== null) window.clearTimeout(timeoutId);
       window.removeEventListener("message", handleMessage);
-      iframe.remove();
+      if (!printWindow.closed) printWindow.close();
       cleanupRef.current = null;
     };
 
     const handleMessage = (event: MessageEvent<unknown>) => {
+      if (event.source !== printWindow) return;
       if (!isPrintMessage(event.data) || event.data.requestId !== requestId) return;
 
       if (event.data.status === "ready") {
@@ -84,17 +84,17 @@ export function DirectPrintButton({
 
     cleanupRef.current = cleanup;
     window.addEventListener("message", handleMessage);
-    document.body.appendChild(iframe);
+    printWindow.focus();
 
     timeoutId = window.setTimeout(() => {
-      setStatus("Printable invoice did not respond. Please retry after refreshing the page.");
+      setStatus("Printable invoice did not respond. Refresh the ERP page and retry.");
       cleanup();
     }, 120_000);
   }
 
   return (
     <span className="inline-flex flex-col items-start gap-1">
-      <Button className={className} onClick={printViaIframe} size="sm" type="button" variant="ghost">
+      <Button className={className} onClick={openSystemPrint} size="sm" type="button" variant="ghost">
         <Printer className="size-4" />{label}
       </Button>
       {status ? <span className="max-w-64 text-xs text-muted-foreground" role="status">{status}</span> : null}
