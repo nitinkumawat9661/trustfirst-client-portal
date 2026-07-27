@@ -2,68 +2,93 @@
 
 ## Status
 
-TrustFirst Client Portal is deployed on the authorized shared VPS for the Mangalam Sanitary demo path.
+- Final deployed SHA: `7ab09b435a42e04f2d2dd36a419b64103c6f869c`
+- GitHub `main` SHA: `7ab09b435a42e04f2d2dd36a419b64103c6f869c`
+- Release directory: `/var/www/trustfirst-client-portal-releases/7ab09b435a42e04f2d2dd36a419b64103c6f869c`
+- Production PM2 process: `trustfirst-client-portal`
+- Production port: `3010`
+- Canary: passed on port `3012`, then stopped
+- Final readiness: SOFTWARE READY FOR CLIENT HANDOVER AND DAILY BILLING; physical printer confirmation pending
 
-- Deployed commit: `58262184f1753f9a9a631b3864308c90dc3529d1`
-- Deployment target: `https://client.trustfirstsolutions.in`
-- Public intake: `https://client.trustfirstsolutions.in/intake/manglam-trading-demo`
-- Shared VPS isolation: yes
-- CafeLuxe untouched: yes
-- Final readiness: PARTIAL STAGING READY, NOT FINAL CLIENT HANDOVER
+## URLs
 
-## Target
+- Public URL: `https://mangalamsanitary.in`
+- ERP URL: `https://app.mangalamsanitary.in`
+- TrustFirst portal: `https://client.trustfirstsolutions.in`
+- Removed unsupported domain assumptions: `manglam.in`, `app.manglam.in`
+
+## Authentication And Cookies
+
+- Mangalam ERP sign-in: `https://app.mangalamsanitary.in/signin`
+- Anonymous ERP admin redirect: `/signin?callbackUrl=%2Fadmin`
+- Mangalam callback cookie: `https://app.mangalamsanitary.in`
+- TrustFirst callback cookie: `https://client.trustfirstsolutions.in`
+- `AUTH_URL` and `NEXTAUTH_URL`: removed from the TrustFirst VPS env to allow host-derived Auth.js callbacks
+- Temporary HTTP staging auth gates: absent
+- Cookie flags observed: `HttpOnly`, `Secure`, `SameSite=Lax`
+
+## Validation
+
+- `npm run db:generate`: passed
+- `npm run demo:env`: passed
+- `npm run demo:db`: passed
+- `npm run demo:manglam`: passed
+- Demo migration safety with loaded demo env: passed
+- `npm run typecheck`: passed
+- `npm run lint`: passed
+- `npm test`: passed, 36 files and 135 tests
+- `npm run build`: passed
+- `git diff --check`: passed
+- Mangalam host smoke: passed
+- TrustFirst host smoke: passed
+- Runtime health: passed
+- Product import template: HTTP 200 CSV
+- Product import page: protected and redirects to Mangalam `/signin`
+- PWA manifest on ERP host: `MANGALAM SANITARY ERP`
+
+## Backup
+
+- Backup path: `/var/backups/trustfirst-client-portal/20260727T083505Z`
+- Database dump: `trustfirst_demo.dump`
+- Database dump SHA-256: `a7c28f613a9962886a38a5b44ae00e0eb2a6755c183fb27c6e731d91a51df80c`
+- Tenant assets backup: `tenant-assets.tgz`
+- Protected env backup: handled by server-side backup process without printing secrets
+- Previous backups preserved: yes
+
+## VPS Runtime
 
 - Host: `45.10.x.x`
-- Deploy user: `trustfirst`
-- App directory: `/var/www/trustfirst-client-portal`
-- Env file: `/etc/trustfirst-client-portal.env`
-- App port: `3010`, loopback-only behind Nginx
-- PM2 process: `trustfirst-client-portal`
-- PM2 persistence service: `pm2-trustfirst.service`
+- OS: Ubuntu 22.04.5 LTS
+- Node: v22.23.0
+- npm: 10.9.8
+- PostgreSQL: 14.23
+- Nginx: 1.18.0
+- PM2: 7.0.1
 - Database: `trustfirst_demo`
-- Database user: `trustfirst_demo`
+- Port 3010: loopback-only
+- PM2 persistence: `pm2-trustfirst.service` active and enabled
 
-## Deployment
+## Security And Audit
 
-- SSH access: passed
-- Host-key verification: passed with trusted ED25519 SHA256 fingerprint
-- Archive deploy from local HEAD: passed
-- `npm ci`: passed
-- `npm run deploy:env`: passed
-- `npm run db:generate`: passed
-- `npm run deploy:migration-check`: passed
-- `npm run deploy:migration-check -- --apply`: passed
-- Pending migrations applied: `20260727052551_financial_transactions`, `20260727070500_hardware_day_closing`
-- `npm run seed:manglam-demo`: completed; official tenant identity lock preserved
-- Production build on VPS: passed
-- PM2 restart: restarted only `trustfirst-client-portal`
+- Host-key verification: passed
+- Host-header/open redirect tests: added and passed
+- Unsupported Mangalam domains removed from runtime routing and tests
+- Product import CSV formula validation: implemented
+- Product import duplicate/idempotency/transaction tests: passed
+- GST HSN/tax snapshot regression: passed
+- `npm audit --omit=dev`: 3 high advisories remain via Next transitive `postcss` and `sharp`; npm only suggests `npm audit fix --force`, which is breaking, so no forced dependency change was applied.
 
-## QA
+## CafeLuxe Isolation
 
-- `npm run runtime:health`: passed
-- `npm run vps:smoke`: passed against `https://client.trustfirstsolutions.in`
-- `SMOKE_BASE_URL=https://client.trustfirstsolutions.in npm run intake:smoke`: passed
-- Latest intake smoke submission: `PUB-REQ-2026-0017`
-- Public intake page: HTTP `200`
-- Auth.js session endpoint: HTTP `200`
-- Anonymous admin lockdown: HTTP `307`
-- Public admin queue exposure: blocked
-- Private queue verification: passed over verified SSH without printing secrets
-- Route lockdown preserved: yes
+- CafeLuxe files touched: no
+- CafeLuxe database touched: no
+- CafeLuxe PM2 process touched: no
+- CafeLuxe Nginx config touched: no
+- CafeLuxe port 3000 touched: no
 
-## Delivered In This Release
+## Remaining External Items
 
-- Hardware purchase return workflow
-- Hardware day closing with duplicate close prevention and authorized reopen
-- Payment receipt and supplier voucher print/reprint route
-- Customer and supplier ledger statement print route
-- Dynamic public intake thank-you confirmation
-- Intake smoke verification hardened for locked admin routes
-
-## Known Limits
-
-- Direct public access to raw `http://45.10.21.141:3010` is not the acceptance path; port `3010` is loopback-only by runtime-health design.
-- Physical printer output is not verified.
-- `npm audit --omit=dev` still reports high findings in Next transitive `postcss` and `sharp`; npm only offers a breaking forced downgrade path, so no unsafe automated fix was applied.
-- Full authenticated browser acceptance for every operator workflow is still pending.
-- Production backup/canary workflow was not fully executed by separate release directories in this run; the existing deploy script performs an isolated app restart on the TrustFirst PM2 process.
+- Owner/admin browser login with real handover credential: pending secure credential handoff or known credential
+- Physical printer output: pending client printer selection and paper confirmation
+- GST provider/GSP credentials: pending
+- E-invoice applicability: pending turnover verification
