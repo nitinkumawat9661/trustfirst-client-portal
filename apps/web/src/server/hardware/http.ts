@@ -7,6 +7,7 @@ import { assertCsrfSafeRequest } from "../security";
 import { sanitizeRecord } from "../security/sanitize";
 import { HardwareService } from "./hardware-service";
 import { HardwareFinancialService } from "./financial-service";
+import { HardwareDayClosingService } from "./day-closing-service";
 import { HardwareTradeService } from "./trade-service";
 
 export async function hardwareContext() {
@@ -30,6 +31,14 @@ export async function hardwareFinancialContext() {
   return {
     context: { tenantId: user.activeTenantId ?? "public", userId: user.id },
     service: new HardwareFinancialService(getPrisma()),
+  };
+}
+
+export async function hardwareDayClosingContext() {
+  const user = await requireCurrentUser();
+  return {
+    context: { tenantId: user.activeTenantId ?? "public", userId: user.id },
+    service: new HardwareDayClosingService(getPrisma()),
   };
 }
 

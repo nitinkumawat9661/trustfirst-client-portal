@@ -383,6 +383,8 @@ model User {
   invoicePayments   PaymentRecord[]       @relation("PaymentRecorder")
   financialTransactionsCreated FinancialTransaction[] @relation("FinancialTransactionCreatedBy")
   financialTransactionsReversed FinancialTransaction[] @relation("FinancialTransactionReversedBy")
+  hardwareDayClosingsClosed HardwareDayClosing[] @relation("HardwareDayClosingClosedBy")
+  hardwareDayClosingsReopened HardwareDayClosing[] @relation("HardwareDayClosingReopenedBy")
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
@@ -484,6 +486,7 @@ model Tenant {
   hardwareTradeDocuments HardwareTradeDocument[]
   hardwareTradeTimelineEvents HardwareTradeTimelineEvent[]
   hardwareBusinessSettings HardwareBusinessSettings?
+  hardwareDayClosings HardwareDayClosing[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -1735,6 +1738,35 @@ model HardwareTradeTimelineEvent {
   @@index([tenantId, documentId, occurredAt])
   @@index([tenantId, verb])
   @@index([actorId])
+}
+
+model HardwareDayClosing {
+  id                String   @id @default(cuid())
+  tenantId          String
+  businessDate      String
+  status            String   @default("CLOSED")
+  openingCashCents  Int      @default(0)
+  expectedCashCents Int      @default(0)
+  countedCashCents  Int      @default(0)
+  differenceCents   Int      @default(0)
+  totals            Json     @default("{}")
+  notes             String?  @db.Text
+  closedById        String?
+  closedAt          DateTime @default(now())
+  reopenedById      String?
+  reopenedAt        DateTime?
+  reopenReason      String?  @db.Text
+  metadata          Json     @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  closedBy          User?    @relation("HardwareDayClosingClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  reopenedBy        User?    @relation("HardwareDayClosingReopenedBy", fields: [reopenedById], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, businessDate])
+  @@index([tenantId, status])
+  @@index([closedById])
+  @@index([reopenedById])
 }
 
 model ProjectMilestone {
