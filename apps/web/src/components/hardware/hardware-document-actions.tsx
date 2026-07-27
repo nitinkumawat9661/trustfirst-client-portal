@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@trustfirst/ui";
-import { Ban, Check, FileInput, FileText, Printer } from "lucide-react";
+import { Ban, Check, FileInput, FileText, PencilLine, Printer } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -25,13 +25,21 @@ export function HardwareDocumentActions({
   const isStockDocument = !["SALES_QUOTATION", "PURCHASE_ORDER"].includes(document.type);
   const canCancelSale = document.type === "SALES_ORDER" && document.status === "CONFIRMED";
 
-  async function run(action: "confirm" | "convert" | "invoice" | "cancel") {
+  async function run(action: "confirm" | "convert" | "invoice" | "cancel" | "correct") {
     const cancellationReason =
       action === "cancel"
         ? window.prompt(`Reason for cancelling ${document.documentNumber}`)
         : null;
+    const correctionReason =
+      action === "correct"
+        ? window.prompt(`Why does ${document.documentNumber} need correction? Example: wrong quantity, wrong rate, wrong customer.`)
+        : null;
     if (action === "cancel" && (!cancellationReason || cancellationReason.trim().length < 3)) {
       setError("Cancellation reason is required.");
+      return;
+    }
+    if (action === "correct" && (!correctionReason || correctionReason.trim().length < 3)) {
+      setError("Correction reason is required.");
       return;
     }
     if (
@@ -61,7 +69,9 @@ export function HardwareDocumentActions({
           ? `/api/hardware/trade/${document.id}/convert-to-sale`
           : action === "invoice"
             ? `/api/hardware/trade/${document.id}/invoice-draft`
-            : `/api/hardware/trade/${document.id}/cancel`;
+            : action === "correct"
+              ? `/api/hardware/trade/${document.id}/correction-assessment`
+              : `/api/hardware/trade/${document.id}/cancel`;
     const result = await postHardwareJson<unknown>(
       endpoint,
       action === "confirm"
@@ -73,11 +83,23 @@ export function HardwareDocumentActions({
               locationId,
               reason: cancellationReason?.trim(),
             }
+          : action === "correct"
+            ? {
+                confirm: true,
+                idempotencyKey: `correction-assessment-${document.id}-${Date.now()}`,
+                reason: "OTHER",
+                reasonDetails: correctionReason?.trim(),
+              }
           : undefined,
     );
     setPending(null);
     if (!result.ok) {
       setError(result.message);
+      return;
+    }
+    if (action === "correct") {
+      const assessment = result.data as { messages: string[]; nextAction: string };
+      setError(`Correction policy: ${assessment.nextAction}. ${assessment.messages.join(" ")}`);
       return;
     }
     router.refresh();
@@ -132,6 +154,11 @@ export function HardwareDocumentActions({
         {canCancelSale ? (
           <Button disabled={pending !== null || !locationId} onClick={() => run("cancel")} size="sm" type="button" variant="outline">
             <Ban className="size-4" />Cancel sale
+          </Button>
+        ) : null}
+        {document.status !== "ARCHIVED" ? (
+          <Button disabled={pending !== null} onClick={() => run("correct")} size="sm" type="button" variant="outline">
+            <PencilLine className="size-4" />Correct bill
           </Button>
         ) : null}
         <Button asChild size="sm" variant="ghost">

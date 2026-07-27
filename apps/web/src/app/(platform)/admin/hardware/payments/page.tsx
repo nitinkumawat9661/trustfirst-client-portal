@@ -1,7 +1,7 @@
 import { getPrisma } from "@trustfirst/database";
 import Link from "next/link";
 import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
-import { HardwarePaymentWorkbench } from "@/components/hardware/hardware-payment-workbench";
+import { HardwareLedgerAdjustmentForm, HardwarePaymentWorkbench } from "@/components/hardware/hardware-payment-workbench";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareService } from "@/server/hardware";
 
@@ -12,7 +12,7 @@ export default async function HardwarePaymentsPage({ searchParams }: { searchPar
   const params = await searchParams;
   const service = new HardwareService(getPrisma());
   const context = { tenantId: user.activeTenantId ?? "public", userId: user.id };
-  const activeTab = params.tab === "supplier" ? "supplier" : "customer";
+  const activeTab = params.tab === "supplier" || params.tab === "adjustments" ? params.tab : "customer";
   const [customers, suppliers] = await Promise.all([
     service.listParties(context, "customer"),
     service.listParties(context, "supplier"),
@@ -27,8 +27,13 @@ export default async function HardwarePaymentsPage({ searchParams }: { searchPar
       <div className="flex flex-wrap gap-2">
         <Tab active={activeTab === "customer"} href="/admin/hardware/payments?tab=customer">Customer receipts</Tab>
         <Tab active={activeTab === "supplier"} href="/admin/hardware/payments?tab=supplier">Supplier payments</Tab>
+        <Tab active={activeTab === "adjustments"} href="/admin/hardware/payments?tab=adjustments">Ledger adjustments</Tab>
       </div>
-      <HardwarePaymentWorkbench parties={activeTab === "supplier" ? suppliers : customers} role={activeTab} />
+      {activeTab === "adjustments" ? (
+        <HardwareLedgerAdjustmentForm customers={customers} suppliers={suppliers} />
+      ) : (
+        <HardwarePaymentWorkbench parties={activeTab === "supplier" ? suppliers : customers} role={activeTab} />
+      )}
     </div>
   );
 }

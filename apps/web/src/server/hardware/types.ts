@@ -26,7 +26,10 @@ export type LedgerEntry = {
   date: Date;
   debitCents: number;
   description: string;
+  paymentMode?: string | null;
   reference: string;
+  status?: string;
+  transactionType?: string;
 };
 
 export type PartyLedger = {

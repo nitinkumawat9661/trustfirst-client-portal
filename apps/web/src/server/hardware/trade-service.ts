@@ -33,11 +33,12 @@ import type {
   HardwareSaleReturnInput,
   HardwarePurchaseReturnInput,
   HardwareTradeCancelInput,
+  HardwareTradeCorrectionAssessmentInput,
   HardwareTradeDocumentInput,
   HardwareTradeStatusInput,
   QuickPosSaleInput,
 } from "./trade-schemas";
-import type { HardwarePrintContract, HardwarePrintProjection, HardwareReportSummary, HardwareReturnOptions, HardwareTradeSummary, HardwareWhatsAppShareContract } from "./trade-types";
+import type { HardwareCorrectionAssessment, HardwarePrintContract, HardwarePrintProjection, HardwareReportSummary, HardwareReturnOptions, HardwareTradeSummary, HardwareWhatsAppShareContract } from "./trade-types";
 
 type ActorContext = { tenantId: string; userId: string };
 type TradeRecord = Awaited<ReturnType<PrismaHardwareTradeRepository["list"]>>[number];
@@ -692,6 +693,95 @@ export class HardwareTradeService {
     });
 
     return toSummary(await this.getOrThrow(context.tenantId, documentId));
+  }
+
+  async assessCorrection(
+    context: ActorContext,
+    documentId: string,
+    input: HardwareTradeCorrectionAssessmentInput,
+  ): Promise<HardwareCorrectionAssessment> {
+    const document = await this.getOrThrow(context.tenantId, documentId);
+    await this.enforce(context, managePermission(document.type));
+    const [returns, invoice, dayClosing] = await Promise.all([
+      this.prisma.hardwareTradeDocument.findMany({
+        select: { totalCents: true },
+        where: {
+          metadata: { equals: document.id, path: ["originalDocumentId"] },
+          tenantId: context.tenantId,
+          type: document.type === HardwareTradeDocumentType.PURCHASE_ENTRY || document.type === HardwareTradeDocumentType.SUPPLIER_BILL
+            ? HardwareTradeDocumentType.PURCHASE_RETURN
+            : HardwareTradeDocumentType.SALE_RETURN,
+        },
+      }),
+      document.billingInvoiceId
+        ? this.prisma.invoice.findFirst({ select: { paidAmountCents: true, status: true }, where: { id: document.billingInvoiceId, tenantId: context.tenantId } })
+        : null,
+      this.prisma.hardwareDayClosing.findUnique({
+        where: { tenantId_businessDate: { businessDate: indiaBusinessDate(document.createdAt), tenantId: context.tenantId } },
+      }),
+    ]);
+    const returnedCents = returns.reduce((total, item) => total + item.totalCents, 0);
+    const paidCents = invoice?.paidAmountCents ?? 0;
+    const messages: string[] = [];
+    let allowed = false;
+    let nextAction: HardwareCorrectionAssessment["nextAction"] = "BLOCKED";
+
+    if (document.status === HardwareTradeDocumentStatus.DRAFT) {
+      allowed = true;
+      nextAction = "EDIT_DRAFT";
+      messages.push("Draft document may be edited directly because it has no stock or ledger effect.");
+    } else if (document.type === HardwareTradeDocumentType.SALES_QUOTATION) {
+      allowed = true;
+      nextAction = "REVISE_QUOTATION";
+      messages.push("Quotation has no stock or ledger effect. Revise or duplicate it instead of overwriting a sent snapshot.");
+    } else if (document.status === HardwareTradeDocumentStatus.CANCELLED) {
+      messages.push("Cancelled documents cannot be corrected. Duplicate as a new bill if needed.");
+    } else if (returnedCents > 0) {
+      nextAction = "RETURN_OR_ADJUST";
+      messages.push("This document already has returns. Use additional return, credit note, or debit note according to the correction reason.");
+    } else if (dayClosing?.status === "CLOSED") {
+      nextAction = "RETURN_OR_ADJUST";
+      messages.push("The business day is closed. Use current-day adjustment/return or reopen the day with owner approval.");
+    } else {
+      allowed = true;
+      nextAction = "CANCEL_AND_REISSUE";
+      messages.push("Posted documents cannot be overwritten. Cancel/reverse effects and issue a corrected replacement through normal posting.");
+      if (paidCents > 0) messages.push("Payment exists. Preserve the original payment and reallocate only after the corrected bill amount is verified.");
+    }
+
+    await this.prisma.auditEvent.create({
+      data: {
+        actorId: context.userId,
+        action: AuditAction.HARDWARE_STOCK_MOVED,
+        metadata: {
+          auditAction: "hardware.trade.correction_assessed",
+          allowed,
+          idempotencyKey: input.idempotencyKey,
+          nextAction,
+          paidCents,
+          reason: input.reason,
+          reasonDetails: input.reasonDetails,
+          returnedCents,
+        },
+        targetId: document.id,
+        targetType: "HardwareTradeDocument",
+        tenantId: context.tenantId,
+      },
+    });
+
+    return {
+      allowed,
+      documentId: document.id,
+      documentNumber: document.documentNumber,
+      documentStatus: document.status,
+      documentType: document.type,
+      linkedInvoiceId: document.billingInvoiceId,
+      messages,
+      nextAction,
+      paidCents,
+      reason: input.reason,
+      returnedCents,
+    };
   }
 
   async createSaleReturn(context: ActorContext, documentId: string, input: HardwareSaleReturnInput) {
@@ -1633,6 +1723,17 @@ function readString(value: unknown) {
 
 function readNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function indiaBusinessDate(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+  }).formatToParts(value);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${map.year}-${map.month}-${map.day}`;
 }
 
 function indianNumberWords(value: number) {

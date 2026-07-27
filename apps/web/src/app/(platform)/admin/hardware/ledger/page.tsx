@@ -21,7 +21,7 @@ export default async function HardwareLedgerPage({ searchParams }: { searchParam
   const ledgers = activeTab === "supplier" ? suppliers : customers;
   return (
     <div className="space-y-6">
-      <HardwarePageHeader description="Simple party ledger from opening balances, invoices, payments, and supplier bills. This is not a double-entry accounting ledger." eyebrow="Ledger" title="Customer and supplier ledger" />
+      <HardwarePageHeader description="Transaction-backed ledgers from bills, returns, payments, reversals, advances, and manual adjustment vouchers." eyebrow="Ledger" title="Customer and supplier ledger" />
       <div className="flex flex-wrap gap-2">
         <Tab href="/admin/hardware/ledger?tab=customer" active={activeTab === "customer"}>Customer Ledger</Tab>
         <Tab href="/admin/hardware/ledger?tab=supplier" active={activeTab === "supplier"}>Supplier Ledger</Tab>
@@ -45,12 +45,12 @@ function LedgerCard({ ledger, role }: { ledger: PartyLedger; role: "customer" | 
       <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle>{ledger.partyName}</CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">Opening {money(ledger.openingBalanceCents)}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Opening {money(ledger.openingBalanceCents)} · {balanceLabel(ledger.totalRemainingCents, role)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge>Total {money(ledger.totalPayableCents)}</Badge>
-          <Badge>Paid {money(ledger.totalPaidCents)}</Badge>
-          <Badge>Balance {money(ledger.totalRemainingCents)}</Badge>
+          <Badge>Debit {money(ledger.totalPayableCents)}</Badge>
+          <Badge>Credit {money(ledger.totalPaidCents)}</Badge>
+          <Badge>{balanceLabel(ledger.totalRemainingCents, role)} {money(Math.abs(ledger.totalRemainingCents))}</Badge>
           <Link
             className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-xs font-medium hover:bg-muted"
             href={`/admin/hardware/ledger/print/${role}/${ledger.partyId}`}
@@ -64,7 +64,7 @@ function LedgerCard({ ledger, role }: { ledger: PartyLedger; role: "customer" | 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[680px] text-left text-sm">
             <thead className="border-b text-xs uppercase text-muted-foreground">
-              <tr><th className="py-2">Date</th><th>Reference</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr>
+              <tr><th className="py-2">Date</th><th>Reference</th><th>Description</th><th>Mode</th><th>Status</th><th>Debit</th><th>Credit</th><th>Balance</th></tr>
             </thead>
             <tbody className="divide-y divide-border">
               {ledger.entries.map((entry) => (
@@ -72,9 +72,11 @@ function LedgerCard({ ledger, role }: { ledger: PartyLedger; role: "customer" | 
                   <td className="py-3">{entry.date.getTime() === 0 ? "-" : entry.date.toLocaleDateString("en-IN")}</td>
                   <td>{entry.reference}</td>
                   <td>{entry.description}</td>
+                  <td>{entry.paymentMode ? humanize(entry.paymentMode) : "-"}</td>
+                  <td>{entry.status ? humanize(entry.status) : "-"}</td>
                   <td>{entry.debitCents ? money(entry.debitCents) : "-"}</td>
                   <td>{entry.creditCents ? money(entry.creditCents) : "-"}</td>
-                  <td className="font-medium">{money(entry.balanceCents)}</td>
+                  <td className="font-medium">{money(Math.abs(entry.balanceCents))}</td>
                 </tr>
               ))}
             </tbody>
@@ -87,4 +89,14 @@ function LedgerCard({ ledger, role }: { ledger: PartyLedger; role: "customer" | 
 
 function money(amountCents: number) {
   return new Intl.NumberFormat("en-IN", { currency: "INR", style: "currency" }).format(amountCents / 100);
+}
+
+function balanceLabel(balanceCents: number, role: "customer" | "supplier") {
+  if (balanceCents === 0) return "Account settled";
+  if (role === "supplier") return balanceCents > 0 ? "पैसा देना है" : "Advance available";
+  return balanceCents > 0 ? "पैसा लेना है" : "Business owes customer";
+}
+
+function humanize(value: string) {
+  return value.toLowerCase().replaceAll("_", " ").replace(/\b\w/gu, (letter) => letter.toUpperCase());
 }

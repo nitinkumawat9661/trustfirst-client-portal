@@ -106,6 +106,24 @@ export const hardwareSaleReturnSchema = z.object({
   refundType: z.enum(["cash_refund", "payment_refund", "customer_credit"]).default("customer_credit"),
 });
 
+export const hardwareTradeCorrectionAssessmentSchema = z.object({
+  confirm: z.literal(true),
+  idempotencyKey: z.string().min(12).max(120),
+  reason: z.enum([
+    "WRONG_CUSTOMER",
+    "WRONG_GSTIN",
+    "WRONG_PRODUCT",
+    "WRONG_QUANTITY",
+    "WRONG_RATE",
+    "WRONG_DISCOUNT",
+    "WRONG_GST_TREATMENT",
+    "WRONG_PAYMENT_MODE",
+    "WRONG_INVOICE_DATE",
+    "OTHER",
+  ]),
+  reasonDetails: z.string().trim().min(3).max(1000),
+});
+
 export const hardwarePurchaseReturnSchema = z.object({
   idempotencyKey: z.string().min(12).max(120),
   items: z.array(z.object({
@@ -136,6 +154,7 @@ export type HardwareTradeItemInput = z.infer<typeof hardwareTradeItemSchema>;
 export type HardwareTradeDocumentInput = z.infer<typeof hardwareTradeDocumentSchema>;
 export type HardwareTradeStatusInput = z.infer<typeof hardwareTradeStatusSchema>;
 export type HardwareTradeCancelInput = z.infer<typeof hardwareTradeCancelSchema>;
+export type HardwareTradeCorrectionAssessmentInput = z.infer<typeof hardwareTradeCorrectionAssessmentSchema>;
 export type HardwareSaleReturnInput = z.infer<typeof hardwareSaleReturnSchema>;
 export type HardwarePurchaseReturnInput = z.infer<typeof hardwarePurchaseReturnSchema>;
 export type QuickPosSaleInput = z.infer<typeof quickPosSaleSchema>;

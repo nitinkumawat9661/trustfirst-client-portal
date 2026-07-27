@@ -14,7 +14,10 @@ function prismaMock(overrides: Partial<PrismaClient> = {}) {
       findUnique: async () => ({
         role: {
           key: "hardware-financial-viewer",
-          permissions: [{ permission: { key: "hardware.sales.read" } }],
+          permissions: [
+            { permission: { key: "hardware.sales.read" } },
+            { permission: { key: "hardware.sales.manage" } },
+          ],
         },
         status: "ACTIVE",
       }),
@@ -24,6 +27,67 @@ function prismaMock(overrides: Partial<PrismaClient> = {}) {
 }
 
 describe("HardwareFinancialService", () => {
+  it("posts manual ledger adjustments as immutable financial transactions", async () => {
+    const createdTransactions: Array<Record<string, unknown>> = [];
+    const auditEvents: Array<Record<string, unknown>> = [];
+    const tx = {
+      auditEvent: { create: async ({ data }: { data: Record<string, unknown> }) => { auditEvents.push(data); return data; } },
+      documentSequence: { upsert: async () => ({ lastValue: 1 }) },
+      financialTransaction: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          createdTransactions.push(data);
+          return { id: "fin_adjustment_1", ...data };
+        },
+        findUnique: async () => null,
+      },
+    };
+    const service = new HardwareFinancialService(
+      prismaMock({
+        $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+        clientOrganization: {
+          findFirst: async () => ({
+            archivedAt: null,
+            customFields: { hardwarePartyRole: "customer" },
+            deletedAt: null,
+            id: "party_1",
+            name: "Sample Customer",
+            tenantId: "tenant_1",
+          }),
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const adjustment = await service.recordAdjustment(
+      { tenantId: "tenant_1", userId: "user_1" },
+      {
+        amountCents: 2500,
+        direction: "credit",
+        idempotencyKey: "manual-adjustment-test",
+        partyId: "party_1",
+        reason: "Post-sale approved discount",
+        reference: "OWNER-APPROVED",
+        role: "customer",
+      },
+    );
+
+    expect(adjustment.transactionNumber).toBe("MS/CADJ/2026-27/00001");
+    expect(createdTransactions).toEqual([
+      expect.objectContaining({
+        amountCents: 2500,
+        creditCents: 2500,
+        debitCents: 0,
+        idempotencyKey: "manual-adjustment-test",
+        partyId: "party_1",
+        type: FinancialTransactionType.MANUAL_CREDIT_ADJUSTMENT,
+      }),
+    ]);
+    expect(auditEvents).toHaveLength(1);
+    expect(auditEvents[0]).toEqual(expect.objectContaining({
+      action: "BILLING_PAYMENT_RECORDED",
+      metadata: expect.objectContaining({ auditAction: "hardware.financial.adjustment.posted" }),
+    }));
+  });
+
   it("builds a read-only receipt print projection from a saved payment transaction", async () => {
     const service = new HardwareFinancialService(
       prismaMock({

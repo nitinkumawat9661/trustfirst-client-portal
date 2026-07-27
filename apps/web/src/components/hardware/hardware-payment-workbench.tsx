@@ -20,7 +20,19 @@ const paymentSchema = z.object({
   reference: z.string(),
 });
 
+const adjustmentSchema = z.object({
+  amount: z.string().refine((value) => Number(value) > 0, "Enter a positive amount."),
+  direction: z.enum(["debit", "credit"]),
+  effectiveDate: z.string().min(1, "Select an effective date."),
+  notes: z.string(),
+  partyId: z.string().min(1, "Select a party."),
+  reason: z.string().min(3, "Reason is required."),
+  reference: z.string(),
+  role: z.enum(["customer", "supplier"]),
+});
+
 type PaymentValues = z.infer<typeof paymentSchema>;
+type AdjustmentValues = z.infer<typeof adjustmentSchema>;
 
 export function HardwarePaymentWorkbench({
   parties,
@@ -216,6 +228,115 @@ export function HardwarePaymentWorkbench({
           <Printer className="size-4" />Print / reprint
         </Button>
         <Button onClick={() => partyId && void loadPosition(partyId)} type="button" variant="ghost"><RefreshCcw className="size-4" />Refresh</Button>
+      </div>
+    </form>
+  );
+}
+
+export function HardwareLedgerAdjustmentForm({
+  customers,
+  suppliers,
+}: {
+  customers: HardwarePartySummary[];
+  suppliers: HardwarePartySummary[];
+}) {
+  const {
+    formState: { errors, isSubmitting },
+    control,
+    handleSubmit,
+    register,
+    reset,
+  } = useForm<AdjustmentValues>({
+    defaultValues: {
+      amount: "",
+      direction: "debit",
+      effectiveDate: new Date().toISOString().slice(0, 10),
+      notes: "",
+      partyId: "",
+      reason: "",
+      reference: "",
+      role: "customer",
+    },
+    resolver: zodResolver(adjustmentSchema),
+  });
+  const role = useWatch({ control, name: "role" });
+  const parties = role === "supplier" ? suppliers : customers;
+  const [status, setStatus] = useState<{ kind: "error" | "success"; message: string } | null>(null);
+
+  async function onSubmit(values: AdjustmentValues) {
+    setStatus(null);
+    const result = await postHardwareJson<{ transactionNumber: string }>("/api/hardware/financial/adjustments", {
+      amountCents: rupeesToCents(values.amount),
+      direction: values.direction,
+      effectiveDate: new Date(`${values.effectiveDate}T00:00:00.000+05:30`).toISOString(),
+      idempotencyKey: `manual-adjustment-${crypto.randomUUID()}`,
+      notes: values.notes || undefined,
+      partyId: values.partyId,
+      reason: values.reason,
+      reference: values.reference || undefined,
+      role: values.role,
+    });
+    if (!result.ok) {
+      setStatus({ kind: "error", message: result.message });
+      return;
+    }
+    setStatus({ kind: "success", message: `Adjustment ${result.data.transactionNumber} posted. Ledger updated without stock impact.` });
+    reset({ ...values, amount: "", notes: "", reason: "", reference: "" });
+  }
+
+  return (
+    <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
+      <Card>
+        <CardHeader><CardTitle>Manual ledger adjustment</CardTitle></CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-4">
+          <label className="grid gap-1.5 text-sm font-medium">
+            Ledger
+            <select className={selectClassName} {...register("role")}>
+              <option value="customer">Customer ledger</option>
+              <option value="supplier">Supplier ledger</option>
+            </select>
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium lg:col-span-2">
+            Party
+            <select className={selectClassName} {...register("partyId")}>
+              <option value="">Select party</option>
+              {parties.map((party) => <option key={party.id} value={party.id}>{party.name}</option>)}
+            </select>
+            {errors.partyId?.message ? <span className="text-xs font-normal text-red-700">{errors.partyId.message}</span> : null}
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium">
+            Adjustment type
+            <select className={selectClassName} {...register("direction")}>
+              <option value="debit">{role === "supplier" ? "Increase payable" : "Increase receivable"}</option>
+              <option value="credit">{role === "supplier" ? "Reduce payable" : "Reduce receivable"}</option>
+            </select>
+          </label>
+          <Field error={errors.amount?.message} label="Amount">
+            <Input inputMode="decimal" min="0.01" step="0.01" type="number" {...register("amount")} />
+          </Field>
+          <Field error={errors.effectiveDate?.message} label="Effective date">
+            <Input type="date" {...register("effectiveDate")} />
+          </Field>
+          <Field label="Reference"><Input autoComplete="off" {...register("reference")} /></Field>
+          <Field error={errors.reason?.message} label="Mandatory reason">
+            <Input autoComplete="off" {...register("reason")} />
+          </Field>
+          <label className="grid gap-1.5 text-sm font-medium lg:col-span-4">
+            Notes
+            <Input autoComplete="off" {...register("notes")} />
+          </label>
+        </CardContent>
+      </Card>
+      <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+        Adjustments create immutable financial entries only. They do not change stock, returns, or posted bills.
+      </div>
+      {status ? (
+        <p className={`rounded-md border p-3 text-sm ${status.kind === "success" ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-red-300 bg-red-50 text-red-800"}`} role={status.kind === "error" ? "alert" : "status"}>
+          {status.message}
+        </p>
+      ) : null}
+      <div className="flex justify-end">
+        <Button disabled={isSubmitting} type="submit">{isSubmitting ? "Posting..." : "Post adjustment"}</Button>
       </div>
     </form>
   );

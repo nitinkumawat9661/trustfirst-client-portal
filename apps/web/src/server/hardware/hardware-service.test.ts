@@ -1,4 +1,6 @@
 import {
+  FinancialPartyType,
+  FinancialTransactionStatus,
   HardwareInventoryMovementType,
   HardwareTradeDocumentType,
   InvoiceStatus,
@@ -72,6 +74,40 @@ describe("HardwareService", () => {
       validRows: 1,
     });
     expect(preview.importId).toMatch(/^hardware-import-/u);
+  });
+
+  it("uses durable financial transactions before invoice fallbacks for party balances", async () => {
+    const service = new HardwareService(
+      prismaMock({
+        clientOrganization: {
+          findMany: async () => [
+            {
+              contacts: [{ email: null, phone: "9999999999" }],
+              customFields: { hardwarePartyRole: "customer", openingBalanceCents: 1000 },
+              id: "party_1",
+              invoices: [{ paidAmountCents: 0, totalAmountCents: 99_999 }],
+              name: "Ledger Customer",
+              supplierHardwareDocuments: [],
+            },
+          ],
+        },
+        financialTransaction: {
+          findMany: async () => [
+            {
+              creditCents: 2000,
+              debitCents: 5000,
+              partyId: "party_1",
+              partyType: FinancialPartyType.CUSTOMER,
+              status: FinancialTransactionStatus.POSTED,
+            },
+          ],
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const parties = await service.listParties({ tenantId: "tenant_1", userId: "user_1" }, "customer");
+
+    expect(parties[0]?.currentBalanceCents).toBe(4000);
   });
 
   it("previews product imports with duplicate SKU and barcode handling", async () => {

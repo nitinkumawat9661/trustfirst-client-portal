@@ -110,3 +110,17 @@ export type HardwarePrintProjection = {
   printContract: HardwarePrintContract;
   signatureLabel: string;
 };
+
+export type HardwareCorrectionAssessment = {
+  allowed: boolean;
+  documentId: string;
+  documentNumber: string;
+  documentStatus: string;
+  documentType: string;
+  linkedInvoiceId: string | null;
+  messages: string[];
+  nextAction: "EDIT_DRAFT" | "REVISE_QUOTATION" | "CANCEL_AND_REISSUE" | "RETURN_OR_ADJUST" | "BLOCKED";
+  paidCents: number;
+  reason: string;
+  returnedCents: number;
+};

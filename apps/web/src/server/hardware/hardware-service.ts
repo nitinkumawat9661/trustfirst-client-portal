@@ -3,6 +3,7 @@ import {
   AuditAction,
   FinancialPartyType,
   FinancialTransactionStatus,
+  FinancialTransactionType,
   HardwareInventoryMovementType,
   HardwareTimelineVerb,
   HardwareTradeDocumentStatus,
@@ -206,31 +207,44 @@ export class HardwareService {
 
   async listParties(context: ActorContext, role: HardwarePartyRole): Promise<HardwarePartySummary[]> {
     await this.enforce(context, role === "supplier" ? "hardware.purchase.read" : "hardware.sales.read");
-    const parties = await this.prisma.clientOrganization.findMany({
-      include: {
-        contacts: {
-          orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
-          select: { email: true, phone: true },
-          take: 1,
+    const [parties, financialTransactions] = await Promise.all([
+      this.prisma.clientOrganization.findMany({
+        include: {
+          contacts: {
+            orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+            select: { email: true, phone: true },
+            take: 1,
+          },
+          invoices: {
+            select: { paidAmountCents: true, totalAmountCents: true },
+            where: { archivedAt: null, status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] } },
+          },
+          supplierHardwareDocuments: {
+            select: { paymentStatus: true, totalCents: true },
+            where: { archivedAt: null, status: "CONFIRMED", type: "SUPPLIER_BILL" },
+          },
         },
-        invoices: {
-          select: { paidAmountCents: true, totalAmountCents: true },
-          where: { archivedAt: null, status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] } },
+        orderBy: { name: "asc" },
+        where: { archivedAt: null, deletedAt: null, tenantId: context.tenantId },
+      }),
+      this.prisma.financialTransaction.findMany({
+        select: { creditCents: true, debitCents: true, partyId: true },
+        where: {
+          partyType: role === "supplier" ? FinancialPartyType.SUPPLIER : FinancialPartyType.CUSTOMER,
+          status: FinancialTransactionStatus.POSTED,
+          tenantId: context.tenantId,
         },
-        supplierHardwareDocuments: {
-          select: { paymentStatus: true, totalCents: true },
-          where: { archivedAt: null, status: "CONFIRMED", type: "SUPPLIER_BILL" },
-        },
-      },
-      orderBy: { name: "asc" },
-      where: { archivedAt: null, deletedAt: null, tenantId: context.tenantId },
-    });
+      }),
+    ]);
 
     return parties.flatMap((party) => {
       const customFields = asRecord(party.customFields);
       if (customFields.hardwarePartyRole !== role) return [];
       const openingBalanceCents = readInteger(customFields.openingBalanceCents) ?? 0;
-      const calculatedBalance =
+      const partyFinancialTransactions = financialTransactions.filter((transaction) => transaction.partyId === party.id);
+      const durableBalance = partyFinancialTransactions
+        .reduce((total, transaction) => total + transaction.debitCents - transaction.creditCents, 0);
+      const fallbackBalance =
         role === "supplier"
           ? party.supplierHardwareDocuments
               .filter((document) => document.paymentStatus !== "paid")
@@ -239,7 +253,7 @@ export class HardwareService {
               (total, invoice) => total + Math.max(invoice.totalAmountCents - invoice.paidAmountCents, 0),
               0,
             );
-      const currentBalanceCents = openingBalanceCents + calculatedBalance;
+      const currentBalanceCents = openingBalanceCents + (partyFinancialTransactions.length > 0 ? durableBalance : fallbackBalance);
       const contact = party.contacts[0];
       return [{
         balanceSide:
@@ -607,7 +621,7 @@ export class HardwareService {
     ]);
     return parties.map((party) => {
       let balance = party.openingBalanceCents;
-      const entries = [{
+      const entries: PartyLedger["entries"] = [{
         amountCents: party.openingBalanceCents,
         balanceCents: balance,
         creditCents: party.openingBalanceCents < 0 ? Math.abs(party.openingBalanceCents) : 0,
@@ -620,16 +634,19 @@ export class HardwareService {
       if (durableEntries.length > 0) {
         for (const transaction of durableEntries) {
           balance += transaction.debitCents - transaction.creditCents;
-          entries.push({
-            amountCents: transaction.amountCents,
-            balanceCents: balance,
-            creditCents: transaction.creditCents,
-            date: transaction.occurredAt,
-            debitCents: transaction.debitCents,
-            description: humanize(transaction.type),
-            reference: transaction.sourceNumber ?? transaction.transactionNumber,
-          });
-        }
+        entries.push({
+          amountCents: transaction.amountCents,
+          balanceCents: balance,
+          creditCents: transaction.creditCents,
+          date: transaction.occurredAt,
+          debitCents: transaction.debitCents,
+          description: financialTransactionDescription(transaction.type),
+          paymentMode: transaction.paymentMode,
+          reference: transaction.sourceNumber ?? transaction.transactionNumber,
+          status: transaction.status,
+          transactionType: transaction.type,
+        });
+      }
         return buildPartyLedger(party, entries);
       }
       if (role === "customer") {
@@ -1581,6 +1598,30 @@ function slugify(value: string) {
 
 function humanize(value: string) {
   return value.toLowerCase().replaceAll("_", " ").replace(/\b\w/gu, (letter) => letter.toUpperCase());
+}
+
+function financialTransactionDescription(type: FinancialTransactionType) {
+  const labels: Record<FinancialTransactionType, string> = {
+    [FinancialTransactionType.ADVANCE_ALLOCATION]: "Advance used against bill",
+    [FinancialTransactionType.CUSTOMER_ADVANCE]: "Customer advance received",
+    [FinancialTransactionType.CUSTOMER_PAYMENT]: "Customer payment",
+    [FinancialTransactionType.CUSTOMER_REFUND_PAID]: "Customer refund paid",
+    [FinancialTransactionType.CUSTOMER_REFUND_PENDING]: "Customer refund pending",
+    [FinancialTransactionType.MANUAL_CREDIT_ADJUSTMENT]: "Manual credit adjustment",
+    [FinancialTransactionType.MANUAL_DEBIT_ADJUSTMENT]: "Manual debit adjustment",
+    [FinancialTransactionType.PAYMENT_REVERSAL]: "Payment reversal",
+    [FinancialTransactionType.PURCHASE_PAYABLE]: "Purchase payable",
+    [FinancialTransactionType.PURCHASE_RETURN_CREDIT]: "Purchase return credit",
+    [FinancialTransactionType.REFUND_REVERSAL]: "Refund reversal",
+    [FinancialTransactionType.SALE_CANCELLATION_REVERSAL]: "Sale cancellation reversal",
+    [FinancialTransactionType.SALE_RECEIVABLE]: "Sale invoice receivable",
+    [FinancialTransactionType.SALE_RETURN_CREDIT]: "Sale return credit",
+    [FinancialTransactionType.SUPPLIER_ADVANCE]: "Supplier advance paid",
+    [FinancialTransactionType.SUPPLIER_PAYMENT]: "Supplier payment",
+    [FinancialTransactionType.SUPPLIER_PAYMENT_REVERSAL]: "Supplier payment reversal",
+    [FinancialTransactionType.SUPPLIER_REFUND_RECEIVED]: "Supplier refund received",
+  };
+  return labels[type] ?? humanize(type);
 }
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {

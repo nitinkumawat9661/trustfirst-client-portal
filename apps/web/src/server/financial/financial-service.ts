@@ -312,6 +312,28 @@ export async function postCustomerRefundPaid(
   });
 }
 
+export async function postManualFinancialAdjustment(
+  tx: FinancialTransactionClient,
+  input: BasePostingInput & {
+    direction: "debit" | "credit";
+    partyType: FinancialPartyType;
+    reason: string;
+  },
+) {
+  return postFinancialTransaction(tx, {
+    ...input,
+    creditCents: input.direction === "credit" ? input.amountCents : 0,
+    debitCents: input.direction === "debit" ? input.amountCents : 0,
+    documentKind: DocumentSequenceKind.ADJUSTMENT,
+    metadata: { adjustmentDirection: input.direction, reason: input.reason },
+    partyType: input.partyType,
+    prefix: input.partyType === FinancialPartyType.SUPPLIER ? "MS/SADJ" : "MS/CADJ",
+    type: input.direction === "debit"
+      ? FinancialTransactionType.MANUAL_DEBIT_ADJUSTMENT
+      : FinancialTransactionType.MANUAL_CREDIT_ADJUSTMENT,
+  });
+}
+
 export async function postFinancialReversal(
   tx: FinancialTransactionClient,
   input: BasePostingInput & {

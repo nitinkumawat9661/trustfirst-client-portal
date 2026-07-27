@@ -1,5 +1,6 @@
 import {
   BillingTimelineVerb,
+  AuditAction,
   FinancialAllocationType,
   FinancialPartyType,
   FinancialTransactionStatus,
@@ -14,11 +15,12 @@ import {
   postCustomerPaymentWithAllocations,
   postCustomerRefundPaid,
   postFinancialReversal,
+  postManualFinancialAdjustment,
   postSupplierAdvance,
   postSupplierPaymentWithAllocations,
 } from "../financial/financial-service";
 import { PermissionResolverService } from "../permissions";
-import type { HardwareCustomerRefundInput, HardwarePartyPaymentInput, HardwarePaymentReversalInput } from "./financial-schemas";
+import type { HardwareCustomerRefundInput, HardwareFinancialAdjustmentInput, HardwarePartyPaymentInput, HardwarePaymentReversalInput } from "./financial-schemas";
 import type { HardwarePrintProjection } from "./trade-types";
 
 type ActorContext = { tenantId: string; userId: string };
@@ -254,6 +256,54 @@ export class HardwareFinancialService {
         tenantId: context.tenantId,
       }),
     );
+  }
+
+  async recordAdjustment(context: ActorContext, input: HardwareFinancialAdjustmentInput) {
+    await this.enforce(context, input.role === "supplier" ? "hardware.purchase.manage" : "hardware.sales.manage");
+    await this.ensureParty(context.tenantId, input.partyId, input.role);
+    const partyType = input.role === "supplier" ? FinancialPartyType.SUPPLIER : FinancialPartyType.CUSTOMER;
+    const occurredAt = input.effectiveDate ? new Date(input.effectiveDate) : new Date();
+    if (Number.isNaN(occurredAt.getTime())) throw validation("Effective date is invalid.");
+
+    return this.prisma.$transaction(async (tx) => {
+      const adjustment = await postManualFinancialAdjustment(tx, {
+        amountCents: input.amountCents,
+        createdById: context.userId,
+        direction: input.direction,
+        externalReference: input.reference ?? null,
+        idempotencyKey: input.idempotencyKey,
+        notes: input.notes ?? null,
+        occurredAt,
+        partyId: input.partyId,
+        partyType,
+        reason: input.reason,
+        sourceId: input.partyId,
+        sourceNumber: input.reference ?? null,
+        sourceType: "ClientOrganization",
+        tenantId: context.tenantId,
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorId: context.userId,
+          action: AuditAction.BILLING_PAYMENT_RECORDED,
+          metadata: {
+            auditAction: "hardware.financial.adjustment.posted",
+            amountCents: input.amountCents,
+            direction: input.direction,
+            idempotencyKey: input.idempotencyKey,
+            notes: input.notes ?? null,
+            partyId: input.partyId,
+            reason: input.reason,
+            reference: input.reference ?? null,
+            role: input.role,
+          },
+          targetId: adjustment.id,
+          targetType: "FinancialTransaction",
+          tenantId: context.tenantId,
+        },
+      });
+      return adjustment;
+    });
   }
 
   private async recordPartyPayment(context: ActorContext, role: PartyRole, input: HardwarePartyPaymentInput) {

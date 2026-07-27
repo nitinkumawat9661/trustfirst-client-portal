@@ -32,7 +32,20 @@ export const hardwareCustomerRefundSchema = z.object({
   reference: z.string().trim().max(120).optional(),
 });
 
+export const hardwareFinancialAdjustmentSchema = z.object({
+  amountCents: z.number().int().positive(),
+  direction: z.enum(["debit", "credit"]),
+  effectiveDate: z.string().datetime().optional(),
+  idempotencyKey: z.string().min(12).max(120),
+  notes: z.string().trim().max(1000).optional(),
+  partyId: z.string().min(1),
+  reason: z.string().trim().min(3).max(1000),
+  reference: z.string().trim().max(120).optional(),
+  role: z.enum(["customer", "supplier"]),
+});
+
 export type HardwareFinancialAllocationInput = z.infer<typeof hardwareFinancialAllocationSchema>;
 export type HardwarePartyPaymentInput = z.infer<typeof hardwarePartyPaymentSchema>;
 export type HardwarePaymentReversalInput = z.infer<typeof hardwarePaymentReversalSchema>;
 export type HardwareCustomerRefundInput = z.infer<typeof hardwareCustomerRefundSchema>;
+export type HardwareFinancialAdjustmentInput = z.infer<typeof hardwareFinancialAdjustmentSchema>;
