@@ -17,6 +17,7 @@ import { AppError } from "../domain/errors";
 import {
   postCustomerPayment,
   postPurchasePayable,
+  postPurchaseReturnCredit,
   postSaleCancellationFinancials,
   postSaleReceivable,
   postSaleReturnCredit,
@@ -30,12 +31,13 @@ import { calculateTradeTotals } from "./trade-calculations";
 import { movementTypeForDocument, PrismaHardwareTradeRepository } from "./trade-repository";
 import type {
   HardwareSaleReturnInput,
+  HardwarePurchaseReturnInput,
   HardwareTradeCancelInput,
   HardwareTradeDocumentInput,
   HardwareTradeStatusInput,
   QuickPosSaleInput,
 } from "./trade-schemas";
-import type { HardwarePrintContract, HardwarePrintProjection, HardwareReportSummary, HardwareTradeSummary, HardwareWhatsAppShareContract } from "./trade-types";
+import type { HardwarePrintContract, HardwarePrintProjection, HardwareReportSummary, HardwareReturnOptions, HardwareTradeSummary, HardwareWhatsAppShareContract } from "./trade-types";
 
 type ActorContext = { tenantId: string; userId: string };
 type TradeRecord = Awaited<ReturnType<PrismaHardwareTradeRepository["list"]>>[number];
@@ -884,6 +886,261 @@ export class HardwareTradeService {
     });
 
     return toSummary(await this.getOrThrow(context.tenantId, created.id));
+  }
+
+  async createPurchaseReturn(context: ActorContext, documentId: string, input: HardwarePurchaseReturnInput) {
+    const document = await this.getOrThrow(context.tenantId, documentId);
+    await this.enforce(context, "hardware.purchase.manage");
+    await this.ensureLocation(context.tenantId, input.locationId);
+    if (
+      document.type !== HardwareTradeDocumentType.PURCHASE_ENTRY &&
+      document.type !== HardwareTradeDocumentType.SUPPLIER_BILL
+    ) {
+      throw validation("Only a confirmed purchase entry or supplier bill can receive a purchase return.");
+    }
+    if (document.status !== HardwareTradeDocumentStatus.CONFIRMED) {
+      throw validation("Only confirmed purchase documents can receive a purchase return.");
+    }
+
+    const existingIdempotentReturn = await this.prisma.hardwareTradeDocument.findFirst({
+      include: { customer: { select: { name: true } }, supplier: { select: { name: true } } },
+      where: {
+        metadata: { equals: input.idempotencyKey, path: ["idempotencyKey"] },
+        tenantId: context.tenantId,
+        type: HardwareTradeDocumentType.PURCHASE_RETURN,
+      },
+    });
+    if (existingIdempotentReturn) return toSummary(existingIdempotentReturn);
+
+    const previousReturns = await this.prisma.hardwareTradeDocument.findMany({
+      include: { items: true },
+      where: {
+        metadata: { equals: document.id, path: ["originalPurchaseId"] },
+        status: HardwareTradeDocumentStatus.CONFIRMED,
+        tenantId: context.tenantId,
+        type: HardwareTradeDocumentType.PURCHASE_RETURN,
+      },
+    });
+    const alreadyReturned = new Map<string, number>();
+    for (const returnDocument of previousReturns) {
+      for (const item of returnDocument.items) {
+        const originalItemId = readString(asRecord(item.metadata).originalItemId);
+        if (originalItemId) alreadyReturned.set(originalItemId, (alreadyReturned.get(originalItemId) ?? 0) + item.quantity);
+      }
+    }
+
+    const originalItems = new Map(document.items.map((item) => [item.id, item]));
+    const inputQuantities = new Map<string, number>();
+    for (const item of input.items) {
+      inputQuantities.set(item.originalItemId, (inputQuantities.get(item.originalItemId) ?? 0) + item.quantity);
+    }
+    const returnItems = [...inputQuantities].map(([originalItemId, quantity]) => {
+      const original = originalItems.get(originalItemId);
+      if (!original) throw validation("Returned item was not found on the original purchase.");
+      const available = original.quantity - (alreadyReturned.get(originalItemId) ?? 0);
+      if (quantity > available) {
+        throw validation(`Return quantity for ${original.description} exceeds purchased quantity.`);
+      }
+      const ratio = quantity / original.quantity;
+      const discountCents = Math.round(original.discountCents * ratio);
+      const lineInput = {
+        discountCents,
+        productId: original.productId,
+        quantity,
+        taxRateBps: original.taxRateBps,
+        unitAmountCents: original.unitAmountCents,
+      };
+      const line = calculateTradeTotals([lineInput]);
+      return {
+        description: original.description,
+        discountCents,
+        lineTotalCents: line.totalCents,
+        metadata: {
+          ...asRecord(original.metadata),
+          originalDocumentNumber: document.documentNumber,
+          originalItemId,
+          originalPurchaseId: document.id,
+          settlementType: input.settlementType,
+        } as Prisma.InputJsonValue,
+        productId: original.productId,
+        quantity,
+        taxCents: line.taxCents,
+        taxRateBps: original.taxRateBps,
+        tenantId: context.tenantId,
+        unitAmountCents: original.unitAmountCents,
+      };
+    });
+    for (const item of returnItems) {
+      const original = originalItems.get(readString(asRecord(item.metadata).originalItemId) ?? "");
+      if (isStockSetupPending(original?.product?.metadata)) continue;
+      const movements = await this.prisma.hardwareInventoryMovement.findMany({
+        where: { locationId: input.locationId, productId: item.productId, tenantId: context.tenantId },
+      });
+      if (item.quantity > stockForProduct(movements)) {
+        throw validation(`Purchase return for ${item.description} exceeds stock available at the selected location.`);
+      }
+    }
+    const totals = calculateTradeTotals(returnItems.map((item) => ({
+      discountCents: item.discountCents,
+      productId: item.productId,
+      quantity: item.quantity,
+      taxRateBps: item.taxRateBps,
+      unitAmountCents: item.unitAmountCents,
+    })));
+    const documentNumber = await this.nextNumber(context.tenantId, HardwareTradeDocumentType.PURCHASE_RETURN);
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const returnMetadata = {
+        idempotencyKey: input.idempotencyKey,
+        originalPurchaseId: document.id,
+        originalPurchaseNumber: document.documentNumber,
+        reason: input.reason,
+        settlementReference: input.settlementReference ?? null,
+        settlementType: input.settlementType,
+      };
+      const returnDocument = await tx.hardwareTradeDocument.create({
+        data: {
+          confirmedAt: now,
+          currency: document.currency,
+          discountCents: totals.discountCents,
+          documentNumber,
+          items: { create: returnItems },
+          metadata: returnMetadata as Prisma.InputJsonValue,
+          paymentStatus: input.settlementType === "refund_received" ? "refund_received" : "supplier_credit",
+          roundOffCents: 0,
+          status: HardwareTradeDocumentStatus.CONFIRMED,
+          subtotalCents: totals.subtotalCents,
+          supplierId: document.supplierId,
+          taxCents: totals.taxCents,
+          tenantId: context.tenantId,
+          totalCents: totals.totalCents,
+          type: HardwareTradeDocumentType.PURCHASE_RETURN,
+        } as Prisma.HardwareTradeDocumentUncheckedCreateInput,
+      });
+      await postPurchaseReturnCredit(tx, {
+        amountCents: totals.totalCents,
+        createdById: context.userId,
+        hardwareDocumentId: returnDocument.id,
+        idempotencyKey: `${input.idempotencyKey}:purchase-return-credit`,
+        notes: input.reason,
+        occurredAt: now,
+        partyId: document.supplierId,
+        settlementType: input.settlementType,
+        sourceId: returnDocument.id,
+        sourceNumber: returnDocument.documentNumber,
+        sourceType: "HardwareTradeDocument",
+        tenantId: context.tenantId,
+      });
+      for (const item of returnItems.filter((candidate) => !isStockSetupPending(originalItems.get(readString(asRecord(candidate.metadata).originalItemId) ?? "")?.product?.metadata))) {
+        await tx.hardwareInventoryMovement.create({
+          data: stripUndefined({
+            locationId: input.locationId,
+            metadata: {
+              idempotencyKey: input.idempotencyKey,
+              originalDocumentNumber: document.documentNumber,
+              originalPurchaseId: document.id,
+              settlementType: input.settlementType,
+            },
+            productId: item.productId,
+            quantity: item.quantity,
+            referenceId: returnDocument.id,
+            referenceType: HardwareTradeDocumentType.PURCHASE_RETURN,
+            supplierId: document.supplierId,
+            tenantId: context.tenantId,
+            type: HardwareInventoryMovementType.STOCK_OUT,
+            unitCostCents: item.unitAmountCents,
+          }) as Prisma.HardwareInventoryMovementUncheckedCreateInput,
+        });
+      }
+      await tx.hardwareTradeDocument.update({
+        data: {
+          metadata: {
+            ...asRecord(document.metadata),
+            purchaseReturnSummary: {
+              lastReturnAt: now.toISOString(),
+              lastReturnDocumentId: returnDocument.id,
+              lastReturnNumber: documentNumber,
+              returnedCents: previousReturns.reduce((sum, candidate) => sum + candidate.totalCents, 0) + totals.totalCents,
+            },
+          } as Prisma.InputJsonValue,
+        },
+        where: { id: document.id, tenantId: context.tenantId },
+      });
+      await tx.hardwareTradeTimelineEvent.create({
+        data: {
+          actorId: context.userId,
+          documentId: returnDocument.id,
+          metadata: returnMetadata as Prisma.InputJsonValue,
+          summary: `Recorded purchase return ${documentNumber} against ${document.documentNumber}`,
+          tenantId: context.tenantId,
+          verb: HardwareTradeTimelineVerb.RETURNED,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          action: AuditAction.HARDWARE_STOCK_MOVED,
+          actorId: context.userId,
+          metadata: { ...returnMetadata, movements: returnItems.length, tradeAction: "purchase_returned" },
+          targetId: returnDocument.id,
+          targetType: "HardwareTradeDocument",
+          tenantId: context.tenantId,
+        },
+      });
+      return returnDocument;
+    });
+
+    return toSummary(await this.getOrThrow(context.tenantId, created.id));
+  }
+
+  async returnOptions(context: ActorContext, documentId: string): Promise<HardwareReturnOptions> {
+    const document = await this.getOrThrow(context.tenantId, documentId);
+    await this.enforce(context, readPermission(document.type));
+    const isSale = document.type === HardwareTradeDocumentType.SALES_ORDER;
+    const isPurchase =
+      document.type === HardwareTradeDocumentType.PURCHASE_ENTRY ||
+      document.type === HardwareTradeDocumentType.SUPPLIER_BILL;
+    if (!isSale && !isPurchase) {
+      throw validation("Only sales and confirmed purchase documents can receive returns.");
+    }
+    if (document.status !== HardwareTradeDocumentStatus.CONFIRMED) {
+      throw validation("Only confirmed documents can receive returns.");
+    }
+    const returnType = isSale ? HardwareTradeDocumentType.SALE_RETURN : HardwareTradeDocumentType.PURCHASE_RETURN;
+    const originalKey = isSale ? "originalSaleId" : "originalPurchaseId";
+    const previousReturns = await this.prisma.hardwareTradeDocument.findMany({
+      include: { items: true },
+      where: {
+        metadata: { equals: document.id, path: [originalKey] },
+        status: HardwareTradeDocumentStatus.CONFIRMED,
+        tenantId: context.tenantId,
+        type: returnType,
+      },
+    });
+    const returned = new Map<string, number>();
+    for (const returnDocument of previousReturns) {
+      for (const item of returnDocument.items) {
+        const originalItemId = readString(asRecord(item.metadata).originalItemId);
+        if (originalItemId) returned.set(originalItemId, (returned.get(originalItemId) ?? 0) + item.quantity);
+      }
+    }
+    return {
+      documentId: document.id,
+      documentNumber: document.documentNumber,
+      documentType: document.type,
+      partyName: isSale ? document.customer?.name ?? null : document.supplier?.name ?? null,
+      remainingItems: document.items.map((item) => {
+        const previouslyReturnedQuantity = returned.get(item.id) ?? 0;
+        return {
+          description: item.description,
+          originalItemId: item.id,
+          previouslyReturnedQuantity,
+          purchasedOrSoldQuantity: item.quantity,
+          remainingQuantity: Math.max(item.quantity - previouslyReturnedQuantity, 0),
+          unitAmountCents: item.unitAmountCents,
+        };
+      }).filter((item) => item.remainingQuantity > 0),
+    };
   }
 
   async draftSaleInvoice(context: ActorContext, documentId: string) {

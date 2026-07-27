@@ -48,6 +48,21 @@ export type HardwareWhatsAppShareContract = {
   messageTemplate: string;
 };
 
+export type HardwareReturnOptions = {
+  documentId: string;
+  documentNumber: string;
+  documentType: HardwareTradeDocumentType;
+  partyName: string | null;
+  remainingItems: Array<{
+    description: string;
+    originalItemId: string;
+    previouslyReturnedQuantity: number;
+    purchasedOrSoldQuantity: number;
+    remainingQuantity: number;
+    unitAmountCents: number;
+  }>;
+};
+
 export type HardwarePrintProjection = {
   customer: {
     address: string | null;

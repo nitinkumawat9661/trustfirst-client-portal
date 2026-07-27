@@ -207,6 +207,24 @@ export async function postPurchasePayable(
   });
 }
 
+export async function postPurchaseReturnCredit(
+  tx: FinancialTransactionClient,
+  input: BasePostingInput & {
+    settlementType: string;
+  },
+) {
+  return postFinancialTransaction(tx, {
+    ...input,
+    creditCents: input.amountCents,
+    debitCents: 0,
+    documentKind: DocumentSequenceKind.ADJUSTMENT,
+    metadata: { settlementType: input.settlementType },
+    partyType: FinancialPartyType.SUPPLIER,
+    prefix: "MS/PRET",
+    type: FinancialTransactionType.PURCHASE_RETURN_CREDIT,
+  });
+}
+
 export async function postSupplierPayment(
   tx: FinancialTransactionClient,
   input: CustomerPaymentInput,

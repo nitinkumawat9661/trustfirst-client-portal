@@ -375,6 +375,116 @@ describe("HardwareTradeService", () => {
     ]);
   });
 
+  it("records a partial purchase return with supplier credit and stock-out movement", async () => {
+    const events: string[] = [];
+    const now = new Date();
+    const purchase = {
+      billingInvoice: null,
+      billingInvoiceId: null,
+      currency: "INR",
+      customer: null,
+      customerId: null,
+      discountCents: 0,
+      documentNumber: "HPE-2026-0002",
+      id: "doc_purchase_2",
+      items: [
+        {
+          description: "CP Tap",
+          discountCents: 0,
+          id: "item_purchase_1",
+          lineTotalCents: 10_000,
+          metadata: {},
+          product: { metadata: {}, unit: null },
+          productId: "prod_1",
+          quantity: 10,
+          taxCents: 0,
+          taxRateBps: 0,
+          unitAmountCents: 1000,
+        },
+      ],
+      metadata: {},
+      paymentStatus: "partial",
+      roundOffCents: 0,
+      status: HardwareTradeDocumentStatus.CONFIRMED,
+      subtotalCents: 10_000,
+      supplier: { name: "Supplier" },
+      supplierId: "supplier_1",
+      taxCents: 0,
+      timeline: [],
+      totalCents: 10_000,
+      type: HardwareTradeDocumentType.PURCHASE_ENTRY,
+      updatedAt: now,
+    };
+    let createdReturn = null as null | Record<string, unknown>;
+    const service = new HardwareTradeService(
+      prismaMock({
+        $transaction: async (callback: (tx: Record<string, unknown>) => Promise<unknown>) =>
+          callback({
+            auditEvent: { create: async () => { events.push("audit"); return {}; } },
+            documentSequence: { upsert: async () => ({ lastValue: 1 }) },
+            financialTransaction: {
+              create: async () => { events.push("financial"); return { id: "fin_return" }; },
+              findUnique: async () => null,
+            },
+            hardwareInventoryMovement: { create: async ({ data }: { data: { type: string; quantity: number } }) => { events.push(`${data.type}:${data.quantity}`); return {}; } },
+            hardwareTradeDocument: {
+              create: async ({ data }: { data: { documentNumber: string; items: { create: unknown[] }; totalCents: number; type: HardwareTradeDocumentType } }) => {
+                events.push("return-document");
+                createdReturn = {
+                  ...purchase,
+                  documentNumber: data.documentNumber,
+                  id: "doc_return_1",
+                  items: [],
+                  totalCents: data.totalCents,
+                  type: data.type,
+                };
+                return createdReturn;
+              },
+              update: async () => { events.push("original-updated"); return purchase; },
+            },
+            hardwareTradeTimelineEvent: { create: async () => { events.push("timeline"); return {}; } },
+          }),
+        hardwareInventoryMovement: {
+          findMany: async () => [{ quantity: 10, type: HardwareInventoryMovementType.STOCK_IN }],
+        },
+        hardwareStockLocation: { findFirst: async () => ({ id: "loc_1" }) },
+        hardwareTradeDocument: {
+          count: async () => 0,
+          findFirst: async ({ where }: { where: { documentNumber?: string; id?: string; type?: HardwareTradeDocumentType } }) => {
+            if (where.documentNumber) return null;
+            if (where.id === "doc_return_1") return createdReturn;
+            if (where.type === HardwareTradeDocumentType.PURCHASE_RETURN) return null;
+            return purchase;
+          },
+          findMany: async () => [],
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const result = await service.createPurchaseReturn(
+      { tenantId: "tenant_1", userId: "user_1" },
+      "doc_purchase_2",
+      {
+        idempotencyKey: "purchase-return-123",
+        items: [{ originalItemId: "item_purchase_1", quantity: 3 }],
+        locationId: "loc_1",
+        reason: "Damaged goods",
+        settlementType: "supplier_credit",
+      },
+    );
+
+    expect(result.type).toBe(HardwareTradeDocumentType.PURCHASE_RETURN);
+    expect(result.totalCents).toBe(3000);
+    expect(events).toEqual([
+      "return-document",
+      "financial",
+      "STOCK_OUT:3",
+      "original-updated",
+      "timeline",
+      "audit",
+    ]);
+  });
+
   it("blocks duplicate draft invoice numbers for hardware documents", async () => {
     const now = new Date();
     const service = new HardwareTradeService(
