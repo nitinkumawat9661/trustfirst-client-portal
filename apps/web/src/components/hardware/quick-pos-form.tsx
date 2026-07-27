@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import type { HardwarePartySummary, HardwareProductSummary } from "@/server/hardware";
 import { buildWhatsAppBillUrl } from "@/server/hardware/whatsapp";
 import { CreatableCombobox } from "./creatable-combobox";
+import { DirectPrintButton } from "./direct-print-button";
 import { postHardwareJson } from "./hardware-api-client";
 
 type LocationOption = { id: string; name: string };
@@ -383,7 +384,7 @@ export function QuickPosForm({
           <Card>
             <CardHeader><CardTitle>After issue</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <Button asChild className="w-full" variant="outline"><Link href={`/admin/hardware/print/${posted.documentId}`}><Printer className="size-4" />Download / Print bill</Link></Button>
+              <DirectPrintButton className="w-full" format="a4" label="Download / Print bill" url={`/admin/hardware/print/${posted.documentId}`} />
               <Button className="w-full" onClick={() => printCurrentBill({ postedSale: posted })} type="button" variant="outline"><Printer className="size-4" />Reprint receipt</Button>
               <Input placeholder="WhatsApp mobile if customer has none" value={whatsAppMobile} onChange={(event) => setWhatsAppMobile(event.target.value)} />
               <Button asChild className="w-full" disabled={!waUrl}>

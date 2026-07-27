@@ -2,11 +2,12 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@trustfirst/ui";
-import { Printer, ReceiptText, RefreshCcw } from "lucide-react";
+import { ReceiptText, RefreshCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import type { HardwarePartySummary, PartyFinancialPosition } from "@/server/hardware";
+import { DirectPrintButton } from "./direct-print-button";
 import { getHardwareJson, postHardwareJson } from "./hardware-api-client";
 
 const paymentModes = ["CASH", "UPI", "CARD", "BANK_TRANSFER", "CHEQUE", "OTHER"] as const;
@@ -217,16 +218,11 @@ export function HardwarePaymentWorkbench({
       ) : null}
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
         <Button disabled={!position || isSubmitting} type="submit"><ReceiptText className="size-4" />{isSubmitting ? "Posting..." : "Post"}</Button>
-        <Button
-          disabled={!lastPrintTransactionId}
-          onClick={() => {
-            if (lastPrintTransactionId) window.open(`/admin/hardware/payments/print/${lastPrintTransactionId}?format=80mm`, "_blank", "noopener,noreferrer");
-          }}
-          type="button"
-          variant="outline"
-        >
-          <Printer className="size-4" />Print / reprint
-        </Button>
+        {lastPrintTransactionId ? (
+          <DirectPrintButton format="80mm" label="Print / reprint" url={`/admin/hardware/payments/print/${lastPrintTransactionId}`} />
+        ) : (
+          <Button disabled type="button" variant="outline">Print / reprint</Button>
+        )}
         <Button onClick={() => partyId && void loadPosition(partyId)} type="button" variant="ghost"><RefreshCcw className="size-4" />Refresh</Button>
       </div>
     </form>

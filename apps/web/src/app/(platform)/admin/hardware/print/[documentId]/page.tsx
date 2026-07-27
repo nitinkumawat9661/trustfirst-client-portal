@@ -35,12 +35,20 @@ export default async function HardwarePrintPreviewPage({
 
   return (
     <main className="min-h-screen bg-zinc-200 p-3 text-black sm:p-6 print:bg-white print:p-0">
-      <section className={`print-sheet mx-auto w-full bg-white p-5 shadow-md sm:p-8 print:p-0 print:shadow-none ${format === "a4" ? "max-w-[210mm]" : format === "80mm" ? "max-w-[80mm]" : "max-w-[58mm]"}`}>
+      <section className={`print-sheet mx-auto w-full bg-white shadow-md print:shadow-none ${format === "a4" ? "max-w-[210mm] p-6" : format === "80mm" ? "max-w-[80mm] p-3" : "max-w-[58mm] p-2"}`}>
         <style>{`
+          .print-table { table-layout: fixed; }
+          .print-item { overflow-wrap: anywhere; word-break: normal; }
           @media print {
-            @page { size: ${format === "a4" ? "A4 portrait" : `${format} auto`}; margin: ${format === "a4" ? "10mm" : "2mm"}; }
+            @page { size: ${format === "a4" ? "A4 portrait" : `${format} auto`}; margin: ${format === "a4" ? "8mm" : "2mm"}; }
+            html, body { margin: 0 !important; background: #fff !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
-            .print-sheet { width: auto; min-height: auto; }
+            .print-sheet { width: 100% !important; max-width: none !important; min-height: auto !important; padding: 0 !important; box-shadow: none !important; }
+            .print-table-wrap { overflow: visible !important; }
+            .print-table { width: 100% !important; min-width: 0 !important; table-layout: fixed !important; }
+            .print-logo { width: ${format === "a4" ? "70px" : "42px"} !important; height: ${format === "a4" ? "70px" : "42px"} !important; }
+            .print-header { gap: ${format === "a4" ? "12px" : "6px"} !important; padding-bottom: ${format === "a4" ? "10px" : "6px"} !important; }
+            .print-compact-gap { margin-top: ${format === "a4" ? "10px" : "6px"} !important; }
             thead { display: table-header-group; }
             tfoot { display: table-footer-group; }
             tr, td, th { break-inside: avoid; page-break-inside: avoid; }
@@ -62,12 +70,12 @@ export default async function HardwarePrintPreviewPage({
           </div>
           <PrintButton />
         </div>
-        <header className={`print-break-avoid flex flex-col gap-5 border-b-2 border-zinc-900 pb-5 ${format === "a4" ? "sm:flex-row sm:items-start sm:justify-between" : "items-center text-center"}`}>
+        <header className={`print-header print-break-avoid flex flex-col gap-5 border-b-2 border-zinc-900 pb-5 ${format === "a4" ? "sm:flex-row sm:items-start sm:justify-between" : "items-center text-center"}`}>
           <div className="flex items-start gap-4">
             {projection.firm.logoUrl ? (
               <Image
                 alt={`${projection.firm.firmName} approved logo`}
-                className="size-20 shrink-0 object-contain sm:size-24"
+                className="print-logo size-16 shrink-0 object-contain sm:size-20"
                 height={96}
                 priority
                 src={projection.firm.logoUrl}
@@ -76,7 +84,7 @@ export default async function HardwarePrintPreviewPage({
               />
             ) : null}
             <div>
-              <h1 className="text-2xl font-bold tracking-normal">{projection.firm.firmName}</h1>
+              <h1 className={format === "a4" ? "text-xl font-bold tracking-normal" : "text-base font-bold tracking-normal"}>{projection.firm.firmName}</h1>
               {projection.firm.tagline ? <p className="mt-1 text-xs font-semibold">{projection.firm.tagline}</p> : null}
               <p className="mt-2 max-w-xl text-xs leading-5">{formatAddress(projection.firm.address)}</p>
               <p className="text-xs">{[projection.firm.phone, projection.firm.email].filter(Boolean).join(" | ")}</p>
@@ -84,7 +92,7 @@ export default async function HardwarePrintPreviewPage({
             </div>
           </div>
           <div className="min-w-52 text-left sm:text-right">
-            <p className="text-xl font-bold">{documentLabel(projection.document.type)}</p>
+            <p className={format === "a4" ? "text-lg font-bold" : "text-base font-bold"}>{documentLabel(projection.document.type)}</p>
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs sm:grid-cols-[1fr_auto]">
               <dt>Number</dt><dd className="font-semibold">{projection.document.documentNumber}</dd>
               <dt>Date</dt><dd>{formatDate(documentDate)}</dd>
@@ -98,7 +106,7 @@ export default async function HardwarePrintPreviewPage({
           </div>
         ) : null}
 
-        <section className={`print-break-avoid grid gap-4 border-b border-zinc-400 py-4 text-xs ${format === "a4" ? "sm:grid-cols-2" : ""}`}>
+        <section className={`print-break-avoid grid gap-4 border-b border-zinc-400 py-3 text-xs ${format === "a4" ? "sm:grid-cols-2" : ""}`}>
           <div>
             <p className="font-semibold uppercase">{isPurchaseDocument(projection.document.type) ? "Supplier" : "Bill to"}</p>
             <p className="mt-1 text-sm font-semibold">{projection.customer?.name ?? "Not linked"}</p>
@@ -117,19 +125,32 @@ export default async function HardwarePrintPreviewPage({
           </div>
         </section>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className={`w-full border-collapse text-[10px] ${format === "a4" ? "min-w-[780px] sm:text-xs" : ""}`}>
+        <div className="print-table-wrap mt-3 overflow-x-auto">
+          {format === "a4" ? (
+          <table className="print-table w-full border-collapse text-[10px] sm:text-[11px]">
+              <colgroup>
+                <col className="w-[4%]" />
+                <col className="w-[30%]" />
+                <col className="w-[10%]" />
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
+                <col className="w-[11%]" />
+                <col className="w-[9%]" />
+                <col className="w-[10%]" />
+                <col className="w-[6%]" />
+                <col className="w-[6%]" />
+              </colgroup>
             <thead>
               <tr className="border-y border-zinc-500 bg-zinc-100 text-left">
                 <th className="px-2 py-2">#</th>
                 <th className="px-2 py-2">Item</th>
-                {format === "a4" ? <th className="px-2 py-2">HSN</th> : null}
+                <th className="px-2 py-2">HSN</th>
                 <th className="px-2 py-2 text-right">Qty</th>
                 <th className="px-2 py-2">Unit</th>
                 <th className="px-2 py-2 text-right">Rate</th>
                 <th className="px-2 py-2 text-right">Disc.</th>
                 <th className="px-2 py-2 text-right">Taxable</th>
-                {format === "a4" ? <th className="px-2 py-2 text-right">GST</th> : null}
+                <th className="px-2 py-2 text-right">GST</th>
                 <th className="px-2 py-2 text-right">Total</th>
               </tr>
             </thead>
@@ -137,26 +158,45 @@ export default async function HardwarePrintPreviewPage({
               {projection.items.map((item, index) => (
                 <tr className="border-b border-zinc-300 align-top" key={`${item.description}-${index}`}>
                   <td className="px-2 py-2">{index + 1}</td>
-                  <td className="px-2 py-2 font-medium">
+                  <td className="print-item px-2 py-2 font-medium">
                     {item.description}
-                    {format !== "a4" ? <div className="text-[9px]">HSN {item.hsnCode ?? "-"} · GST {item.taxRateBps / 100}%</div> : null}
                     {isQuotation && !quotationGstIncluded && item.productGstRateBps !== null ? <div className="text-[9px] font-normal">Product GST ref {item.productGstRateBps / 100}%</div> : null}
                   </td>
-                  {format === "a4" ? <td className="px-2 py-2">{item.hsnCode ?? "Pending"}</td> : null}
+                  <td className="px-2 py-2">{item.hsnCode ?? "Pending"}</td>
                   <td className="px-2 py-2 text-right">{item.quantity}</td>
                   <td className="px-2 py-2">{item.unitCode ?? "-"}</td>
                   <td className="px-2 py-2 text-right">{money(item.unitAmountCents)}</td>
                   <td className="px-2 py-2 text-right">{discountDisplay(item)}</td>
                   <td className="px-2 py-2 text-right">{money(item.taxableCents)}</td>
-                  {format === "a4" ? <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td> : null}
+                  <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td>
                   <td className="px-2 py-2 text-right font-medium">{money(item.lineTotalCents)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          ) : (
+            <div className="space-y-2 text-[10px]">
+              {projection.items.map((item, index) => (
+                <div className="border-b border-zinc-300 pb-2" key={`${item.description}-${index}`}>
+                  <div className="flex justify-between gap-2 font-semibold">
+                    <span className="print-item">{index + 1}. {item.description}</span>
+                    <span>{money(item.lineTotalCents)}</span>
+                  </div>
+                  <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1">
+                    <span>Qty {item.quantity} {item.unitCode ?? ""}</span>
+                    <span className="text-right">Rate {money(item.unitAmountCents)}</span>
+                    <span>Discount {discountDisplay(item)}</span>
+                    <span className="text-right">Taxable {money(item.taxableCents)}</span>
+                    <span>HSN {item.hsnCode ?? "-"}</span>
+                    <span className="text-right">GST {quotationGstIncluded ? `${item.taxRateBps / 100}%` : "not included"}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <section className={`print-break-avoid mt-5 grid gap-6 ${format === "a4" ? "sm:grid-cols-[minmax(0,1fr)_280px]" : ""}`}>
+        <section className={`print-compact-gap print-break-avoid mt-5 grid gap-5 ${format === "a4" ? "sm:grid-cols-[minmax(0,1fr)_260px]" : ""}`}>
           <div>
             <p className="text-xs font-semibold uppercase">Tax summary</p>
             {isQuotation && !quotationGstIncluded ? (
@@ -171,7 +211,7 @@ export default async function HardwarePrintPreviewPage({
                 })}</tbody>
               </table>
             ) : <p className="mt-2 text-xs">No tax lines.</p>}
-            <p className="mt-5 text-xs font-semibold uppercase">Amount in words</p>
+            <p className="mt-4 text-xs font-semibold uppercase">Amount in words</p>
             <p className="mt-1 text-sm">{projection.document.totalsInWords}</p>
           </div>
           <dl className="space-y-2 text-xs">
@@ -183,7 +223,7 @@ export default async function HardwarePrintPreviewPage({
           </dl>
         </section>
 
-        <footer className="print-break-avoid mt-10 grid gap-10 border-t border-zinc-400 pt-5 text-xs sm:grid-cols-2">
+        <footer className="print-break-avoid mt-7 grid gap-8 border-t border-zinc-400 pt-4 text-xs sm:grid-cols-2">
           <div>
             <p className="font-semibold">Terms</p>
             <p className="mt-1 leading-5">{projection.firm.termsFooter ?? "WAITING FOR CLIENT CONFIRMATION"}</p>
@@ -191,7 +231,7 @@ export default async function HardwarePrintPreviewPage({
           </div>
           <div className="text-right">
             <p>For {projection.firm.firmName}</p>
-            <div className="ml-auto mt-14 w-52 border-t border-zinc-700 pt-2">{projection.signatureLabel}</div>
+            <div className="ml-auto mt-10 w-52 border-t border-zinc-700 pt-2">{projection.signatureLabel}</div>
           </div>
         </footer>
       </section>

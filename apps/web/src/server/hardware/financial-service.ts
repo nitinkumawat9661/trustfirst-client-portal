@@ -20,7 +20,14 @@ import {
   postSupplierPaymentWithAllocations,
 } from "../financial/financial-service";
 import { PermissionResolverService } from "../permissions";
-import type { HardwareCustomerRefundInput, HardwareFinancialAdjustmentInput, HardwarePartyPaymentInput, HardwarePaymentReversalInput } from "./financial-schemas";
+import type {
+  HardwareCustomerRefundInput,
+  HardwareFinancialAdjustmentCorrectionInput,
+  HardwareFinancialAdjustmentInput,
+  HardwareFinancialAdjustmentReversalInput,
+  HardwarePartyPaymentInput,
+  HardwarePaymentReversalInput,
+} from "./financial-schemas";
 import type { HardwarePrintProjection } from "./trade-types";
 
 type ActorContext = { tenantId: string; userId: string };
@@ -306,6 +313,171 @@ export class HardwareFinancialService {
     });
   }
 
+  async correctAdjustment(
+    context: ActorContext,
+    transactionId: string,
+    input: HardwareFinancialAdjustmentCorrectionInput,
+  ) {
+    const original = await this.findCorrectableAdjustment(context.tenantId, transactionId);
+    await this.enforce(
+      context,
+      original.partyType === FinancialPartyType.SUPPLIER ? "hardware.purchase.manage" : "hardware.sales.manage",
+    );
+    const occurredAt = input.effectiveDate ? new Date(input.effectiveDate) : new Date();
+    if (Number.isNaN(occurredAt.getTime())) throw validation("Effective date is invalid.");
+    const role = original.partyType === FinancialPartyType.SUPPLIER ? "supplier" : "customer";
+    const duplicate = await this.prisma.financialTransaction.findFirst({
+      where: {
+        metadata: { path: ["replacementOfTransactionId"], equals: original.id },
+        tenantId: context.tenantId,
+      },
+    });
+    if (duplicate || original.status !== FinancialTransactionStatus.POSTED) {
+      throw validation("This ledger entry has already been corrected or reversed.");
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const reversal = await postFinancialReversal(tx, {
+        amountCents: original.amountCents,
+        createdById: context.userId,
+        externalReference: original.externalReference,
+        hardwareDocumentId: original.hardwareDocumentId,
+        idempotencyKey: `${input.idempotencyKey}:reversal`,
+        invoiceId: original.invoiceId,
+        metadata: {
+          auditAction: "hardware.financial.adjustment.correction.reversal",
+          correctedByIdempotencyKey: input.idempotencyKey,
+          originalTransactionId: original.id,
+          role,
+        },
+        notes: input.reason,
+        occurredAt,
+        original: {
+          creditCents: original.creditCents,
+          debitCents: original.debitCents,
+          id: original.id,
+          partyType: original.partyType,
+          transactionNumber: original.transactionNumber,
+          type: original.type,
+        },
+        partyId: original.partyId,
+        reason: input.reason,
+        sourceId: original.id,
+        sourceNumber: original.transactionNumber,
+        sourceType: "FinancialTransaction",
+        tenantId: context.tenantId,
+      });
+      const replacement = await postManualFinancialAdjustment(tx, {
+        amountCents: input.amountCents,
+        createdById: context.userId,
+        direction: input.direction,
+        externalReference: input.reference ?? original.externalReference,
+        idempotencyKey: `${input.idempotencyKey}:replacement`,
+        metadata: {
+          auditAction: "hardware.financial.adjustment.corrected",
+          correctionReason: input.reason,
+          originalTransactionId: original.id,
+          replacementOfTransactionId: original.id,
+          reversalTransactionId: reversal.id,
+          role,
+        },
+        notes: input.notes ?? null,
+        occurredAt,
+        partyId: original.partyId,
+        partyType: original.partyType,
+        reason: input.reason,
+        sourceId: original.id,
+        sourceNumber: input.reference ?? original.sourceNumber ?? original.transactionNumber,
+        sourceType: "FinancialTransaction",
+        tenantId: context.tenantId,
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorId: context.userId,
+          action: AuditAction.BILLING_PAYMENT_RECORDED,
+          metadata: {
+            auditAction: "hardware.financial.adjustment.corrected",
+            correctedAmountCents: input.amountCents,
+            correctedDirection: input.direction,
+            originalAmountCents: original.amountCents,
+            originalTransactionId: original.id,
+            reason: input.reason,
+            replacementTransactionId: replacement.id,
+            reversalTransactionId: reversal.id,
+            role,
+          },
+          targetId: replacement.id,
+          targetType: "FinancialTransaction",
+          tenantId: context.tenantId,
+        },
+      });
+      return { originalTransactionId: original.id, replacement, reversal };
+    });
+  }
+
+  async reverseAdjustment(
+    context: ActorContext,
+    transactionId: string,
+    input: HardwareFinancialAdjustmentReversalInput,
+  ) {
+    const original = await this.findCorrectableAdjustment(context.tenantId, transactionId);
+    await this.enforce(
+      context,
+      original.partyType === FinancialPartyType.SUPPLIER ? "hardware.purchase.manage" : "hardware.sales.manage",
+    );
+    const duplicate = await this.prisma.financialTransaction.findFirst({
+      where: { reversalOfId: original.id, tenantId: context.tenantId },
+    });
+    if (duplicate || original.status !== FinancialTransactionStatus.POSTED) {
+      throw validation("This ledger entry has already been corrected or reversed.");
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const reversal = await postFinancialReversal(tx, {
+        amountCents: original.amountCents,
+        createdById: context.userId,
+        externalReference: original.externalReference,
+        hardwareDocumentId: original.hardwareDocumentId,
+        idempotencyKey: input.idempotencyKey,
+        invoiceId: original.invoiceId,
+        metadata: {
+          auditAction: "hardware.financial.adjustment.reversed",
+          originalTransactionId: original.id,
+        },
+        notes: input.reason,
+        original: {
+          creditCents: original.creditCents,
+          debitCents: original.debitCents,
+          id: original.id,
+          partyType: original.partyType,
+          transactionNumber: original.transactionNumber,
+          type: original.type,
+        },
+        partyId: original.partyId,
+        reason: input.reason,
+        sourceId: original.id,
+        sourceNumber: original.transactionNumber,
+        sourceType: "FinancialTransaction",
+        tenantId: context.tenantId,
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorId: context.userId,
+          action: AuditAction.BILLING_PAYMENT_RECORDED,
+          metadata: {
+            auditAction: "hardware.financial.adjustment.reversed",
+            originalTransactionId: original.id,
+            reason: input.reason,
+            reversalTransactionId: reversal.id,
+          },
+          targetId: reversal.id,
+          targetType: "FinancialTransaction",
+          tenantId: context.tenantId,
+        },
+      });
+      return reversal;
+    });
+  }
+
   private async recordPartyPayment(context: ActorContext, role: PartyRole, input: HardwarePartyPaymentInput) {
     await this.ensureParty(context.tenantId, input.partyId, role);
     const position = await this.partyPosition(context, role, input.partyId);
@@ -460,6 +632,8 @@ export class HardwareFinancialService {
             FinancialTransactionType.SUPPLIER_PAYMENT_REVERSAL,
             FinancialTransactionType.PAYMENT_REVERSAL,
             FinancialTransactionType.REFUND_REVERSAL,
+            FinancialTransactionType.MANUAL_DEBIT_ADJUSTMENT,
+            FinancialTransactionType.MANUAL_CREDIT_ADJUSTMENT,
           ],
         },
       },
@@ -567,6 +741,23 @@ export class HardwareFinancialService {
       tenantId: context.tenantId,
       userId: context.userId,
     });
+  }
+
+  private async findCorrectableAdjustment(tenantId: string, transactionId: string) {
+    const original = await this.prisma.financialTransaction.findFirst({
+      where: {
+        id: transactionId,
+        tenantId,
+        type: {
+          in: [
+            FinancialTransactionType.MANUAL_DEBIT_ADJUSTMENT,
+            FinancialTransactionType.MANUAL_CREDIT_ADJUSTMENT,
+          ],
+        },
+      },
+    });
+    if (!original) throw validation("Ledger adjustment entry was not found.");
+    return original;
   }
 }
 

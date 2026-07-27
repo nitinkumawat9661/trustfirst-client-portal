@@ -48,12 +48,15 @@ describe("quick POS print preview helpers", () => {
     const preview = quickPosPrintTestUtils.buildBillPreview({
       cashierName: "Counter",
       customer: {
+        address: null,
         balanceSide: null,
         contact: "9999999999",
+        creditLimitCents: 0,
         currentBalanceCents: 0,
         gstin: null,
         id: "customer_1",
         name: "TEST CUSTOMER",
+        notes: null,
         openingBalanceCents: 0,
         role: "customer",
       },

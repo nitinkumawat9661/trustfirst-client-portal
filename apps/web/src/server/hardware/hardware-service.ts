@@ -27,6 +27,7 @@ import type {
   HardwareLocationInput,
   HardwareMovementInput,
   HardwareProductInput,
+  HardwarePartyUpdateInput,
   QuickHardwarePartyInput,
   QuickHardwareProductInput,
   HardwareUnitInput,
@@ -263,14 +264,97 @@ export class HardwareService {
               ? currentBalanceCents > 0 ? "CR" as const : "DR" as const
               : currentBalanceCents > 0 ? "DR" as const : "CR" as const,
         contact: contact?.phone ?? contact?.email ?? readText(customFields.phone) ?? null,
+        address: readText(customFields.address) ?? null,
+        creditLimitCents: readInteger(customFields.creditLimitCents) ?? 0,
         currentBalanceCents,
         gstin: readText(customFields.gstin) ?? null,
         id: party.id,
         name: party.name,
+        notes: readText(customFields.notes) ?? null,
         openingBalanceCents,
         role,
       }];
     });
+  }
+
+  async updateParty(context: ActorContext, partyId: string, input: HardwarePartyUpdateInput): Promise<HardwarePartySummary> {
+    await this.enforce(context, input.role === "supplier" ? "hardware.purchase.manage" : "hardware.sales.manage");
+    const party = await this.prisma.clientOrganization.findFirst({
+      include: { contacts: { orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }], take: 1 } },
+      where: { archivedAt: null, deletedAt: null, id: partyId, tenantId: context.tenantId },
+    });
+    if (!party || asRecord(party.customFields).hardwarePartyRole !== input.role) {
+      throw validation(`${input.role === "supplier" ? "Supplier" : "Customer"} was not found.`);
+    }
+    const customFields = asRecord(party.customFields);
+    const normalizedMobile = input.mobile !== undefined ? normalizeMobile(input.mobile) : undefined;
+    const nextCustomFields = stripUndefined({
+      ...customFields,
+      ...(input.address !== undefined ? { address: input.address || undefined } : {}),
+      ...(input.creditLimitCents !== undefined ? { creditLimitCents: input.creditLimitCents } : {}),
+      ...(input.gstin !== undefined ? { gstin: input.gstin ? input.gstin.toUpperCase() : undefined } : {}),
+      ...(input.mobile !== undefined ? { phone: normalizedMobile || undefined } : {}),
+      ...(input.notes !== undefined ? { notes: input.notes || undefined } : {}),
+    }) as Prisma.InputJsonValue;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const nextParty = await tx.clientOrganization.update({
+        data: {
+          customFields: nextCustomFields,
+          ...(input.name ? { name: input.name } : {}),
+        },
+        where: { id: party.id },
+      });
+      if (input.mobile !== undefined) {
+        if (party.contacts[0]) {
+          await tx.clientContact.update({
+            data: { phone: normalizedMobile || null },
+            where: { id: party.contacts[0].id },
+          });
+        } else if (normalizedMobile) {
+          await tx.clientContact.create({
+            data: {
+              clientId: party.id,
+              email: `${party.id}@local.invalid`,
+              isPrimary: true,
+              name: input.name ?? party.name,
+              normalizedEmail: `${party.id}@local.invalid`,
+              phone: normalizedMobile,
+              tenantId: context.tenantId,
+            },
+          });
+        }
+      }
+      await tx.auditEvent.create({
+        data: {
+          actorId: context.userId,
+          action: AuditAction.HARDWARE_CATALOG_UPDATED,
+          metadata: {
+            auditAction: "hardware.party.updated",
+            editableFields: ["name", "mobile", "address", "gstin", "creditLimitCents", "notes"],
+            openingBalanceNotOverwritten: true,
+            role: input.role,
+          },
+          targetId: party.id,
+          targetType: "ClientOrganization",
+          tenantId: context.tenantId,
+        },
+      });
+      return nextParty;
+    });
+    const ledgers = await this.listParties(context, input.role);
+    return ledgers.find((entry) => entry.id === updated.id) ?? {
+      address: readText(asRecord(updated.customFields).address) ?? null,
+      balanceSide: null,
+      contact: normalizedMobile ?? null,
+      creditLimitCents: readInteger(asRecord(updated.customFields).creditLimitCents) ?? 0,
+      currentBalanceCents: 0,
+      gstin: readText(asRecord(updated.customFields).gstin) ?? null,
+      id: updated.id,
+      name: updated.name,
+      notes: readText(asRecord(updated.customFields).notes) ?? null,
+      openingBalanceCents: readInteger(asRecord(updated.customFields).openingBalanceCents) ?? 0,
+      role: input.role,
+    };
   }
 
   async createProduct(context: ActorContext, input: HardwareProductInput) {
@@ -421,12 +505,15 @@ export class HardwareService {
       });
     }
     return {
+      address: input.address ?? null,
       balanceSide: signedOpening === 0 ? null : input.role === "supplier" ? (signedOpening > 0 ? "CR" : "DR") : (signedOpening > 0 ? "DR" : "CR"),
       contact: normalizedMobile ?? null,
+      creditLimitCents: 0,
       currentBalanceCents: signedOpening,
       gstin: input.gstin ?? null,
       id: party.id,
       name: party.name,
+      notes: null,
       openingBalanceCents: signedOpening,
       role: input.role,
     };
@@ -628,6 +715,7 @@ export class HardwareService {
         date: new Date(0),
         debitCents: party.openingBalanceCents > 0 ? party.openingBalanceCents : 0,
         description: "Opening balance",
+        isOpeningBalance: true,
         reference: "OPENING",
       }];
       const durableEntries = financialTransactions.filter((transaction) => transaction.partyId === party.id);
@@ -641,9 +729,12 @@ export class HardwareService {
           date: transaction.occurredAt,
           debitCents: transaction.debitCents,
           description: financialTransactionDescription(transaction.type),
+          isCorrectable: isManualAdjustment(transaction.type),
+          isReversible: isManualAdjustment(transaction.type),
           paymentMode: transaction.paymentMode,
           reference: transaction.sourceNumber ?? transaction.transactionNumber,
           status: transaction.status,
+          transactionId: transaction.id,
           transactionType: transaction.type,
         });
       }
@@ -1582,10 +1673,16 @@ function buildPartyLedger(
   });
 
   return {
+    address: party.address,
+    contact: party.contact,
+    creditLimitCents: party.creditLimitCents,
     entries: runningEntries,
+    gstin: party.gstin,
+    notes: party.notes,
     openingBalanceCents: party.openingBalanceCents,
     partyId: party.id,
     partyName: party.name,
+    role: party.role,
     totalPaidCents: runningEntries.reduce((total, entry) => total + entry.creditCents, 0),
     totalPayableCents: runningEntries.reduce((total, entry) => total + entry.debitCents, 0),
     totalRemainingCents: runningEntries.at(-1)?.balanceCents ?? 0,
@@ -1622,6 +1719,11 @@ function financialTransactionDescription(type: FinancialTransactionType) {
     [FinancialTransactionType.SUPPLIER_REFUND_RECEIVED]: "Supplier refund received",
   };
   return labels[type] ?? humanize(type);
+}
+
+function isManualAdjustment(type: FinancialTransactionType) {
+  return type === FinancialTransactionType.MANUAL_DEBIT_ADJUSTMENT ||
+    type === FinancialTransactionType.MANUAL_CREDIT_ADJUSTMENT;
 }
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {

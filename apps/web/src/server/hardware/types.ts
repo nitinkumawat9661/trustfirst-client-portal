@@ -26,17 +26,27 @@ export type LedgerEntry = {
   date: Date;
   debitCents: number;
   description: string;
+  isCorrectable?: boolean;
+  isOpeningBalance?: boolean;
+  isReversible?: boolean;
   paymentMode?: string | null;
   reference: string;
   status?: string;
+  transactionId?: string | null;
   transactionType?: string;
 };
 
 export type PartyLedger = {
+  address: string | null;
+  contact: string | null;
+  creditLimitCents: number;
   entries: LedgerEntry[];
+  gstin: string | null;
+  notes: string | null;
   openingBalanceCents: number;
   partyId: string;
   partyName: string;
+  role: HardwarePartyRole;
   totalPaidCents: number;
   totalPayableCents: number;
   totalRemainingCents: number;
@@ -109,12 +119,15 @@ export type HardwareMovementSummary = {
 export type HardwarePartyRole = "customer" | "supplier";
 
 export type HardwarePartySummary = {
+  address: string | null;
   balanceSide: "CR" | "DR" | null;
   contact: string | null;
+  creditLimitCents: number;
   currentBalanceCents: number;
   gstin: string | null;
   id: string;
   name: string;
+  notes: string | null;
   openingBalanceCents: number;
   role: HardwarePartyRole;
 };

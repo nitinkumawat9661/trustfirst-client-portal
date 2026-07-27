@@ -21,6 +21,7 @@ type BasePostingInput = {
   notes?: string | null;
   occurredAt?: Date;
   partyId?: string | null;
+  reversalOfId?: string | null;
   sourceNumber?: string | null;
   sourceType: string;
   sourceId: string;
@@ -316,6 +317,7 @@ export async function postManualFinancialAdjustment(
   tx: FinancialTransactionClient,
   input: BasePostingInput & {
     direction: "debit" | "credit";
+    metadata?: Prisma.InputJsonValue;
     partyType: FinancialPartyType;
     reason: string;
   },
@@ -325,7 +327,7 @@ export async function postManualFinancialAdjustment(
     creditCents: input.direction === "credit" ? input.amountCents : 0,
     debitCents: input.direction === "debit" ? input.amountCents : 0,
     documentKind: DocumentSequenceKind.ADJUSTMENT,
-    metadata: { adjustmentDirection: input.direction, reason: input.reason },
+    metadata: { ...asRecord(input.metadata), adjustmentDirection: input.direction, reason: input.reason },
     partyType: input.partyType,
     prefix: input.partyType === FinancialPartyType.SUPPLIER ? "MS/SADJ" : "MS/CADJ",
     type: input.direction === "debit"
@@ -337,6 +339,7 @@ export async function postManualFinancialAdjustment(
 export async function postFinancialReversal(
   tx: FinancialTransactionClient,
   input: BasePostingInput & {
+    metadata?: Prisma.InputJsonValue;
     original: {
       creditCents: number;
       debitCents: number;
@@ -371,9 +374,10 @@ export async function postFinancialReversal(
     creditCents: input.original.debitCents,
     debitCents: input.original.creditCents,
     documentKind: DocumentSequenceKind.ADJUSTMENT,
-    metadata: { originalTransactionNumber: input.original.transactionNumber, reason: input.reason },
+    metadata: { ...asRecord(input.metadata), originalTransactionNumber: input.original.transactionNumber, reason: input.reason },
     partyType: input.original.partyType,
     prefix: "MS/REV",
+    reversalOfId: input.original.id,
     type: reversalType,
   });
 }
@@ -496,6 +500,7 @@ async function postFinancialTransaction(
       partyId: input.partyId ?? null,
       partyType: input.partyType,
       paymentMode: input.paymentMode,
+      reversalOfId: input.reversalOfId ?? null,
       sourceId: input.sourceId,
       sourceNumber: input.sourceNumber ?? null,
       sourceType: input.sourceType,
@@ -512,4 +517,10 @@ function centsToDecimal(amountCents: number) {
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }

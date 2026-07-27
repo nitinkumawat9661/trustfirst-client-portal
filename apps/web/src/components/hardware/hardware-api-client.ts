@@ -34,6 +34,32 @@ export async function postHardwareJson<T>(
   }
 }
 
+export async function patchHardwareJson<T>(
+  endpoint: string,
+  body?: unknown,
+): Promise<HardwareApiResult<T>> {
+  try {
+    const response = await fetch(endpoint, {
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      headers: { "content-type": "application/json" },
+      method: "PATCH",
+    });
+    const result = await readEnvelope<T>(response);
+    if (!response.ok || !result.ok) {
+      return {
+        message: result.error?.message ?? "The request could not be completed.",
+        ok: false,
+      };
+    }
+    return { data: result.data as T, ok: true };
+  } catch {
+    return {
+      message: "The server could not be reached. Check the connection and retry.",
+      ok: false,
+    };
+  }
+}
+
 export async function getHardwareJson<T>(endpoint: string): Promise<HardwareApiResult<T>> {
   try {
     const response = await fetch(endpoint, { headers: { accept: "application/json" } });

@@ -158,4 +158,118 @@ describe("HardwareFinancialService", () => {
     ]);
     expect(projection.amountInWords).toContain("Seventy Five rupees");
   });
+
+  it("corrects a manual adjustment by reversing the original and posting a linked replacement", async () => {
+    const createdTransactions: Array<Record<string, unknown>> = [];
+    const updatedTransactions: Array<Record<string, unknown>> = [];
+    const original = {
+      amountCents: 5000,
+      creditCents: 0,
+      debitCents: 5000,
+      externalReference: "OPENING-CORRECTION",
+      hardwareDocumentId: null,
+      id: "fin_original",
+      invoiceId: null,
+      partyId: "party_1",
+      partyType: FinancialPartyType.CUSTOMER,
+      sourceNumber: "OPENING-CORRECTION",
+      status: FinancialTransactionStatus.POSTED,
+      transactionNumber: "MS/CADJ/2026-27/00001",
+      type: FinancialTransactionType.MANUAL_DEBIT_ADJUSTMENT,
+    };
+    const tx = {
+      auditEvent: { create: async ({ data }: { data: Record<string, unknown> }) => data },
+      documentSequence: { upsert: async () => ({ lastValue: createdTransactions.length + 1 }) },
+      financialTransaction: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          const created = { id: `fin_created_${createdTransactions.length + 1}`, ...data };
+          createdTransactions.push(created);
+          return created;
+        },
+        findUnique: async () => null,
+        update: async ({ data }: { data: Record<string, unknown> }) => {
+          updatedTransactions.push(data);
+          return { ...original, ...data };
+        },
+      },
+    };
+    const service = new HardwareFinancialService(
+      prismaMock({
+        $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+        financialTransaction: {
+          findFirst: async ({ where }: { where: Record<string, unknown> }) => "metadata" in where ? null : original,
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    const result = await service.correctAdjustment(
+      { tenantId: "tenant_1", userId: "user_1" },
+      "fin_original",
+      {
+        amountCents: 7500,
+        confirm: true,
+        direction: "credit",
+        idempotencyKey: "adjustment-correction-test",
+        reason: "Owner approved correction",
+        reference: "CORRECTED",
+      },
+    );
+
+    expect(updatedTransactions[0]).toEqual(expect.objectContaining({ status: "REVERSED" }));
+    expect(createdTransactions).toEqual([
+      expect.objectContaining({
+        creditCents: 5000,
+        debitCents: 0,
+        idempotencyKey: "adjustment-correction-test:reversal",
+        reversalOfId: "fin_original",
+      }),
+      expect.objectContaining({
+        creditCents: 7500,
+        debitCents: 0,
+        idempotencyKey: "adjustment-correction-test:replacement",
+        metadata: expect.objectContaining({
+          originalTransactionId: "fin_original",
+          replacementOfTransactionId: "fin_original",
+          reversalTransactionId: result.reversal.id,
+        }),
+      }),
+    ]);
+  });
+
+  it("rejects duplicate manual adjustment correction attempts", async () => {
+    const original = {
+      amountCents: 5000,
+      creditCents: 0,
+      debitCents: 5000,
+      externalReference: null,
+      hardwareDocumentId: null,
+      id: "fin_original",
+      invoiceId: null,
+      partyId: "party_1",
+      partyType: FinancialPartyType.CUSTOMER,
+      sourceNumber: null,
+      status: FinancialTransactionStatus.POSTED,
+      transactionNumber: "MS/CADJ/2026-27/00001",
+      type: FinancialTransactionType.MANUAL_DEBIT_ADJUSTMENT,
+    };
+    const service = new HardwareFinancialService(
+      prismaMock({
+        financialTransaction: {
+          findFirst: async ({ where }: { where: Record<string, unknown> }) => "metadata" in where ? { id: "fin_replacement" } : original,
+        },
+      } as unknown as Partial<PrismaClient>),
+    );
+
+    await expect(service.correctAdjustment(
+      { tenantId: "tenant_1", userId: "user_1" },
+      "fin_original",
+      {
+        amountCents: 7500,
+        confirm: true,
+        direction: "credit",
+        idempotencyKey: "adjustment-correction-test",
+        reason: "Owner approved correction",
+      },
+    )).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
 });

@@ -120,6 +120,19 @@ export const hardwareImportPreviewSchema = z.object({
   mode: z.enum(["create", "update", "upsert"]).default("create"),
 });
 
+export const hardwarePartyUpdateSchema = z.object({
+  address: z.string().trim().max(500).optional(),
+  creditLimitCents: z.number().int().nonnegative().optional(),
+  gstin: z.string().trim().max(20).optional().refine(
+    (value) => !value || /^[0-9A-Z]{15}$/u.test(value.toUpperCase()),
+    { message: "GSTIN must be 15 uppercase letters or digits." },
+  ),
+  mobile: z.string().trim().max(30).optional(),
+  name: z.string().trim().min(2).max(240).optional(),
+  notes: z.string().trim().max(1000).optional(),
+  role: z.enum(["customer", "supplier"]),
+});
+
 export const hardwareImportExecuteSchema = hardwareImportPreviewSchema.extend({
   duplicateMode: z.enum(["reject", "skip"]).default("reject"),
   dryRun: z.boolean().default(false),
@@ -151,6 +164,7 @@ export type HardwareUnitInput = z.infer<typeof hardwareUnitSchema>;
 export type HardwareProductInput = z.infer<typeof hardwareProductSchema>;
 export type QuickHardwareProductInput = z.infer<typeof quickHardwareProductSchema>;
 export type QuickHardwarePartyInput = z.infer<typeof quickHardwarePartySchema>;
+export type HardwarePartyUpdateInput = z.infer<typeof hardwarePartyUpdateSchema>;
 export type HardwareLocationInput = z.infer<typeof hardwareLocationSchema>;
 export type HardwareMovementInput = z.infer<typeof hardwareMovementSchema>;
 export type HardwareImportPreviewInput = z.infer<typeof hardwareImportPreviewSchema>;

@@ -1,7 +1,8 @@
 import { getPrisma } from "@trustfirst/database";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@trustfirst/ui";
-import { Printer } from "lucide-react";
 import Link from "next/link";
+import { DirectPrintButton } from "@/components/hardware/direct-print-button";
+import { HardwarePartyEditButton, LedgerEntryActions, OpeningBalanceCorrectionButton } from "@/components/hardware/hardware-ledger-actions";
 import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareService, type PartyLedger } from "@/server/hardware";
@@ -51,20 +52,16 @@ function LedgerCard({ ledger, role }: { ledger: PartyLedger; role: "customer" | 
           <Badge>Debit {money(ledger.totalPayableCents)}</Badge>
           <Badge>Credit {money(ledger.totalPaidCents)}</Badge>
           <Badge>{balanceLabel(ledger.totalRemainingCents, role)} {money(Math.abs(ledger.totalRemainingCents))}</Badge>
-          <Link
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-xs font-medium hover:bg-muted"
-            href={`/admin/hardware/ledger/print/${role}/${ledger.partyId}`}
-            target="_blank"
-          >
-            <Printer className="size-3.5" />Print
-          </Link>
+          <HardwarePartyEditButton party={toPartySummary(ledger, role)} role={role} />
+          <OpeningBalanceCorrectionButton party={toPartySummary(ledger, role)} role={role} />
+          <DirectPrintButton format="a4" label="Print ledger" url={`/admin/hardware/ledger/print/${role}/${ledger.partyId}`} />
         </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[680px] text-left text-sm">
             <thead className="border-b text-xs uppercase text-muted-foreground">
-              <tr><th className="py-2">Date</th><th>Reference</th><th>Description</th><th>Mode</th><th>Status</th><th>Debit</th><th>Credit</th><th>Balance</th></tr>
+              <tr><th className="py-2">Date</th><th>Reference</th><th>Description</th><th>Mode</th><th>Status</th><th>Debit</th><th>Credit</th><th>Balance</th><th>Actions</th></tr>
             </thead>
             <tbody className="divide-y divide-border">
               {ledger.entries.map((entry) => (
@@ -77,6 +74,7 @@ function LedgerCard({ ledger, role }: { ledger: PartyLedger; role: "customer" | 
                   <td>{entry.debitCents ? money(entry.debitCents) : "-"}</td>
                   <td>{entry.creditCents ? money(entry.creditCents) : "-"}</td>
                   <td className="font-medium">{money(Math.abs(entry.balanceCents))}</td>
+                  <td><LedgerEntryActions entry={entry} role={role} /></td>
                 </tr>
               ))}
             </tbody>
@@ -99,4 +97,25 @@ function balanceLabel(balanceCents: number, role: "customer" | "supplier") {
 
 function humanize(value: string) {
   return value.toLowerCase().replaceAll("_", " ").replace(/\b\w/gu, (letter) => letter.toUpperCase());
+}
+
+function toPartySummary(ledger: PartyLedger, role: "customer" | "supplier") {
+  return {
+    address: ledger.address,
+    balanceSide:
+      ledger.totalRemainingCents === 0
+        ? null
+        : role === "supplier"
+          ? ledger.totalRemainingCents > 0 ? "CR" as const : "DR" as const
+          : ledger.totalRemainingCents > 0 ? "DR" as const : "CR" as const,
+    contact: ledger.contact,
+    creditLimitCents: ledger.creditLimitCents,
+    currentBalanceCents: ledger.totalRemainingCents,
+    gstin: ledger.gstin,
+    id: ledger.partyId,
+    name: ledger.partyName,
+    notes: ledger.notes,
+    openingBalanceCents: ledger.openingBalanceCents,
+    role,
+  };
 }

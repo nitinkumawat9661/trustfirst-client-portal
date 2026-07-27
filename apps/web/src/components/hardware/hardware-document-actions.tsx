@@ -1,11 +1,11 @@
 "use client";
 
 import { Button } from "@trustfirst/ui";
-import { Ban, Check, FileInput, FileText, PencilLine, Printer } from "lucide-react";
-import Link from "next/link";
+import { Ban, Check, FileInput, FileText, PencilLine } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { HardwareTradeSummary } from "@/server/hardware";
+import { DirectPrintButton } from "./direct-print-button";
 import { postHardwareJson } from "./hardware-api-client";
 
 type LocationOption = { id: string; name: string };
@@ -161,9 +161,7 @@ export function HardwareDocumentActions({
             <PencilLine className="size-4" />Correct bill
           </Button>
         ) : null}
-        <Button asChild size="sm" variant="ghost">
-          <Link href={`/admin/hardware/print/${document.id}`} target="_blank"><Printer className="size-4" />Print preview</Link>
-        </Button>
+        <DirectPrintButton format="a4" label="Print" url={`/admin/hardware/print/${document.id}`} />
       </div>
       {error ? <p className="text-xs text-red-700" role="alert">{error}</p> : null}
     </div>

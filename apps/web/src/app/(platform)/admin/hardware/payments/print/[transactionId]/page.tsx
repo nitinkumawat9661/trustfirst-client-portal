@@ -29,12 +29,17 @@ export default async function HardwareFinancialPrintPage({
 
   return (
     <main className="min-h-screen bg-zinc-200 p-3 text-black sm:p-6 print:bg-white print:p-0">
-      <section className={`print-sheet mx-auto w-full bg-white p-5 shadow-md sm:p-8 print:p-0 print:shadow-none ${format === "a4" ? "max-w-[210mm]" : format === "80mm" ? "max-w-[80mm]" : "max-w-[58mm]"}`}>
+      <section className={`print-sheet mx-auto w-full bg-white shadow-md print:shadow-none ${format === "a4" ? "max-w-[210mm] p-6" : format === "80mm" ? "max-w-[80mm] p-3" : "max-w-[58mm] p-2"}`}>
         <style>{`
+          .print-item { overflow-wrap: anywhere; word-break: normal; }
           @media print {
-            @page { size: ${format === "a4" ? "A4 portrait" : `${format} auto`}; margin: ${format === "a4" ? "10mm" : "2mm"}; }
+            @page { size: ${format === "a4" ? "A4 portrait" : `${format} auto`}; margin: ${format === "a4" ? "8mm" : "2mm"}; }
+            html, body { margin: 0 !important; background: #fff !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
-            .print-sheet { width: auto; min-height: auto; }
+            .print-sheet { width: 100% !important; max-width: none !important; min-height: auto !important; padding: 0 !important; box-shadow: none !important; }
+            .print-logo { width: ${format === "a4" ? "70px" : "42px"} !important; height: ${format === "a4" ? "70px" : "42px"} !important; }
+            .print-header { gap: ${format === "a4" ? "12px" : "6px"} !important; padding-bottom: ${format === "a4" ? "10px" : "6px"} !important; }
+            .print-table { width: 100% !important; table-layout: fixed !important; }
             tr, td, th { break-inside: avoid; page-break-inside: avoid; }
             .print-break-avoid { break-inside: avoid; page-break-inside: avoid; }
           }
@@ -55,12 +60,12 @@ export default async function HardwareFinancialPrintPage({
           <PrintButton />
         </div>
 
-        <header className={`print-break-avoid flex flex-col gap-5 border-b-2 border-zinc-900 pb-5 ${compact ? "items-center text-center" : "sm:flex-row sm:items-start sm:justify-between"}`}>
+        <header className={`print-header print-break-avoid flex flex-col gap-5 border-b-2 border-zinc-900 pb-5 ${compact ? "items-center text-center" : "sm:flex-row sm:items-start sm:justify-between"}`}>
           <div className="flex items-start gap-4">
             {projection.firm.logoUrl ? (
               <Image
                 alt={`${projection.firm.firmName} approved logo`}
-                className="size-20 shrink-0 object-contain sm:size-24"
+                className="print-logo size-16 shrink-0 object-contain sm:size-20"
                 height={96}
                 priority
                 src={projection.firm.logoUrl}
@@ -69,7 +74,7 @@ export default async function HardwareFinancialPrintPage({
               />
             ) : null}
             <div>
-              <h1 className="text-2xl font-bold tracking-normal">{projection.firm.firmName}</h1>
+              <h1 className={compact ? "text-base font-bold tracking-normal" : "text-xl font-bold tracking-normal"}>{projection.firm.firmName}</h1>
               {projection.firm.tagline ? <p className="mt-1 text-xs font-semibold">{projection.firm.tagline}</p> : null}
               <p className="mt-2 max-w-xl text-xs leading-5">{formatAddress(projection.firm.address)}</p>
               <p className="text-xs">{[projection.firm.phone, projection.firm.email].filter(Boolean).join(" | ")}</p>
@@ -77,7 +82,7 @@ export default async function HardwareFinancialPrintPage({
             </div>
           </div>
           <div className={compact ? "text-center" : "min-w-56 text-left sm:text-right"}>
-            <p className="text-xl font-bold">{documentLabel(projection.transaction.type)}</p>
+            <p className={compact ? "text-base font-bold" : "text-lg font-bold"}>{documentLabel(projection.transaction.type)}</p>
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs sm:grid-cols-[1fr_auto]">
               <dt>Number</dt><dd className="font-semibold">{projection.transaction.transactionNumber}</dd>
               <dt>Date</dt><dd>{formatDate(projection.transaction.occurredAt)}</dd>
@@ -124,14 +129,14 @@ export default async function HardwareFinancialPrintPage({
         {projection.allocations.length ? (
           <section className="mt-5">
             <p className="text-xs font-semibold uppercase">Allocations</p>
-            <table className="mt-2 w-full border-collapse text-xs">
+            <table className="print-table mt-2 w-full border-collapse text-xs">
               <thead className="border-y border-zinc-500 bg-zinc-100 text-left">
                 <tr><th className="px-2 py-2">Document</th><th className="px-2 py-2">Invoice</th><th className="px-2 py-2">Target</th><th className="px-2 py-2 text-right">Amount</th></tr>
               </thead>
               <tbody>
                 {projection.allocations.map((allocation, index) => (
                   <tr className="border-b border-zinc-300" key={`${allocation.targetNumber ?? allocation.documentNumber}-${index}`}>
-                    <td className="px-2 py-2">{allocation.documentNumber}</td>
+                    <td className="print-item px-2 py-2">{allocation.documentNumber}</td>
                     <td className="px-2 py-2">{allocation.invoiceNumber ?? "-"}</td>
                     <td className="px-2 py-2">{allocation.targetNumber ?? "-"}</td>
                     <td className="px-2 py-2 text-right">{money(allocation.amountCents)}</td>
@@ -182,6 +187,8 @@ function documentLabel(type: string) {
   if (type === "CUSTOMER_REFUND_PAID") return "REFUND RECEIPT";
   if (type === "SUPPLIER_PAYMENT") return "PAYMENT VOUCHER";
   if (type === "SUPPLIER_ADVANCE") return "SUPPLIER ADVANCE VOUCHER";
+  if (type === "MANUAL_DEBIT_ADJUSTMENT") return "LEDGER ADJUSTMENT VOUCHER";
+  if (type === "MANUAL_CREDIT_ADJUSTMENT") return "LEDGER ADJUSTMENT VOUCHER";
   return humanize(type).toUpperCase();
 }
 
