@@ -60,6 +60,15 @@ export function DirectPrintButton({
       cleanupRef.current = null;
     };
 
+    const stopWaitingWithoutClosing = () => {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      window.removeEventListener("message", handleMessage);
+      cleanupRef.current = null;
+    };
+
     const handleMessage = (event: MessageEvent<unknown>) => {
       if (event.source !== printWindow) return;
       if (!isPrintMessage(event.data) || event.data.requestId !== requestId) return;
@@ -69,12 +78,16 @@ export function DirectPrintButton({
         return;
       }
       if (event.data.status === "opened") {
-        setStatus("System print dialog opened. Reprint creates no new transaction.");
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        setStatus("System print dialog opened. Save the PDF, then close the invoice window.");
         return;
       }
       if (event.data.status === "closed") {
-        setStatus("Print dialog closed.");
-        window.setTimeout(cleanup, 250);
+        setStatus("Print dialog closed. Complete the Save as PDF file dialog, then close the invoice window.");
+        stopWaitingWithoutClosing();
         return;
       }
 
