@@ -22,7 +22,7 @@ export default async function NewHardwareSalePage() {
   ]);
   return (
     <div className={`${styles.quickPosPage} space-y-6`}>
-      <HardwarePageHeader description="Type product name, add missing items without leaving the bill, preview totals, then confirm and print." eyebrow="Sales" title="Quick POS bill" />
+      <HardwarePageHeader description="Search products by name, SKU, part code, size or barcode; review price and stock; then post and print a professional A4 invoice." eyebrow="Sales" title="Quick POS bill" />
       <QuickPosForm
         brands={brands}
         categories={categories}
@@ -38,8 +38,8 @@ export default async function NewHardwareSalePage() {
           termsFooter: settings?.termsFooter ?? "Goods once sold will be accepted for return only as per store policy.",
         }}
         locations={locations}
+        productSearchStorageKey={`trustfirst:${user.activeTenantId ?? "public"}:${user.id}:hardware:product-search`}
         products={products}
-        printerStorageKey={`trustfirst:${user.activeTenantId ?? "public"}:${user.id}:hardware:printer-format`}
         units={units}
       />
     </div>
