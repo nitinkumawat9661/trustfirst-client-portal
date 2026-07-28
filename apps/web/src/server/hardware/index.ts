@@ -17,3 +17,4 @@ export * from "./trade-service";
 export * from "./trade-types";
 export * from "./types";
 export * from "./whatsapp";
+export * from "./catalog-audit";

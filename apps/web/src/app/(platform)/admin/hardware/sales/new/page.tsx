@@ -1,6 +1,5 @@
 import { getPrisma } from "@trustfirst/database";
 import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
-import { ProductSearchMetadataBridge } from "@/components/hardware/product-search-metadata-bridge";
 import { QuickPosForm } from "@/components/hardware/quick-pos-form";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareService } from "@/server/hardware";
@@ -21,12 +20,9 @@ export default async function NewHardwareSalePage() {
     service.listCategories(context),
     service.listUnits(context),
   ]);
-  const printerStorageKey = `trustfirst:${user.activeTenantId ?? "public"}:${user.id}:hardware:printer-format`;
   return (
     <div className={`${styles.quickPosPage} space-y-6`}>
-      <script dangerouslySetInnerHTML={{ __html: `try{localStorage.setItem(${JSON.stringify(printerStorageKey)},"a4")}catch{}` }} />
-      <ProductSearchMetadataBridge printerStorageKey={printerStorageKey} products={products} />
-      <HardwarePageHeader description="Search by product, SKU, part number, barcode, brand, category, size, or rate; then confirm the A4 invoice." eyebrow="Sales" title="Quick POS bill" />
+      <HardwarePageHeader description="Search products by name, SKU, part code, size or barcode; review price and stock; then post and print a professional A4 invoice." eyebrow="Sales" title="Quick POS bill" />
       <QuickPosForm
         brands={brands}
         categories={categories}
@@ -42,8 +38,8 @@ export default async function NewHardwareSalePage() {
           termsFooter: settings?.termsFooter ?? "Goods once sold will be accepted for return only as per store policy.",
         }}
         locations={locations}
+        productSearchStorageKey={`trustfirst:${user.activeTenantId ?? "public"}:${user.id}:hardware:product-search`}
         products={products}
-        printerStorageKey={printerStorageKey}
         units={units}
       />
     </div>
