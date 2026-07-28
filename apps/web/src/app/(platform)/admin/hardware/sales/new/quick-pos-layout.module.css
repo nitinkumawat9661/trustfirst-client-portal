@@ -34,30 +34,13 @@
   appearance: none;
 }
 
-@media (min-width: 768px) and (max-width: 1279px) {
-  .quickPosPage :global(fieldset) {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
-  }
-
-  .quickPosPage :global(fieldset > div),
-  .quickPosPage :global(fieldset > label) {
-    grid-column: auto !important;
-  }
-
-  .quickPosPage :global(fieldset > div:first-of-type),
-  .quickPosPage :global(fieldset > div:last-of-type) {
-    grid-column: 1 / -1 !important;
-  }
-}
-
-@media (min-width: 1280px) {
+@media (min-width: 768px) {
   .quickPosPage :global(fieldset) {
     grid-template-columns:
-      minmax(270px, 1fr)
-      88px
-      132px
-      100px
-      100px
+      minmax(0, 1fr)
+      minmax(0, 1fr)
+      minmax(0, 1fr)
+      minmax(0, 1fr)
       48px !important;
     align-items: end;
   }
@@ -67,8 +50,17 @@
     grid-column: auto !important;
   }
 
+  .quickPosPage :global(fieldset > div:first-of-type) {
+    grid-column: 1 / -1 !important;
+  }
+
+  .quickPosPage :global(fieldset > div:last-of-type) {
+    grid-column: 5 !important;
+  }
+
   .quickPosPage :global(fieldset > div:last-of-type button) {
     width: 48px;
+    min-width: 48px;
     padding-inline: 0;
   }
 }
