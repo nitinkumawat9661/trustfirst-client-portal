@@ -17,7 +17,7 @@ export default async function NewHardwareProductPage() {
   ]);
   return (
     <div className="space-y-6">
-      <HardwarePageHeader description="Leave unknown HSN, GST, pricing, brand, category, or unit fields blank until the client confirms them." eyebrow="Catalog" title="Add product" />
+      <HardwarePageHeader description="Product name and sale price are required. Item code can be generated automatically; all other master fields can be added now or updated later." eyebrow="Catalog" title="Add single product" />
       <HardwareProductForm brands={brands} categories={categories} units={units} />
     </div>
   );
