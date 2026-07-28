@@ -6,7 +6,6 @@ import {
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireCurrentUser } from "@/server/auth/session";
-import { AppError } from "@/server/domain/errors";
 import {
   HardwareService,
   buildCatalogAudit,
@@ -41,22 +40,30 @@ export async function POST(request: NextRequest) {
     const service = new HardwareService(prisma);
     const products = await service.listProducts({ tenantId, userId: user.id });
     const suggestionMap = new Map(buildCatalogAudit(products).suggestions.map((suggestion) => [suggestion.id, suggestion]));
+    const eligible: Array<{
+      item: (typeof input.items)[number];
+      suggestion: NonNullable<ReturnType<typeof suggestionMap.get>>;
+    }> = [];
+    const preSkipped: string[] = [];
 
     for (const item of input.items) {
       const suggestion = suggestionMap.get(item.id);
-      if (!suggestion) throw validation(`Product ${item.id} is no longer a safe rename candidate.`);
-      if (suggestion.oldName !== item.expectedName || suggestion.newName !== item.newName) {
-        throw validation(`Product ${suggestion.sku} changed after the audit was loaded. Refresh the audit before applying names.`);
+      if (!suggestion) {
+        preSkipped.push(item.id);
+        continue;
       }
+      if (suggestion.oldName !== item.expectedName || suggestion.newName !== item.newName) {
+        preSkipped.push(item.id);
+        continue;
+      }
+      eligible.push({ item, suggestion });
     }
 
     const result = await prisma.$transaction(async (tx) => {
       const updated: Array<{ id: string; name: string; sku: string }> = [];
-      const skipped: string[] = [];
+      const skipped = [...preSkipped];
 
-      for (const item of input.items) {
-        const suggestion = suggestionMap.get(item.id);
-        if (!suggestion) continue;
+      for (const { item, suggestion } of eligible) {
         const update = await tx.hardwareProduct.updateMany({
           data: { name: item.newName },
           where: {
@@ -87,6 +94,7 @@ export async function POST(request: NextRequest) {
             metadata: {
               operation: "safe_duplicate_name_cleanup",
               productIds: updated.map((product) => product.id),
+              skippedCount: skipped.length,
               updatedCount: updated.length,
             },
             targetId: tenantId,
@@ -103,8 +111,4 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return hardwareError(error);
   }
-}
-
-function validation(message: string) {
-  return new AppError({ code: "VALIDATION_ERROR", message, status: 422 });
 }
