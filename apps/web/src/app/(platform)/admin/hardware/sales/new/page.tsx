@@ -3,6 +3,7 @@ import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
 import { QuickPosForm } from "@/components/hardware/quick-pos-form";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareService } from "@/server/hardware";
+import styles from "./quick-pos-layout.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function NewHardwareSalePage() {
     service.listUnits(context),
   ]);
   return (
-    <div className="space-y-6">
+    <div className={`${styles.quickPosPage} space-y-6`}>
       <HardwarePageHeader description="Type product name, add missing items without leaving the bill, preview totals, then confirm and print." eyebrow="Sales" title="Quick POS bill" />
       <QuickPosForm
         brands={brands}
