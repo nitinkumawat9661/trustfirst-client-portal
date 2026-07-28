@@ -23,6 +23,7 @@ export function CatalogAuditPanel({ audit }: { audit: CatalogAudit }) {
   const [progress, setProgress] = useState({ completed: 0, total: audit.suggestions.length });
   const [error, setError] = useState<string | null>(null);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
+  const [skippedCount, setSkippedCount] = useState(0);
   const appliedSet = useMemo(() => new Set(appliedIds), [appliedIds]);
 
   const filteredSuggestions = useMemo(() => {
@@ -40,8 +41,11 @@ export function CatalogAuditPanel({ audit }: { audit: CatalogAudit }) {
   async function applySafeNames() {
     setError(null);
     setApplying(true);
+    setAppliedIds([]);
+    setSkippedCount(0);
     setProgress({ completed: 0, total: audit.suggestions.length });
     const nextApplied: string[] = [];
+    let nextSkipped = 0;
 
     for (let index = 0; index < audit.suggestions.length; index += BATCH_SIZE) {
       const batch = audit.suggestions.slice(index, index + BATCH_SIZE);
@@ -59,7 +63,9 @@ export function CatalogAuditPanel({ audit }: { audit: CatalogAudit }) {
         return;
       }
       nextApplied.push(...result.data.updated.map((product) => product.id));
+      nextSkipped += result.data.skipped.length;
       setAppliedIds([...nextApplied]);
+      setSkippedCount(nextSkipped);
       setProgress({ completed: Math.min(index + batch.length, audit.suggestions.length), total: audit.suggestions.length });
     }
 
@@ -117,7 +123,11 @@ export function CatalogAuditPanel({ audit }: { audit: CatalogAudit }) {
             </Button>
           </div>
           {error ? <p className="rounded-md border border-red-300 bg-red-50 p-3 text-red-800" role="alert">{error}</p> : null}
-          {appliedIds.length ? <p className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-emerald-900">Updated {appliedIds.length} product names. Refreshing audit...</p> : null}
+          {appliedIds.length || skippedCount ? (
+            <p className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-emerald-900">
+              Updated {appliedIds.length} product names. Skipped {skippedCount} already-resolved or stale rows. Refreshing audit...
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
