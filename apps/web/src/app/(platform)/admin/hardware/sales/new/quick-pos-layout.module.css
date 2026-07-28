@@ -1,0 +1,74 @@
+.quickPosPage {
+  min-width: 0;
+}
+
+.quickPosPage::before {
+  position: fixed;
+  z-index: 19;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 4rem;
+  pointer-events: none;
+  content: "";
+  background: var(--background);
+  box-shadow: 0 1px 0 var(--border), 0 8px 20px rgb(0 0 0 / 7%);
+}
+
+.quickPosPage :global(fieldset),
+.quickPosPage :global(fieldset > div),
+.quickPosPage :global(fieldset > label),
+.quickPosPage :global(input) {
+  min-width: 0;
+}
+
+.quickPosPage :global(input[type="number"]) {
+  appearance: textfield;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.quickPosPage :global(input[type="number"]::-webkit-inner-spin-button),
+.quickPosPage :global(input[type="number"]::-webkit-outer-spin-button) {
+  margin: 0;
+  appearance: none;
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  .quickPosPage :global(fieldset) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+
+  .quickPosPage :global(fieldset > div),
+  .quickPosPage :global(fieldset > label) {
+    grid-column: auto !important;
+  }
+
+  .quickPosPage :global(fieldset > div:first-of-type),
+  .quickPosPage :global(fieldset > div:last-of-type) {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .quickPosPage :global(fieldset) {
+    grid-template-columns:
+      minmax(270px, 1fr)
+      88px
+      132px
+      100px
+      100px
+      48px !important;
+    align-items: end;
+  }
+
+  .quickPosPage :global(fieldset > div),
+  .quickPosPage :global(fieldset > label) {
+    grid-column: auto !important;
+  }
+
+  .quickPosPage :global(fieldset > div:last-of-type button) {
+    width: 48px;
+    padding-inline: 0;
+  }
+}
