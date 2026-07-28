@@ -39,11 +39,19 @@ export const hardwareProductSchema = z.object({
   gstTaxConfig: gstTaxConfigSchema.optional(),
   lowStockThreshold: z.number().int().min(0).optional(),
   metadata: jsonRecord.optional(),
-  name: z.string().min(2).max(240),
+  name: z.string().trim().min(1, "Product name is required.").max(240),
   purchaseCostCents: z.number().int().nonnegative().optional(),
   salesPriceCents: z.number().int().nonnegative().optional(),
   sku: z.string().min(1).max(120).optional(),
   unitId: z.string().optional(),
+}).superRefine((value, context) => {
+  if (!value.salesPriceCents || value.salesPriceCents <= 0) {
+    context.addIssue({
+      code: "custom",
+      message: "Sale price is required and must be greater than zero.",
+      path: ["salesPriceCents"],
+    });
+  }
 });
 
 export const quickHardwareProductSchema = z.object({

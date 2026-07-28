@@ -8,11 +8,20 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { z } from "zod";
-import { postHardwareJson } from "./hardware-api-client";
+import { patchHardwareJson, postHardwareJson } from "./hardware-api-client";
 
-const optionalMoney = z.string().refine((value) => value === "" || /^\d+(\.\d{1,2})?$/.test(value), {
+const moneyPattern = /^\d+(\.\d{1,2})?$/u;
+const optionalMoney = z.string().refine((value) => value === "" || moneyPattern.test(value), {
   message: "Enter a valid amount with up to two decimals.",
 });
+const requiredSalePrice = z.string()
+  .min(1, "Sale price is required.")
+  .refine((value) => moneyPattern.test(value), {
+    message: "Enter a valid amount with up to two decimals.",
+  })
+  .refine((value) => Number(value) > 0, {
+    message: "Sale price must be greater than zero.",
+  });
 
 const productFormSchema = z.object({
   barcode: z.string().max(120),
@@ -23,9 +32,9 @@ const productFormSchema = z.object({
   }),
   hsnCode: z.string().max(20),
   lowStockThreshold: z.number().int().min(0),
-  name: z.string().trim().min(2).max(240),
+  name: z.string().trim().min(1, "Product name is required.").max(240),
   purchasePrice: optionalMoney,
-  salePrice: optionalMoney,
+  salePrice: requiredSalePrice,
   sku: z.string().trim().max(120),
   unitId: z.string(),
 });
@@ -34,59 +43,97 @@ type ProductFormValues = z.infer<typeof productFormSchema>;
 type LookupOption = { id: string; name: string };
 type UnitOption = { code: string; id: string; name: string };
 
+export type HardwareProductFormProduct = {
+  barcode: string;
+  brandId: string;
+  categoryId: string;
+  gstRate: string;
+  hsnCode: string;
+  id: string;
+  lowStockThreshold: number;
+  name: string;
+  purchasePrice: string;
+  salePrice: string;
+  sku: string;
+  unitId: string;
+};
+
 export function HardwareProductForm({
   brands,
   categories,
+  product,
   units,
 }: {
   brands: LookupOption[];
   categories: LookupOption[];
+  product?: HardwareProductFormProduct;
   units: UnitOption[];
 }) {
   const router = useRouter();
+  const isEditing = Boolean(product);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(isEditing);
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
     register,
+    watch,
   } = useForm<ProductFormValues>({
     defaultValues: {
-      barcode: "",
-      brandId: "",
-      categoryId: "",
-      gstRate: "",
-      hsnCode: "",
-      lowStockThreshold: 0,
-      name: "",
-      purchasePrice: "",
-      salePrice: "",
-      sku: "",
-      unitId: "",
+      barcode: product?.barcode ?? "",
+      brandId: product?.brandId ?? "",
+      categoryId: product?.categoryId ?? "",
+      gstRate: product?.gstRate ?? "",
+      hsnCode: product?.hsnCode ?? "",
+      lowStockThreshold: product?.lowStockThreshold ?? 0,
+      name: product?.name ?? "",
+      purchasePrice: product?.purchasePrice ?? "",
+      salePrice: product?.salePrice ?? "",
+      sku: product?.sku ?? "",
+      unitId: product?.unitId ?? "",
     },
     resolver: zodResolver(productFormSchema),
   });
 
+  const currentName = watch("name");
+  const currentSalePrice = watch("salePrice");
+  const canSubmit = currentName.trim().length > 0 && moneyPattern.test(currentSalePrice) && Number(currentSalePrice) > 0;
+
   async function onSubmit(values: ProductFormValues) {
     setServerError(null);
-    const result = await postHardwareJson<unknown>("/api/hardware/products", {
-        ...(values.barcode ? { barcode: values.barcode } : {}),
-        ...(values.brandId ? { brandId: values.brandId } : {}),
-        ...(values.categoryId ? { categoryId: values.categoryId } : {}),
-        ...(values.gstRate ? { gstTaxConfig: { rateBps: Math.round(Number(values.gstRate) * 100) } } : {}),
-        ...(values.hsnCode ? { metadata: { hsnCode: values.hsnCode } } : {}),
-        ...(values.purchasePrice ? { purchaseCostCents: toCents(values.purchasePrice) } : {}),
-        ...(values.salePrice ? { salesPriceCents: toCents(values.salePrice) } : {}),
-        ...(values.unitId ? { unitId: values.unitId } : {}),
-        lowStockThreshold: values.lowStockThreshold,
-        name: values.name,
-        sku: values.sku,
-    });
+    const commonPayload = {
+      gstTaxConfig: values.gstRate ? { rateBps: Math.round(Number(values.gstRate) * 100) } : {},
+      lowStockThreshold: values.lowStockThreshold,
+      metadata: { hsnCode: values.hsnCode.trim() || null },
+      name: values.name.trim(),
+      purchaseCostCents: values.purchasePrice ? toCents(values.purchasePrice) : 0,
+      salesPriceCents: toCents(values.salePrice),
+    };
+    const payload = isEditing
+      ? {
+          ...commonPayload,
+          barcode: values.barcode.trim(),
+          brandId: values.brandId,
+          categoryId: values.categoryId,
+          sku: values.sku.trim() || product?.sku,
+          unitId: values.unitId,
+        }
+      : {
+          ...commonPayload,
+          ...(values.barcode.trim() ? { barcode: values.barcode.trim() } : {}),
+          ...(values.brandId ? { brandId: values.brandId } : {}),
+          ...(values.categoryId ? { categoryId: values.categoryId } : {}),
+          ...(values.sku.trim() ? { sku: values.sku.trim() } : {}),
+          ...(values.unitId ? { unitId: values.unitId } : {}),
+        };
+    const result = isEditing && product
+      ? await patchHardwareJson<unknown>(`/api/hardware/products/${product.id}`, payload)
+      : await postHardwareJson<unknown>("/api/hardware/products", payload);
     if (!result.ok) {
       setServerError(result.message);
       return;
     }
-    router.push("/admin/hardware/products?created=1");
+    router.push(`/admin/hardware/products?${isEditing ? "updated" : "created"}=1`);
     router.refresh();
   }
 
@@ -94,23 +141,29 @@ export function HardwareProductForm({
     <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
       <Card>
         <CardHeader>
-          <CardTitle>Simple product</CardTitle>
+          <CardTitle>{isEditing ? "Edit product" : "Add single product"}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Field error={errors.name?.message} label="Product name" required>
-            <Input autoFocus autoComplete="off" {...register("name")} />
-          </Field>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field error={errors.name?.message} label="Product name" required>
+              <Input autoFocus autoComplete="off" placeholder="Enter product name" {...register("name")} />
+            </Field>
+            <Field error={errors.salePrice?.message} label="Sale price (INR)" required>
+              <Input inputMode="decimal" min="0.01" step="0.01" type="number" {...register("salePrice")} />
+            </Field>
+          </div>
+          <p className="text-sm text-muted-foreground">Product name and sale price are required before the product can be saved.</p>
           <button
             className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium"
             onClick={() => setDetailsOpen((open) => !open)}
             type="button"
           >
-            <SlidersHorizontal className="size-4" />More details
+            <SlidersHorizontal className="size-4" />{detailsOpen ? "Hide details" : "More details"}
           </button>
           {detailsOpen ? (
             <div className="grid gap-4 border-t border-border pt-4 md:grid-cols-2 xl:grid-cols-3">
               <Field error={errors.sku?.message} label="Item code">
-                <Input autoComplete="off" placeholder="Auto generated if blank" {...register("sku")} />
+                <Input autoComplete="off" placeholder={isEditing ? undefined : "Auto generated if blank"} {...register("sku")} />
               </Field>
               <Field error={errors.barcode?.message} label="Barcode">
                 <Input autoComplete="off" inputMode="numeric" {...register("barcode")} />
@@ -135,9 +188,6 @@ export function HardwareProductForm({
               <Field error={errors.purchasePrice?.message} label="Purchase price (INR)">
                 <Input inputMode="decimal" min="0" step="0.01" type="number" {...register("purchasePrice")} />
               </Field>
-              <Field error={errors.salePrice?.message} label="Sale price (INR)">
-                <Input inputMode="decimal" min="0" step="0.01" type="number" {...register("salePrice")} />
-              </Field>
             </div>
           ) : null}
         </CardContent>
@@ -147,8 +197,8 @@ export function HardwareProductForm({
         <Button asChild type="button" variant="outline">
           <Link href="/admin/hardware/products"><ArrowLeft className="size-4" />Cancel</Link>
         </Button>
-        <Button disabled={isSubmitting} type="submit">
-          <Save className="size-4" />{isSubmitting ? "Saving..." : "Save product"}
+        <Button disabled={isSubmitting || !canSubmit} type="submit">
+          <Save className="size-4" />{isSubmitting ? "Saving..." : isEditing ? "Update product" : "Save product"}
         </Button>
       </div>
     </form>

@@ -19,7 +19,6 @@ export class PrismaHardwareRepository {
     return this.prisma.hardwareProduct.findMany({
       include: productInclude,
       orderBy: { updatedAt: "desc" },
-      take: 100,
       where: { archivedAt: null, tenantId },
     });
   }

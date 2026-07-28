@@ -12,12 +12,19 @@ export async function postHardwareJson<T>(
   endpoint: string,
   body?: unknown,
 ): Promise<HardwareApiResult<T>> {
+  return sendHardwareJson<T>(endpoint, "POST", body);
+}
+
+export async function patchHardwareJson<T>(
+  endpoint: string,
+  body?: unknown,
+): Promise<HardwareApiResult<T>> {
+  return sendHardwareJson<T>(endpoint, "PATCH", body);
+}
+
+export async function getHardwareJson<T>(endpoint: string): Promise<HardwareApiResult<T>> {
   try {
-    const response = await fetch(endpoint, {
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    });
+    const response = await fetch(endpoint, { headers: { accept: "application/json" } });
     const result = await readEnvelope<T>(response);
     if (!response.ok || !result.ok) {
       return {
@@ -34,9 +41,17 @@ export async function postHardwareJson<T>(
   }
 }
 
-export async function getHardwareJson<T>(endpoint: string): Promise<HardwareApiResult<T>> {
+async function sendHardwareJson<T>(
+  endpoint: string,
+  method: "PATCH" | "POST",
+  body?: unknown,
+): Promise<HardwareApiResult<T>> {
   try {
-    const response = await fetch(endpoint, { headers: { accept: "application/json" } });
+    const response = await fetch(endpoint, {
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      headers: { "content-type": "application/json" },
+      method,
+    });
     const result = await readEnvelope<T>(response);
     if (!response.ok || !result.ok) {
       return {

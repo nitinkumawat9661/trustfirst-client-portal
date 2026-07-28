@@ -1,7 +1,8 @@
 "use client";
 
-import { Badge, Input } from "@trustfirst/ui";
-import { Search } from "lucide-react";
+import { Badge, Button, Input } from "@trustfirst/ui";
+import { Pencil, Search } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { HardwareProductSummary } from "@/server/hardware";
 
@@ -19,24 +20,40 @@ export function HardwareProductTable({ products }: { products: HardwareProductSu
   if (products.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-border px-4 py-10 text-center">
-        <p className="font-medium">No products have been imported yet.</p>
-        <p className="mt-1 text-sm text-muted-foreground">Create a product manually or import the verified client product master when it is available.</p>
+        <p className="font-medium">No products have been added yet.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Add one product manually or import a verified product master in bulk.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <label className="relative block max-w-md">
-        <span className="sr-only">Search products</span>
-        <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
-        <Input className="pl-9" onChange={(event) => setQuery(event.target.value)} placeholder="Search name, SKU, barcode, brand, or HSN" value={query} />
-      </label>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <label className="relative block w-full max-w-md">
+          <span className="sr-only">Search products</span>
+          <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+          <Input className="pl-9" onChange={(event) => setQuery(event.target.value)} placeholder="Search name, SKU, barcode, brand, or HSN" value={query} />
+        </label>
+        <p className="text-sm text-muted-foreground">Showing {filtered.length} of {products.length} products</p>
+      </div>
       <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full min-w-[1120px] text-left text-sm">
+        <table className="w-full min-w-[1200px] text-left text-sm">
           <thead className="bg-muted text-xs font-semibold uppercase text-muted-foreground">
             <tr>
-              {["Product", "SKU", "Brand", "Category", "Unit", "Purchase", "Sale", "GST", "HSN", "Stock", "Status"].map((heading) => (
+              {[
+                "Product",
+                "SKU",
+                "Brand",
+                "Category",
+                "Unit",
+                "Purchase",
+                "Sale",
+                "GST",
+                "HSN",
+                "Stock",
+                "Status",
+                "Actions",
+              ].map((heading) => (
                 <th className="px-3 py-3" key={heading} scope="col">{heading}</th>
               ))}
             </tr>
@@ -57,6 +74,11 @@ export function HardwareProductTable({ products }: { products: HardwareProductSu
                   <span className={product.lowStock ? "font-semibold text-amber-700 dark:text-amber-300" : ""}>{product.currentStock}</span>
                 </td>
                 <td className="px-3 py-3"><Badge className="border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Active</Badge></td>
+                <td className="px-3 py-3">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/admin/hardware/products/${product.id}/edit`}><Pencil className="size-4" />Edit</Link>
+                  </Button>
+                </td>
               </tr>
             ))}
           </tbody>
