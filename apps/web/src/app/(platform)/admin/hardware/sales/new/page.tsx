@@ -1,5 +1,6 @@
 import { getPrisma } from "@trustfirst/database";
 import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
+import { ProductSearchMetadataBridge } from "@/components/hardware/product-search-metadata-bridge";
 import { QuickPosForm } from "@/components/hardware/quick-pos-form";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareService } from "@/server/hardware";
@@ -20,9 +21,12 @@ export default async function NewHardwareSalePage() {
     service.listCategories(context),
     service.listUnits(context),
   ]);
+  const printerStorageKey = `trustfirst:${user.activeTenantId ?? "public"}:${user.id}:hardware:printer-format`;
   return (
     <div className={`${styles.quickPosPage} space-y-6`}>
-      <HardwarePageHeader description="Type product name, add missing items without leaving the bill, preview totals, then confirm and print." eyebrow="Sales" title="Quick POS bill" />
+      <script dangerouslySetInnerHTML={{ __html: `try{localStorage.setItem(${JSON.stringify(printerStorageKey)},"a4")}catch{}` }} />
+      <ProductSearchMetadataBridge printerStorageKey={printerStorageKey} products={products} />
+      <HardwarePageHeader description="Search by product, SKU, part number, barcode, brand, category, size, or rate; then confirm the A4 invoice." eyebrow="Sales" title="Quick POS bill" />
       <QuickPosForm
         brands={brands}
         categories={categories}
@@ -39,7 +43,7 @@ export default async function NewHardwareSalePage() {
         }}
         locations={locations}
         products={products}
-        printerStorageKey={`trustfirst:${user.activeTenantId ?? "public"}:${user.id}:hardware:printer-format`}
+        printerStorageKey={printerStorageKey}
         units={units}
       />
     </div>
