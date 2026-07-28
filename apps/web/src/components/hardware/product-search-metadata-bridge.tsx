@@ -1,0 +1,64 @@
+"use client";
+
+import { useEffect } from "react";
+import type { HardwareProductSummary } from "@/server/hardware";
+
+export type ProductSearchMetadata = {
+  barcode: string | null;
+  brandName: string | null;
+  categoryName: string | null;
+  currentStock: number;
+  id: string;
+  name: string;
+  salesPriceCents: number;
+  sku: string;
+  unitCode: string | null;
+};
+
+type SearchWindow = Window & {
+  __hardwareProductSearchMetadata?: Record<string, ProductSearchMetadata>;
+};
+
+export function ProductSearchMetadataBridge({
+  printerStorageKey,
+  products,
+}: {
+  printerStorageKey: string;
+  products: HardwareProductSummary[];
+}) {
+  const metadata = Object.fromEntries(products.map((product) => [product.id, {
+    barcode: product.barcode,
+    brandName: product.brandName,
+    categoryName: product.categoryName,
+    currentStock: product.currentStock,
+    id: product.id,
+    name: product.name,
+    salesPriceCents: product.salesPriceCents,
+    sku: product.sku,
+    unitCode: product.unitCode,
+  } satisfies ProductSearchMetadata]));
+
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(printerStorageKey, "a4");
+    } catch {
+      // The billing form still falls back safely when browser storage is unavailable.
+    }
+    (window as SearchWindow).__hardwareProductSearchMetadata = metadata;
+  }
+
+  useEffect(() => {
+    (window as SearchWindow).__hardwareProductSearchMetadata = metadata;
+    window.dispatchEvent(new CustomEvent("hardware-product-search-metadata-ready"));
+    try {
+      window.localStorage.setItem(printerStorageKey, "a4");
+    } catch {
+      // Ignore private-mode storage restrictions.
+    }
+    return () => {
+      delete (window as SearchWindow).__hardwareProductSearchMetadata;
+    };
+  }, [metadata, printerStorageKey]);
+
+  return null;
+}
