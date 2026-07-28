@@ -15,6 +15,11 @@
   box-shadow: 0 1px 0 var(--border), 0 8px 20px rgb(0 0 0 / 7%);
 }
 
+/* Mangalam uses A4 invoices only. Hide the obsolete thermal/format control card. */
+.quickPosPage :global(aside > div:first-child) {
+  display: none;
+}
+
 .quickPosPage :global(fieldset),
 .quickPosPage :global(fieldset > div),
 .quickPosPage :global(fieldset > label),
