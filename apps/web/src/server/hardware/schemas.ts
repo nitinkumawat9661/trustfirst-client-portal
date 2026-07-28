@@ -41,9 +41,17 @@ export const hardwareProductSchema = z.object({
   metadata: jsonRecord.optional(),
   name: z.string().trim().min(1, "Product name is required.").max(240),
   purchaseCostCents: z.number().int().nonnegative().optional(),
-  salesPriceCents: z.number().int().positive("Sale price is required and must be greater than zero."),
+  salesPriceCents: z.number().int().nonnegative().optional(),
   sku: z.string().min(1).max(120).optional(),
   unitId: z.string().optional(),
+}).superRefine((value, context) => {
+  if (!value.salesPriceCents || value.salesPriceCents <= 0) {
+    context.addIssue({
+      code: "custom",
+      message: "Sale price is required and must be greater than zero.",
+      path: ["salesPriceCents"],
+    });
+  }
 });
 
 export const quickHardwareProductSchema = z.object({
@@ -53,13 +61,13 @@ export const quickHardwareProductSchema = z.object({
   gstRateBps: z.number().int().min(0).max(10_000).optional(),
   hsnCode: z.string().regex(/^[0-9A-Za-z-]{2,12}$/u, "HSN must be 2 to 12 letters, digits, or dashes.").optional(),
   lowStockThreshold: z.number().int().min(0).optional(),
-  name: z.string().trim().min(1, "Product name is required.").max(240),
+  name: z.string().trim().min(2).max(240),
   openingStock: z.object({
     locationId: z.string(),
     quantity: z.number().int().nonnegative(),
   }).optional(),
   purchaseCostCents: z.number().int().nonnegative().optional(),
-  salesPriceCents: z.number().int().positive("Sale price is required and must be greater than zero."),
+  salesPriceCents: z.number().int().nonnegative().optional(),
   sku: z.string().min(1).max(120).optional(),
   unitId: z.string().optional(),
 });
