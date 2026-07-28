@@ -32,6 +32,11 @@ export async function PATCH(
     });
     if (!existing) throw validation("Product was not found.");
 
+    const salesPriceCents = input.salesPriceCents;
+    if (salesPriceCents === undefined || salesPriceCents <= 0) {
+      throw validation("Sale price is required and must be greater than zero.");
+    }
+
     const sku = input.sku?.trim() || existing.sku;
     const barcode = input.barcode?.trim() || null;
     const brandId = input.brandId?.trim() || null;
@@ -75,7 +80,7 @@ export async function PATCH(
           metadata,
           name: input.name.trim(),
           purchaseCostCents: input.purchaseCostCents ?? existing.purchaseCostCents,
-          salesPriceCents: input.salesPriceCents,
+          salesPriceCents,
           sku,
           unitId,
         },
