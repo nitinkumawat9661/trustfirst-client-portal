@@ -32,13 +32,41 @@ export default async function HardwarePrintPreviewPage({
       : projection.document.createdAt;
 
   return (
-    <main className="min-h-screen bg-zinc-200 p-3 text-black sm:p-6 print:bg-white print:p-0">
-      <section className={`print-sheet mx-auto w-full bg-white p-5 shadow-md sm:p-8 print:p-0 print:shadow-none ${format === "a4" ? "max-w-[210mm]" : format === "80mm" ? "max-w-[80mm]" : "max-w-[58mm]"}`}>
+    <main className="min-h-screen bg-zinc-200 p-3 text-black sm:p-6 print:min-h-0 print:bg-white print:p-0">
+      <section className={`print-sheet mx-auto w-full bg-white p-5 shadow-md sm:p-8 print:max-w-none print:p-0 print:shadow-none ${format === "a4" ? "max-w-[210mm]" : format === "80mm" ? "max-w-[80mm]" : "max-w-[58mm]"}`}>
         <style>{`
           @media print {
             @page { size: ${format === "a4" ? "A4 portrait" : `${format} auto`}; margin: ${format === "a4" ? "10mm" : "2mm"}; }
+            html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; }
+            body [class*="min-h-screen"] { min-height: 0 !important; }
+            body header.sticky { display: none !important; }
+            body aside.fixed { display: none !important; }
+            body [class*="fixed"][class*="bottom-"] { display: none !important; }
+            body .lg\\:pl-64 { padding-left: 0 !important; }
+            body main.px-3.py-5 { padding: 0 !important; }
             .no-print { display: none !important; }
-            .print-sheet { width: auto; min-height: auto; }
+            .print-sheet {
+              width: 100% !important;
+              max-width: none !important;
+              min-height: 0 !important;
+              height: auto !important;
+              margin: 0 !important;
+              overflow: visible !important;
+            }
+            .print-table-wrap { overflow: visible !important; }
+            .print-table {
+              width: 100% !important;
+              min-width: 0 !important;
+              table-layout: fixed !important;
+              font-size: ${format === "a4" ? "9px" : "8px"} !important;
+            }
+            .print-table th,
+            .print-table td {
+              padding-left: 1.2mm !important;
+              padding-right: 1.2mm !important;
+              white-space: normal !important;
+              overflow-wrap: anywhere !important;
+            }
             thead { display: table-header-group; }
             tfoot { display: table-footer-group; }
             tr, td, th { break-inside: avoid; page-break-inside: avoid; }
@@ -112,8 +140,22 @@ export default async function HardwarePrintPreviewPage({
           </div>
         </section>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className={`w-full border-collapse text-[10px] ${format === "a4" ? "min-w-[780px] sm:text-xs" : ""}`}>
+        <div className="print-table-wrap mt-4 overflow-x-auto">
+          <table className={`print-table w-full border-collapse text-[10px] ${format === "a4" ? "min-w-[780px] sm:text-xs" : ""}`}>
+            {format === "a4" ? (
+              <colgroup>
+                <col style={{ width: "4%" }} />
+                <col style={{ width: "31%" }} />
+                <col style={{ width: "9%" }} />
+                <col style={{ width: "6%" }} />
+                <col style={{ width: "7%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "7%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "6%" }} />
+                <col style={{ width: "10%" }} />
+              </colgroup>
+            ) : null}
             <thead>
               <tr className="border-y border-zinc-500 bg-zinc-100 text-left">
                 <th className="px-2 py-2">#</th>
@@ -132,7 +174,7 @@ export default async function HardwarePrintPreviewPage({
               {projection.items.map((item, index) => (
                 <tr className="border-b border-zinc-300 align-top" key={`${item.description}-${index}`}>
                   <td className="px-2 py-2">{index + 1}</td>
-                  <td className="px-2 py-2 font-medium">{item.description}{format !== "a4" ? <div className="text-[9px]">HSN {item.hsnCode ?? "-"} · GST {item.taxRateBps / 100}%</div> : null}</td>
+                  <td className="break-words px-2 py-2 font-medium">{item.description}{format !== "a4" ? <div className="text-[9px]">HSN {item.hsnCode ?? "-"} · GST {item.taxRateBps / 100}%</div> : null}</td>
                   {format === "a4" ? <td className="px-2 py-2">{item.hsnCode ?? "Pending"}</td> : null}
                   <td className="px-2 py-2 text-right">{item.quantity}</td>
                   <td className="px-2 py-2">{item.unitCode ?? "-"}</td>
