@@ -15,14 +15,43 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: mangalam-production
   cancel-in-progress: false
 
 jobs:
+  status-start:
+    name: Mark deployment pending
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish pending commit status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg state pending \
+            --arg target_url "$RUN_URL" \
+            --arg description "Mangalam production deployment is running" \
+            --arg context "Mangalam Production Deployment" \
+            '{state: $state, target_url: $target_url, description: $description, context: $context}' \
+            > status.json
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPOSITORY/statuses/$GITHUB_SHA" \
+            --data @status.json
+
   validate:
     name: Validate release
+    needs: status-start
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -204,3 +233,44 @@ jobs:
           curl --silent --show-error --fail --max-time 15 "$PUBLIC_URL" >/dev/null
           echo "DEPLOYED_SHA=$deployed_sha"
           echo "MANGALAM_PRODUCTION_DEPLOYMENT_SUCCESSFUL"
+
+  status-final:
+    name: Publish final deployment status
+    if: always()
+    needs:
+      - validate
+      - deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish final commit status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$VALIDATE_RESULT" = "success" ] && [ "$DEPLOY_RESULT" = "success" ]; then
+            state="success"
+            description="Mangalam production deployment succeeded"
+          else
+            state="failure"
+            description="Mangalam deployment failed: validate=$VALIDATE_RESULT deploy=$DEPLOY_RESULT"
+          fi
+
+          jq -n \
+            --arg state "$state" \
+            --arg target_url "$RUN_URL" \
+            --arg description "$description" \
+            --arg context "Mangalam Production Deployment" \
+            '{state: $state, target_url: $target_url, description: $description, context: $context}' \
+            > status.json
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPOSITORY/statuses/$GITHUB_SHA" \
+            --data @status.json
