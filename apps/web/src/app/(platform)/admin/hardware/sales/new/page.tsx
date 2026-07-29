@@ -22,7 +22,7 @@ export default async function NewHardwareSalePage() {
   ]);
   return (
     <div className={`${styles.quickPosPage} space-y-6`}>
-      <HardwarePageHeader description="Search products by name, SKU, part code, size or barcode; review price and stock; then post and print a professional A4 invoice." eyebrow="Sales" title="Quick POS bill" />
+      <HardwarePageHeader description="Search products by name, brand, category, SKU, model, size, or colour—even with spelling mistakes or words in a different order. Review price and stock, then post and print a professional A4 invoice." eyebrow="Sales" title="Quick POS bill" />
       <QuickPosForm
         brands={brands}
         categories={categories}
