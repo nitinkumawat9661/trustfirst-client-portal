@@ -155,11 +155,12 @@ jobs:
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "$VPS_USER@$VPS_HOST" \
-            bash -s -- "$VPS_USER" "$DEPLOY_PATH" "$PM2_APP_NAME" <<'REMOTE'
+            bash -s -- "$VPS_USER" "$DEPLOY_PATH" "$PM2_APP_NAME" "$PRODUCTION_PORT" <<'REMOTE'
           set -euo pipefail
           EXPECTED_USER="$1"
           APP_DIR="$2"
           PM2_PROCESS="$3"
+          PROD_PORT="$4"
 
           check() {
             local label="$1"
@@ -188,10 +189,20 @@ jobs:
           check pm2_available command -v pm2
           check curl_available command -v curl
           check tar_available command -v tar
+          check ss_available command -v ss
           node --version
           npm --version
           pm2 --version
-          check trustfirst_pm2_process pm2 describe "$PM2_PROCESS"
+
+          if pm2 describe "$PM2_PROCESS" >/dev/null 2>&1; then
+            echo "PREFLIGHT_OK:trustfirst_pm2_process"
+          elif ss -ltn 2>/dev/null | grep -Eq "[:.]${PROD_PORT}[[:space:]]"; then
+            echo "PREFLIGHT_FAIL:production_port_occupied_without_expected_pm2" >&2
+            exit 1
+          else
+            echo "PREFLIGHT_OK:trustfirst_pm2_first_start"
+          fi
+
           echo VPS_PREFLIGHT_PASSED
           REMOTE
 
