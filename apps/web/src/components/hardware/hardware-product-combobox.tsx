@@ -35,11 +35,8 @@ export function HardwareProductCombobox({
   const [category, setCategory] = useState("ALL");
   const [activeIndex, setActiveIndex] = useState(0);
   const [open, setOpen] = useState(false);
-  const [memory, setMemory] = useState<ProductSearchMemory>({ favorites: [], recent: [] });
+  const [memory, setMemory] = useState<ProductSearchMemory>(() => readMemory(storageKey));
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => setQuery(value), [value]);
-  useEffect(() => setMemory(readMemory(storageKey)), [storageKey]);
   useEffect(() => () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
   }, []);
@@ -70,8 +67,9 @@ export function HardwareProductCombobox({
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name]) => name);
   }, [products]);
 
+  const displayedQuery = open ? query : value;
   const results = useMemo(() => {
-    const normalizedQuery = normalize(query);
+    const normalizedQuery = normalize(displayedQuery);
     const recentRank = new Map(memory.recent.map((id, index) => [id, index]));
     const favoriteSet = new Set(memory.favorites);
     const filtered = products.filter((product) =>
@@ -104,12 +102,11 @@ export function HardwareProductCombobox({
       })
       .slice(0, MAX_RESULTS)
       .map((entry) => entry.product);
-  }, [brand, category, memory.favorites, memory.recent, products, query]);
-
-  useEffect(() => setActiveIndex(0), [brand, category, query]);
+  }, [brand, category, displayedQuery, memory.favorites, memory.recent, products]);
 
   function select(product: HardwareProductSummary) {
     setQuery(product.name);
+    setActiveIndex(0);
     onQueryChange(product.name);
     onSelect(product);
     setOpen(false);
@@ -130,7 +127,7 @@ export function HardwareProductCombobox({
     writeMemory(storageKey, nextMemory);
   }
 
-  const normalizedQuery = normalize(query);
+  const normalizedQuery = normalize(displayedQuery);
   const exactName = products.some((product) => normalize(product.name) === normalizedQuery);
 
   return (
@@ -141,7 +138,7 @@ export function HardwareProductCombobox({
         autoComplete="off"
         className="pl-9"
         placeholder="Type name, SKU, part code, size or scan barcode"
-        value={query}
+        value={displayedQuery}
         onBlur={() => {
           closeTimer.current = setTimeout(() => setOpen(false), 160);
         }}
@@ -149,9 +146,14 @@ export function HardwareProductCombobox({
           const nextQuery = event.target.value;
           setQuery(nextQuery);
           onQueryChange(nextQuery);
+          setActiveIndex(0);
           setOpen(true);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setQuery(value);
+          setActiveIndex(0);
+          setOpen(true);
+        }}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown") {
             event.preventDefault();
@@ -179,11 +181,25 @@ export function HardwareProductCombobox({
       {open ? (
         <div className="absolute left-0 right-0 top-[4.45rem] z-40 overflow-hidden rounded-md border border-border bg-card shadow-xl">
           <div className="grid gap-2 border-b border-border bg-muted/40 p-2 sm:grid-cols-2">
-            <select className={filterClassName} value={brand} onChange={(event) => setBrand(event.target.value)}>
+            <select
+              className={filterClassName}
+              value={brand}
+              onChange={(event) => {
+                setBrand(event.target.value);
+                setActiveIndex(0);
+              }}
+            >
               <option value="ALL">All brands</option>
               {brands.map((name) => <option key={name} value={name}>{name}</option>)}
             </select>
-            <select className={filterClassName} value={category} onChange={(event) => setCategory(event.target.value)}>
+            <select
+              className={filterClassName}
+              value={category}
+              onChange={(event) => {
+                setCategory(event.target.value);
+                setActiveIndex(0);
+              }}
+            >
               <option value="ALL">All categories</option>
               {categories.map((name) => <option key={name} value={name}>{name}</option>)}
             </select>
@@ -194,7 +210,10 @@ export function HardwareProductCombobox({
                     className="rounded-full border border-border bg-background px-2 py-1 text-xs font-normal hover:bg-muted"
                     key={name}
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => setCategory(name)}
+                    onClick={() => {
+                      setCategory(name);
+                      setActiveIndex(0);
+                    }}
                     type="button"
                   >
                     {name}
@@ -294,6 +313,7 @@ function searchScore(product: HardwareProductSummary, query: string) {
 }
 
 function readMemory(key: string): ProductSearchMemory {
+  if (typeof window === "undefined") return { favorites: [], recent: [] };
   try {
     const parsed = JSON.parse(window.localStorage.getItem(key) ?? "{}") as Partial<ProductSearchMemory>;
     return {
