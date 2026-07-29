@@ -1,0 +1,93 @@
+name: Validate Estimate Bill Upgrade
+
+on:
+  push:
+    branches:
+      - feature/estimate-bill-line-gst-fuzzy-search
+
+permissions:
+  contents: write
+
+jobs:
+  apply-validate-and-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: feature/estimate-bill-line-gst-fuzzy-search
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Repair and compile isolated patch validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          target = Path('scripts/apply_estimate_bill_upgrade.py')
+          text = target.read_text(encoding='utf-8')
+          marker = '''replace_once(
+              "apps/web/src/components/hardware/creatable-combobox.tsx",
+              "  const haystack'''
+          start = text.index(marker)
+          end = text.index('\n)\n', start) + 3
+          replacement = '''replace_once(
+              "apps/web/src/components/hardware/creatable-combobox.tsx",
+              '  const haystack = [label, sku, barcode, brand, category, price, ...(option.keywords ?? []).map(normalize)].join(" ");\\n',
+              '  const haystack = [label, sku, brand, category, price, ...(option.keywords ?? []).map(normalize)].join(" ");\\n',
+          )\n'''
+          target.write_text(text[:start] + replacement + text[end:], encoding='utf-8')
+          PY
+          python -m py_compile scripts/apply_estimate_bill_upgrade.py
+
+      - name: Apply feature patch
+        run: python scripts/apply_estimate_bill_upgrade.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Prepare safe build environment
+        run: npm run deploy:env
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Verify patch cleanliness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -- scripts/apply_estimate_bill_upgrade.py
+          git diff --check
+          git status --short
+          test -n "$(git status --short --untracked-files=all | grep -vE '^(.. )?(scripts/apply_estimate_bill_upgrade.py|.github/workflows/feature-estimate-bill-upgrade.yml)$' || true)"
+
+      - name: Commit validated feature
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps packages package.json package-lock.json
+          git commit -m "feat: add GST-free Estimate Bills and line-level GST"
+          git push origin HEAD:feature/estimate-bill-line-gst-fuzzy-search
