@@ -4,7 +4,6 @@ import { useEffect, useMemo } from "react";
 import type { HardwareProductSummary } from "@/server/hardware";
 
 export type ProductSearchMetadata = {
-  barcode: string | null;
   brandName: string | null;
   categoryName: string | null;
   currentStock: number;
@@ -28,7 +27,6 @@ export function ProductSearchMetadataBridge({
 }) {
   const metadata = useMemo(
     () => Object.fromEntries(products.map((product) => [product.id, {
-      barcode: product.barcode,
       brandName: product.brandName,
       categoryName: product.categoryName,
       currentStock: product.currentStock,
