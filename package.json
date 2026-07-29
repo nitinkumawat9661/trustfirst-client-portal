@@ -11,8 +11,6 @@
     "dev": "npm run dev --workspace @trustfirst/web",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "postinstall": "python3 scripts/run_estimate_stock_gst_search_favicon.py",
-    "prebuild": "npm run lint && npm run typecheck && npm test",
     "pretest": "node scripts/ensure-rolldown-binding.mjs",
     "test": "npm run test --workspaces --if-present",
     "test:binding": "node scripts/ensure-rolldown-binding.mjs",

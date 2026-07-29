@@ -91,7 +91,6 @@ export function CreatableCombobox({
       .map((option) => ({ option, score: rankOption(option, normalizedQuery, metadata[option.id]) }))
       .filter((entry) => entry.score > 0)
       .sort((left, right) => right.score - left.score || left.option.label.localeCompare(right.option.label))
-      .slice(0, 20)
       .map((entry) => entry.option);
   }, [brandFilter, categoryFilter, favoriteIds, isProductSearch, metadata, normalizedQuery, options, recentIds]);
 

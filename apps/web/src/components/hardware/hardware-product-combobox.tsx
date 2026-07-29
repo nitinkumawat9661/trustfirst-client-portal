@@ -115,8 +115,7 @@ export function HardwareProductCombobox({
         const recentDifference = (recentRank.get(left.product.id) ?? 999) - (recentRank.get(right.product.id) ?? 999);
         if (recentDifference) return recentDifference;
         return localeCompare(left.product.name, right.product.name);
-      })
-      .slice(0, MAX_RESULTS);
+      });
   }, [brand, category, displayedQuery, memory.favorites, memory.recent, normalizedQuery, products]);
 
   const results = rankedResults.map((entry) => entry.product);
@@ -306,7 +305,7 @@ export function HardwareProductCombobox({
             ) : null}
           </div>
           <p className="border-t border-border px-3 py-2 text-[11px] font-normal text-muted-foreground">
-            ↑/↓ choose • Enter select • Esc close
+            {normalizedQuery ? `${results.length} matching products • ` : ""}↑/↓ choose • Enter select • Esc close
           </p>
         </div>
       ) : null}

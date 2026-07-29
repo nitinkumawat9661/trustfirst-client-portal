@@ -23,7 +23,7 @@ export default async function HardwareQuotationsPage() {
         actionHref="/admin/hardware/quotations/new"
         actionIcon={Plus}
         actionLabel="New Estimate Bill"
-        description="Create and save a GST-free estimate, then print or reprint it directly. Estimates do not move stock."
+        description="Create and save Estimate Bills with optional line-wise GST. Confirmed quantities deduct stock, taxed lines feed the sales GST report, and every document can be printed or reprinted."
         eyebrow="Sales"
         title="Estimate Bills"
       />

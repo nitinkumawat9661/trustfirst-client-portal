@@ -133,11 +133,8 @@ export default async function HardwarePrintPreviewPage({
             {typeof projection.document.metadata.referenceNumber === "string" ? (
               <><p className="font-semibold uppercase">Reference</p><p className="mt-1">{projection.document.metadata.referenceNumber}</p></>
             ) : null}
-            {isEstimate ? (
-              <p className="mt-2 font-semibold">GST-free estimate · No stock movement</p>
-            ) : (
-              <p className="mt-2">Tax treatment: {taxMode === "inter-state" ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)"}</p>
-            )}
+            <p className="mt-2">Tax treatment: {taxMode === "inter-state" ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)"}</p>
+            {isEstimate ? <p className="mt-1 font-semibold">Confirmed Estimate Bill · Stock deducted</p> : null}
           </div>
         </section>
 
@@ -152,8 +149,8 @@ export default async function HardwarePrintPreviewPage({
               <col style={{ width: "10%" }} />
               <col style={{ width: "7%" }} />
               <col style={{ width: "10%" }} />
-              {!isEstimate ? <col style={{ width: "6%" }} /> : null}
-              <col style={{ width: isEstimate ? "16%" : "10%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "10%" }} />
             </colgroup>
             <thead>
               <tr className="border-y border-zinc-500 bg-zinc-100 text-left">
@@ -165,7 +162,7 @@ export default async function HardwarePrintPreviewPage({
                 <th className="px-2 py-2 text-right">Rate</th>
                 <th className="px-2 py-2 text-right">Disc.</th>
                 <th className="px-2 py-2 text-right">Taxable</th>
-                {!isEstimate ? <th className="px-2 py-2 text-right">GST</th> : null}
+                <th className="px-2 py-2 text-right">GST</th>
                 <th className="px-2 py-2 text-right">Total</th>
               </tr>
             </thead>
@@ -180,7 +177,7 @@ export default async function HardwarePrintPreviewPage({
                   <td className="px-2 py-2 text-right">{money(item.unitAmountCents)}</td>
                   <td className="px-2 py-2 text-right">{item.discountPercent === null ? money(item.discountCents) : `${item.discountPercent}%`}</td>
                   <td className="px-2 py-2 text-right">{money(item.taxableCents)}</td>
-                  {!isEstimate ? <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td> : null}
+                  <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td>
                   <td className="px-2 py-2 text-right font-medium">{money(item.lineTotalCents)}</td>
                 </tr>
               ))}
@@ -190,10 +187,8 @@ export default async function HardwarePrintPreviewPage({
 
         <section className="print-break-avoid mt-5 grid gap-6 sm:grid-cols-[minmax(0,1fr)_280px]">
           <div>
-            <p className="text-xs font-semibold uppercase">{isEstimate ? "Estimate summary" : "Tax summary"}</p>
-            {isEstimate ? (
-              <p className="mt-2 text-xs">GST-free Estimate Bill. This document does not reserve or move stock.</p>
-            ) : projection.gstSummary.length ? (
+            <p className="text-xs font-semibold uppercase">Tax summary</p>
+            {projection.gstSummary.length ? (
               <table className="mt-2 w-full max-w-md text-xs">
                 <thead className="border-b border-zinc-400 text-left"><tr><th className="py-1">Rate</th><th>Taxable</th><th>CGST</th><th>SGST</th><th>IGST</th></tr></thead>
                 <tbody>{projection.gstSummary.map((row) => {
@@ -209,7 +204,7 @@ export default async function HardwarePrintPreviewPage({
           <dl className="space-y-2 text-xs">
             <AmountRow label="Subtotal" value={projection.document.subtotalCents} />
             <AmountRow label="Line discounts" value={-projection.document.discountCents} />
-            {!isEstimate ? <AmountRow label={taxMode === "inter-state" ? "IGST" : "CGST + SGST"} value={projection.document.taxCents} /> : null}
+            <AmountRow label={taxMode === "inter-state" ? "IGST" : "CGST + SGST"} value={projection.document.taxCents} />
             <AmountRow label="Round-off" value={projection.document.roundOffCents} />
             <div className="flex justify-between border-t-2 border-zinc-900 pt-2 text-base font-bold"><dt>Grand total</dt><dd>{money(projection.document.totalCents)}</dd></div>
           </dl>

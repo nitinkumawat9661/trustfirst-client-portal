@@ -48,6 +48,7 @@ describe("HardwareTradeService", () => {
 
   it("maps sales, purchases, and returns to stock movement directions", () => {
     expect(movementTypeForDocument(HardwareTradeDocumentType.SALES_ORDER)).toBe(HardwareInventoryMovementType.STOCK_OUT);
+    expect(movementTypeForDocument(HardwareTradeDocumentType.SALES_QUOTATION)).toBe(HardwareInventoryMovementType.STOCK_OUT);
     expect(movementTypeForDocument(HardwareTradeDocumentType.PURCHASE_ENTRY)).toBe(HardwareInventoryMovementType.STOCK_IN);
     expect(movementTypeForDocument(HardwareTradeDocumentType.SALE_RETURN)).toBe(HardwareInventoryMovementType.STOCK_IN);
     expect(movementTypeForDocument(HardwareTradeDocumentType.PURCHASE_RETURN)).toBe(HardwareInventoryMovementType.STOCK_OUT);
@@ -68,6 +69,14 @@ describe("HardwareTradeService", () => {
               totalCents: 50_000,
               type: HardwareTradeDocumentType.SUPPLIER_BILL,
             },
+            {
+              createdAt: new Date(),
+              paymentStatus: "unlinked",
+              status: HardwareTradeDocumentStatus.CONFIRMED,
+              taxCents: 1800,
+              totalCents: 11_800,
+              type: HardwareTradeDocumentType.SALES_QUOTATION,
+            },
           ],
         },
         invoice: {
@@ -82,6 +91,7 @@ describe("HardwareTradeService", () => {
 
     expect(report.outstandingCustomersCents).toBe(55_000);
     expect(report.outstandingSuppliersCents).toBe(50_000);
+    expect(report.salesGstCents).toBe(1_800);
   });
 
   it("builds an A4 print projection with GST summary and firm settings", async () => {

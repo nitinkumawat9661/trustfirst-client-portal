@@ -165,9 +165,7 @@ export class HardwareTradeService {
     const document = await this.getOrThrow(context.tenantId, documentId);
     await this.enforce(context, managePermission(document.type));
     if (document.status !== "DRAFT") throw validation("Only draft hardware documents can be confirmed.");
-    const nonStockDocument =
-      document.type === HardwareTradeDocumentType.SALES_QUOTATION ||
-      document.type === HardwareTradeDocumentType.PURCHASE_ORDER;
+    const nonStockDocument = document.type === HardwareTradeDocumentType.PURCHASE_ORDER;
     if (!nonStockDocument && !input.locationId) {
       throw validation("A stock location is required to confirm this document.");
     }
@@ -1290,7 +1288,8 @@ export class HardwareTradeService {
         .reduce((total, document) => total + document.totalCents, 0),
       salesGstCents: documents
         .filter((document) =>
-          document.type === HardwareTradeDocumentType.SALES_ORDER &&
+          (document.type === HardwareTradeDocumentType.SALES_ORDER ||
+            document.type === HardwareTradeDocumentType.SALES_QUOTATION) &&
           document.status === "CONFIRMED",
         )
         .reduce((total, document) => total + document.taxCents, 0),

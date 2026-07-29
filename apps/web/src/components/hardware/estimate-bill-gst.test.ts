@@ -40,20 +40,29 @@ describe("bill and estimate GST behavior", () => {
     expect(totals.totalCents).toBe(39_100);
   });
 
-  it("forces Estimate Bill tax to zero even when a line contains a GST value", () => {
+  it("keeps Estimate Bill GST editable per line and defaults other lines to zero", () => {
     const estimate = hardwareTradeFormTestUtils.calculatePreview([{
       discountPercent: "0",
       gstRate: "18",
       hsnCode: "",
       productId: "product-1",
-      productName: "Test product",
+      productName: "Taxed product",
       quantity: "2",
       unitCode: "PCS",
       unitRate: "100",
-    }], "0", true);
+    }, {
+      discountPercent: "0",
+      gstRate: "0",
+      hsnCode: "",
+      productId: "product-2",
+      productName: "Zero-rated product",
+      quantity: "1",
+      unitCode: "PCS",
+      unitRate: "50",
+    }], "0");
 
-    expect(estimate.grossCents).toBe(20_000);
-    expect(estimate.taxCents).toBe(0);
-    expect(estimate.totalCents).toBe(20_000);
+    expect(estimate.grossCents).toBe(25_000);
+    expect(estimate.taxCents).toBe(3_600);
+    expect(estimate.totalCents).toBe(28_600);
   });
 });

@@ -5,6 +5,7 @@ import {
 } from "./host-routing";
 
 const mangalamLogo = "/api/public/branding/mangalam-sanitary-logo";
+const mangalamIcon = `${mangalamLogo}?v=20260729`;
 const trustFirstIcon = "/icons/pwa-icon.svg";
 const trustFirstMaskableIcon = "/icons/pwa-maskable.svg";
 
@@ -15,8 +16,9 @@ export function metadataForSurface(surface: AppSurface): Metadata {
       description:
         "Mangalam Sanitary, Sikar - bathware, plumbing, sanitary ware and hardware solutions.",
       icons: {
-        apple: mangalamLogo,
-        icon: mangalamLogo,
+        apple: mangalamIcon,
+        icon: mangalamIcon,
+        shortcut: mangalamIcon,
       },
       manifest: "/manifest.webmanifest",
       metadataBase: new URL(CANONICAL_ORIGINS.mangalamPublic),
@@ -49,8 +51,9 @@ export function metadataForSurface(surface: AppSurface): Metadata {
       applicationName: "MANGALAM SANITARY ERP",
       description: "Secure business operations workspace for Mangalam Sanitary.",
       icons: {
-        apple: mangalamLogo,
-        icon: mangalamLogo,
+        apple: mangalamIcon,
+        icon: mangalamIcon,
+        shortcut: mangalamIcon,
       },
       manifest: "/manifest.webmanifest",
       metadataBase: new URL(CANONICAL_ORIGINS.mangalamErp),
@@ -148,14 +151,12 @@ export function manifestForSurface(surface: AppSurface): MetadataRoute.Manifest 
       {
         purpose: "any",
         sizes: "192x192",
-        src: mangalamLogo,
-        type: "image/jpeg",
+        src: mangalamIcon,
       },
       {
         purpose: "maskable",
         sizes: "512x512",
-        src: mangalamLogo,
-        type: "image/jpeg",
+        src: mangalamIcon,
       },
     ],
     id: `${CANONICAL_ORIGINS.mangalamErp}/mangalam-erp`,

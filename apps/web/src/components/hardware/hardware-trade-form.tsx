@@ -20,6 +20,7 @@ const numericString = z.string().refine((value) => value !== "" && Number.isFini
 const tradeFormSchema = z.object({
   customerAddress: z.string().max(1000),
   documentDate: z.string().min(1, "Date is required."),
+  locationId: z.string(),
   documentType: z.enum(["PURCHASE_ENTRY", "PURCHASE_ORDER", "SALES_ORDER", "SALES_QUOTATION", "SUPPLIER_BILL"]),
   items: z.array(z.object({
     discountPercent: z.string().refine((value) => Number(value) >= 0 && Number(value) <= 100, {
@@ -64,10 +65,12 @@ const emptyItem = {
 };
 
 export function HardwareTradeForm({
+  locations = [],
   mode,
   parties,
   products,
 }: {
+  locations?: Array<{ id: string; name: string }>;
   mode: TradeMode;
   parties: HardwarePartySummary[];
   products: HardwareProductSummary[];
@@ -88,6 +91,7 @@ export function HardwareTradeForm({
       documentDate: new Date().toISOString().slice(0, 10),
       documentType: defaultDocumentType(mode),
       items: [{ ...emptyItem }],
+      locationId: locations[0]?.id ?? "",
       partyId: "",
       paidAmount: "",
       paymentMode: mode === "purchase" ? "Credit" : "Cash",
@@ -101,15 +105,17 @@ export function HardwareTradeForm({
   const watchedItems = useWatch({ control, name: "items" });
   const watchedRoundOff = useWatch({ control, name: "roundOff" });
   const totals = useMemo(
-    () => calculatePreview(watchedItems, watchedRoundOff, mode === "quotation"),
-    [mode, watchedItems, watchedRoundOff],
+    () => calculatePreview(watchedItems, watchedRoundOff),
+    [watchedItems, watchedRoundOff],
   );
   const disabledReason =
     products.length === 0
       ? "Add at least one verified product before creating a document."
       : mode === "purchase" && parties.length === 0
         ? "Add at least one supplier before creating a purchase document."
-        : null;
+        : mode === "quotation" && locations.length === 0
+          ? "Add at least one stock location before creating an Estimate Bill."
+          : null;
 
   function applyProduct(index: number, product: HardwareProductSummary) {
     const rateCents = mode === "purchase" ? product.purchaseCostCents : product.salesPriceCents;
@@ -160,6 +166,10 @@ export function HardwareTradeForm({
     setServerError(null);
     try {
       const partyId = await resolveCustomerId(values);
+      if (mode === "quotation" && !values.locationId) {
+        setServerError("Select a stock location for this Estimate Bill.");
+        return;
+      }
       if (!partyId) {
         setServerError(mode === "purchase" ? "Select a supplier." : "Enter or select a customer name.");
         return;
@@ -181,7 +191,7 @@ export function HardwareTradeForm({
             },
             productId: item.productId,
             quantity: Number(item.quantity),
-            taxRateBps: mode === "quotation" ? 0 : Math.round(Number(item.gstRate) * 100),
+            taxRateBps: Math.round(Number(item.gstRate) * 100),
             unitAmountCents: Math.round(Number(item.unitRate) * 100),
           };
         }),
@@ -189,11 +199,12 @@ export function HardwareTradeForm({
           customerAddress: mode === "purchase" ? undefined : values.customerAddress.trim() || null,
           documentDate: values.documentDate,
           estimateBill: mode === "quotation",
-          gstFree: mode === "quotation",
+          gstFilingEligible: mode !== "purchase" && values.items.some((item) => Number(item.gstRate) > 0),
           paidAmountCents: mode === "purchase" ? Math.round(Number(values.paidAmount || 0) * 100) : undefined,
           paymentMode: values.paymentMode,
           referenceNumber: values.referenceNumber || null,
-          taxMode: mode === "quotation" ? "gst-free" : values.taxMode,
+          stockMovementOnConfirm: mode === "quotation",
+          taxMode: values.taxMode,
         },
         roundOffCents: Math.round(Number(values.roundOff || 0) * 100),
         type: values.documentType,
@@ -205,6 +216,13 @@ export function HardwareTradeForm({
       }
 
       if (mode === "quotation") {
+        const confirmation = await postHardwareJson<unknown>(`/api/hardware/trade/${result.data.id}/confirm`, {
+          locationId: values.locationId,
+        });
+        if (!confirmation.ok) {
+          setServerError(`Estimate Bill ${result.data.documentNumber} was saved as a draft, but stock could not be deducted: ${confirmation.message}`);
+          return;
+        }
         router.push(`/admin/hardware/print/${result.data.id}?print=1`);
       } else {
         router.push(mode === "purchase" ? "/admin/hardware/purchases?created=1" : "/admin/hardware/sales?created=1");
@@ -282,19 +300,26 @@ export function HardwareTradeForm({
               </select>
             </FormField>
           ) : null}
-          {mode !== "quotation" ? (
-            <FormField label="Tax treatment">
-              <select className={selectClassName} {...register("taxMode")}>
-                <option value="intra-state">Intra-state (CGST + SGST)</option>
-                <option value="inter-state">Inter-state (IGST)</option>
-              </select>
-            </FormField>
-          ) : (
-            <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
-              <p className="font-medium">GST-free Estimate Bill</p>
-              <p className="mt-1 text-xs text-muted-foreground">GST is fixed at 0% and no stock movement is posted.</p>
-            </div>
-          )}
+          <FormField label="Tax treatment">
+            <select className={selectClassName} {...register("taxMode")}>
+              <option value="intra-state">Intra-state (CGST + SGST)</option>
+              <option value="inter-state">Inter-state (IGST)</option>
+            </select>
+          </FormField>
+          {mode === "quotation" ? (
+            <>
+              <FormField label="Stock location" required>
+                <select className={selectClassName} {...register("locationId")}>
+                  <option value="">Select stock location</option>
+                  {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                </select>
+              </FormField>
+              <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
+                <p className="font-medium">Estimate Bill with stock movement</p>
+                <p className="mt-1 text-xs text-muted-foreground">Each line starts at 0% GST. Selected GST lines are included in the sales GST report, and confirmed quantities are deducted from this location.</p>
+              </div>
+            </>
+          ) : null}
           {mode !== "quotation" ? (
             <FormField label="Payment mode">
               <select className={selectClassName} {...register("paymentMode")}>
@@ -359,17 +384,11 @@ export function HardwareTradeForm({
                   <Input inputMode="decimal" min="0" max="100" step="0.01" type="number" {...register(`items.${index}.discountPercent`)} />
                 </FormField>
               </div>
-              {mode === "quotation" ? (
-                <div className="lg:col-span-1">
-                  <FormField label="GST"><Input disabled value="0%" /></FormField>
-                </div>
-              ) : (
-                <div className="lg:col-span-1">
-                  <FormField error={errors.items?.[index]?.gstRate?.message} label="GST %">
-                    <GstRateSelect value={watchedItems?.[index]?.gstRate ?? "0"} {...register(`items.${index}.gstRate`)} />
-                  </FormField>
-                </div>
-              )}
+              <div className="lg:col-span-1">
+                <FormField error={errors.items?.[index]?.gstRate?.message} label="GST %">
+                  <GstRateSelect value={watchedItems?.[index]?.gstRate ?? "0"} {...register(`items.${index}.gstRate`)} />
+                </FormField>
+              </div>
               <div className="flex items-end lg:col-span-1">
                 <Button aria-label={`Remove item ${index + 1}`} className="w-full" disabled={fields.length === 1} onClick={() => remove(index)} type="button" variant="ghost">
                   <Trash2 className="size-4" />
@@ -391,8 +410,8 @@ export function HardwareTradeForm({
           <dl className="space-y-2 text-sm">
             <TotalRow label="Gross value" value={totals.grossCents} />
             <TotalRow label="Line discounts" value={-totals.discountCents} />
-            <TotalRow label={mode === "quotation" ? "Net estimate value" : "Taxable value"} value={totals.taxableCents} />
-            {mode !== "quotation" ? <TotalRow label="GST" value={totals.taxCents} /> : null}
+            <TotalRow label="Taxable value" value={totals.taxableCents} />
+            <TotalRow label="GST" value={totals.taxCents} />
             <TotalRow label="Round-off" value={totals.roundOffCents} />
             <div className="flex justify-between border-t border-border pt-2 text-base font-semibold"><dt>Grand total</dt><dd>{money(totals.totalCents)}</dd></div>
           </dl>
@@ -438,13 +457,12 @@ function TotalRow({ label, value }: { label: string; value: number }) {
 function calculatePreview(
   items: TradeFormValues["items"] | undefined,
   roundOff: string | undefined,
-  gstFree: boolean,
 ) {
   const result = (items ?? []).reduce((totals, item) => {
     const gross = Math.round((Number(item.quantity) || 0) * (Number(item.unitRate) || 0) * 100);
     const discount = Math.round(gross * (Number(item.discountPercent) || 0) / 100);
     const taxable = Math.max(gross - discount, 0);
-    const tax = gstFree ? 0 : Math.round(taxable * (Number(item.gstRate) || 0) / 100);
+    const tax = Math.round(taxable * (Number(item.gstRate) || 0) / 100);
     return {
       discountCents: totals.discountCents + discount,
       grossCents: totals.grossCents + gross,
