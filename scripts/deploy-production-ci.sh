@@ -21,66 +21,101 @@ done
 
 ENV_FILE="/etc/trustfirst-client-portal.env"
 CANARY_NAME="${PM2_APP_NAME}-canary"
-NEXT_DIR="${DEPLOY_PATH}.next.${DEPLOY_SHA}"
-BACKUP_DIR="${DEPLOY_PATH}.rollback.$(date +%Y%m%d%H%M%S)"
-FAILED_DIR="${DEPLOY_PATH}.failed.${DEPLOY_SHA}"
-STORAGE_HOLD="${DEPLOY_PATH}.storage.${DEPLOY_SHA}"
+DEPLOY_ROOT="$HOME/.trustfirst-deploy"
+RELEASE_DIR="$DEPLOY_ROOT/releases/$DEPLOY_SHA"
+BACKUP_DIR="$DEPLOY_ROOT/backups/$(date +%Y%m%d%H%M%S)-$DEPLOY_SHA"
 SWITCHED=0
+RESTORING=0
 CAFE_BEFORE=""
 
 log() {
   printf '[trustfirst-deploy] %s\n' "$*"
 }
 
-fail() {
-  log "ERROR: $*"
-  exit 1
+copy_tree() {
+  local source_dir="$1"
+  local target_dir="$2"
+  mkdir -p "$target_dir"
+  (cd "$source_dir" && tar -cf - .) | (cd "$target_dir" && tar -xf -)
 }
 
 cleanup_canary() {
   pm2 delete "$CANARY_NAME" >/dev/null 2>&1 || true
 }
 
+start_production() {
+  cd "$DEPLOY_PATH"
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+  PORT="$PRODUCTION_PORT" pm2 start npm \
+    --name "$PM2_APP_NAME" \
+    --cwd "$DEPLOY_PATH" \
+    --time \
+    --update-env \
+    -- run start --workspace @trustfirst/web -- --hostname 127.0.0.1
+}
+
 restore_previous_release() {
   local reason="$1"
+  local original_status="${2:-1}"
+
+  if [ "$RESTORING" = "1" ]; then
+    log "Rollback re-entry blocked. Manual recovery may be required."
+    exit "$original_status"
+  fi
+
+  RESTORING=1
+  trap - ERR
+  set +e
   log "Production verification failed: $reason"
   cleanup_canary
 
   if [ "$SWITCHED" = "1" ] && [ -d "$BACKUP_DIR" ]; then
     log "Restoring previous TrustFirst release."
     pm2 delete "$PM2_APP_NAME" >/dev/null 2>&1 || true
+    find "$DEPLOY_PATH" -mindepth 1 -maxdepth 1 ! -name storage -exec rm -rf {} +
+    copy_tree "$BACKUP_DIR" "$DEPLOY_PATH"
+    start_production
 
-    rm -rf "$FAILED_DIR"
-    if [ -d "$DEPLOY_PATH" ]; then
-      if [ -d "$DEPLOY_PATH/storage" ]; then
-        rm -rf "$STORAGE_HOLD"
-        mv "$DEPLOY_PATH/storage" "$STORAGE_HOLD"
+    local restored=0
+    for attempt in $(seq 1 45); do
+      if curl --silent --show-error --fail --max-time 3 "http://127.0.0.1:${PRODUCTION_PORT}/api/auth/session" >/dev/null 2>&1; then
+        restored=1
+        break
       fi
-      mv "$DEPLOY_PATH" "$FAILED_DIR"
-    fi
+      sleep 1
+    done
 
-    mv "$BACKUP_DIR" "$DEPLOY_PATH"
-    if [ -d "$STORAGE_HOLD" ]; then
-      rm -rf "$DEPLOY_PATH/storage"
-      mv "$STORAGE_HOLD" "$DEPLOY_PATH/storage"
+    if [ "$restored" = "1" ]; then
+      log "Previous TrustFirst release restored successfully."
+    else
+      log "Previous release was copied back, but runtime health verification failed."
     fi
-
-    cd "$DEPLOY_PATH"
-    set -a
-    # shellcheck disable=SC1090
-    . "$ENV_FILE"
-    set +a
-    PORT="$PRODUCTION_PORT" pm2 start npm \
-      --name "$PM2_APP_NAME" \
-      --cwd "$DEPLOY_PATH" \
-      --time \
-      --update-env \
-      -- run start --workspace @trustfirst/web -- --hostname 127.0.0.1
+  else
+    log "Production was not switched; existing release remains unchanged."
   fi
 
+  exit "$original_status"
+}
+
+fail() {
+  local message="$1"
+  log "ERROR: $message"
+  if [ "$SWITCHED" = "1" ]; then
+    restore_previous_release "$message" 1
+  fi
   exit 1
 }
 
+handle_unexpected_error() {
+  local status="$1"
+  local line="$2"
+  restore_previous_release "Unexpected command failure at line $line." "$status"
+}
+
+trap 'handle_unexpected_error $? $LINENO' ERR
 trap 'cleanup_canary' EXIT
 
 [ "$DEPLOY_PATH" = "/var/www/trustfirst-client-portal" ] || fail "Unexpected deployment path: $DEPLOY_PATH"
@@ -91,10 +126,13 @@ trap 'cleanup_canary' EXIT
 [ "$CANARY_PORT" != "3000" ] || fail "CafeLuxe port 3000 is forbidden."
 [ -f "$ENV_FILE" ] || fail "Missing production environment file: $ENV_FILE"
 [ -f "$DEPLOY_ARCHIVE" ] || fail "Missing uploaded release archive: $DEPLOY_ARCHIVE"
+[ -d "$DEPLOY_PATH" ] || fail "Existing TrustFirst application directory is missing: $DEPLOY_PATH"
+[ -w "$DEPLOY_PATH" ] || fail "Deploy user cannot write to $DEPLOY_PATH"
 command -v node >/dev/null 2>&1 || fail "Node.js is not installed."
 command -v npm >/dev/null 2>&1 || fail "npm is not installed."
 command -v pm2 >/dev/null 2>&1 || fail "PM2 is not installed."
 command -v curl >/dev/null 2>&1 || fail "curl is not installed."
+command -v tar >/dev/null 2>&1 || fail "tar is not installed."
 
 case "$DEPLOY_PATH:$PM2_APP_NAME:$ENV_FILE" in
   *[Cc]afe[Ll]uxe*|*[Cc]afe[Ll]uxesite*) fail "TrustFirst deployment target references CafeLuxe." ;;
@@ -111,13 +149,13 @@ if ss -ltn 2>/dev/null | grep -Eq "[:.]${CANARY_PORT}[[:space:]]"; then
   fi
 fi
 
-rm -rf "$NEXT_DIR"
-mkdir -p "$NEXT_DIR"
-tar -xzf "$DEPLOY_ARCHIVE" -C "$NEXT_DIR"
+rm -rf "$RELEASE_DIR" "$BACKUP_DIR"
+mkdir -p "$RELEASE_DIR" "$BACKUP_DIR"
+tar -xzf "$DEPLOY_ARCHIVE" -C "$RELEASE_DIR"
 rm -f "$DEPLOY_ARCHIVE"
-printf '%s\n' "$DEPLOY_SHA" > "$NEXT_DIR/.trustfirst-deployed-commit"
+printf '%s\n' "$DEPLOY_SHA" > "$RELEASE_DIR/.trustfirst-deployed-commit"
 
-cd "$NEXT_DIR"
+cd "$RELEASE_DIR"
 set -a
 # shellcheck disable=SC1090
 . "$ENV_FILE"
@@ -132,16 +170,17 @@ case "${DATABASE_URL:-}" in
   *) fail "DATABASE_URL must point to the local TrustFirst database." ;;
 esac
 
-log "Installing production dependencies and building release."
+log "Installing dependencies and building isolated release."
 npm ci --include=dev
 npm run deploy:env
 npm run db:generate
 
-MIGRATION_STATUS="$(npm exec --workspace @trustfirst/database -- prisma migrate status --schema prisma/schema.prisma 2>&1)" || {
-  printf '%s\n' "$MIGRATION_STATUS" >&2
-  fail "Prisma migration status failed. No migration was applied."
-}
+set +e
+MIGRATION_STATUS="$(npm exec --workspace @trustfirst/database -- prisma migrate status --schema prisma/schema.prisma 2>&1)"
+MIGRATION_EXIT=$?
+set -e
 printf '%s\n' "$MIGRATION_STATUS"
+[ "$MIGRATION_EXIT" -eq 0 ] || fail "Prisma migration status failed. No migration was applied."
 if printf '%s\n' "$MIGRATION_STATUS" | grep -qi "Following migrations have not yet been applied"; then
   fail "Pending database migrations detected. Deployment stopped without applying them."
 fi
@@ -151,14 +190,14 @@ npm run build
 log "Starting canary on port $CANARY_PORT."
 PORT="$CANARY_PORT" pm2 start npm \
   --name "$CANARY_NAME" \
-  --cwd "$NEXT_DIR" \
+  --cwd "$RELEASE_DIR" \
   --time \
   --update-env \
   -- run start --workspace @trustfirst/web -- --hostname 127.0.0.1
 
 CANARY_READY=0
 for attempt in $(seq 1 45); do
-  if curl --silent --show-error --fail --max-time 3 "http://127.0.0.1:${CANARY_PORT}/api/auth/session" >/dev/null; then
+  if curl --silent --show-error --fail --max-time 3 "http://127.0.0.1:${CANARY_PORT}/api/auth/session" >/dev/null 2>&1; then
     CANARY_READY=1
     break
   fi
@@ -168,55 +207,40 @@ done
 log "Canary health check passed."
 cleanup_canary
 
-rm -rf "$BACKUP_DIR" "$FAILED_DIR" "$STORAGE_HOLD"
-if [ -d "$DEPLOY_PATH" ]; then
-  mv "$DEPLOY_PATH" "$BACKUP_DIR"
-fi
-mv "$NEXT_DIR" "$DEPLOY_PATH"
+log "Creating rollback copy without the persistent storage directory."
+(cd "$DEPLOY_PATH" && tar --exclude='./storage' -cf - .) | (cd "$BACKUP_DIR" && tar -xf -)
 
-if [ -d "$BACKUP_DIR/storage" ]; then
-  mv "$BACKUP_DIR/storage" "$STORAGE_HOLD"
-  rm -rf "$DEPLOY_PATH/storage"
-  mv "$STORAGE_HOLD" "$DEPLOY_PATH/storage"
-fi
 SWITCHED=1
-
-log "Restarting only $PM2_APP_NAME on port $PRODUCTION_PORT."
+log "Switching TrustFirst application files in place."
 pm2 delete "$PM2_APP_NAME" >/dev/null 2>&1 || true
-cd "$DEPLOY_PATH"
-set -a
-# shellcheck disable=SC1090
-. "$ENV_FILE"
-set +a
-PORT="$PRODUCTION_PORT" pm2 start npm \
-  --name "$PM2_APP_NAME" \
-  --cwd "$DEPLOY_PATH" \
-  --time \
-  --update-env \
-  -- run start --workspace @trustfirst/web -- --hostname 127.0.0.1
+find "$DEPLOY_PATH" -mindepth 1 -maxdepth 1 ! -name storage -exec rm -rf {} +
+copy_tree "$RELEASE_DIR" "$DEPLOY_PATH"
+
+log "Starting only $PM2_APP_NAME on port $PRODUCTION_PORT."
+start_production
 
 PRODUCTION_READY=0
 for attempt in $(seq 1 45); do
-  if curl --silent --show-error --fail --max-time 3 "http://127.0.0.1:${PRODUCTION_PORT}/api/auth/session" >/dev/null; then
+  if curl --silent --show-error --fail --max-time 3 "http://127.0.0.1:${PRODUCTION_PORT}/api/auth/session" >/dev/null 2>&1; then
     PRODUCTION_READY=1
     break
   fi
   sleep 1
 done
-[ "$PRODUCTION_READY" = "1" ] || restore_previous_release "Loopback health check failed."
+[ "$PRODUCTION_READY" = "1" ] || fail "Loopback production health check failed."
 
 curl --silent --show-error --fail --max-time 15 "$PRODUCTION_URL/api/auth/session" >/dev/null \
-  || restore_previous_release "ERP domain health check failed."
+  || fail "ERP domain health check failed."
 curl --silent --show-error --fail --max-time 15 "$PUBLIC_URL" >/dev/null \
-  || restore_previous_release "Public Mangalam domain health check failed."
+  || fail "Public Mangalam domain health check failed."
 
 CAFE_AFTER="$(ss -ltnp 2>/dev/null | grep -E '[:.]3000[[:space:]]' || true)"
-[ "$CAFE_AFTER" = "$CAFE_BEFORE" ] || restore_previous_release "CafeLuxe port 3000 listener changed unexpectedly."
+[ "$CAFE_AFTER" = "$CAFE_BEFORE" ] || fail "CafeLuxe port 3000 listener changed unexpectedly."
 
 printf '%s\n' "$DEPLOY_SHA" > "$DEPLOY_PATH/.trustfirst-deployed-commit"
-rm -rf "$BACKUP_DIR"
+rm -rf "$BACKUP_DIR" "$RELEASE_DIR"
 SWITCHED=0
-trap - EXIT
+trap - ERR EXIT
 cleanup_canary
 
 log "Deployment completed successfully."
