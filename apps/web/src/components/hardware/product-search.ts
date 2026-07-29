@@ -71,7 +71,7 @@ export function rankProductSearchEntry(entry: ProductSearchEntry, rawQuery: stri
   if (sku && sku.startsWith(query)) return 1_250;
   if (label.includes(query)) return 1_200;
 
-  const queryTokens = unique(tokenize(query));
+  const queryTokens = unique(query.split(" ").filter(Boolean));
   const candidateTokens = buildCandidateTokens(entry);
   if (!queryTokens.length || !candidateTokens.length) return 0;
 
