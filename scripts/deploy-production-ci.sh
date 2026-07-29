@@ -58,6 +58,13 @@ trustfirst_process_name() {
   esac
 }
 
+old_runtime_uses_deploy_path() {
+  case "$OLD_PM2_CWD" in
+    "$DEPLOY_PATH"|"$DEPLOY_PATH"/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 copy_tree() {
   local source_dir="$1"
   local target_dir="$2"
@@ -67,6 +74,18 @@ copy_tree() {
 
 cleanup_canary() {
   pm2 delete "$CANARY_NAME" >/dev/null 2>&1 || true
+}
+
+cleanup_staging() {
+  case "$RELEASE_DIR" in
+    "$DEPLOY_ROOT"/releases/*) rm -rf "$RELEASE_DIR" ;;
+    *) log "Refusing unsafe release cleanup path: $RELEASE_DIR" ;;
+  esac
+
+  case "$BACKUP_DIR" in
+    "$DEPLOY_ROOT"/backups/*) rm -rf "$BACKUP_DIR" ;;
+    *) log "Refusing unsafe backup cleanup path: $BACKUP_DIR" ;;
+  esac
 }
 
 start_production() {
@@ -227,8 +246,8 @@ stop_existing_runtime_for_switch() {
 
   if [ "$OLD_PM2_NAME" != "$PM2_APP_NAME" ]; then
     log "Stopping and retaining existing TrustFirst PM2 process id=$OLD_PM2_ID for rollback."
-    pm2 stop "$OLD_PM2_ID"
     OLD_PM2_RETAINED=1
+    pm2 stop "$OLD_PM2_ID"
   else
     log "Deleting existing canonical TrustFirst PM2 process id=$OLD_PM2_ID; file backup will provide rollback."
     pm2 delete "$OLD_PM2_ID"
@@ -257,9 +276,11 @@ finalize_old_runtime() {
 restore_previous_release() {
   local reason="$1"
   local original_status="${2:-1}"
+  local rollback_started=0
 
   if [ "$RESTORING" = "1" ]; then
     log "Rollback re-entry blocked. Manual recovery may be required."
+    cleanup_staging
     exit "$original_status"
   fi
 
@@ -270,37 +291,51 @@ restore_previous_release() {
   cleanup_canary
   pm2 delete "$PM2_APP_NAME" >/dev/null 2>&1 || true
 
-  if [ "$SWITCHED" = "1" ] && [ -d "$BACKUP_DIR" ]; then
-    log "Restoring previous TrustFirst application files."
-    find "$DEPLOY_PATH" -mindepth 1 -maxdepth 1 ! -name storage -exec rm -rf {} +
-    copy_tree "$BACKUP_DIR" "$DEPLOY_PATH"
-
-    if [ "$OLD_PM2_RETAINED" = "1" ] && [ -n "$OLD_PM2_ID" ] && pm2 describe "$OLD_PM2_ID" >/dev/null 2>&1; then
-      log "Restarting retained previous TrustFirst PM2 process id=$OLD_PM2_ID."
+  if [ "$SWITCHED" = "1" ]; then
+    if [ "$OLD_PM2_RETAINED" = "1" ] && [ -n "$OLD_PM2_ID" ] && \
+       ! old_runtime_uses_deploy_path && pm2 describe "$OLD_PM2_ID" >/dev/null 2>&1; then
+      log "Restarting retained external TrustFirst PM2 process id=$OLD_PM2_ID."
       pm2 restart "$OLD_PM2_ID"
+      rollback_started=1
+    elif [ -d "$BACKUP_DIR" ]; then
+      log "Restoring previous TrustFirst application files."
+      find "$DEPLOY_PATH" -mindepth 1 -maxdepth 1 ! -name storage -exec rm -rf {} +
+      copy_tree "$BACKUP_DIR" "$DEPLOY_PATH"
+
+      if [ "$OLD_PM2_RETAINED" = "1" ] && [ -n "$OLD_PM2_ID" ] && \
+         pm2 describe "$OLD_PM2_ID" >/dev/null 2>&1; then
+        log "Restarting retained previous TrustFirst PM2 process id=$OLD_PM2_ID."
+        pm2 restart "$OLD_PM2_ID"
+      else
+        log "Starting restored canonical TrustFirst release."
+        start_production
+      fi
+      rollback_started=1
     else
-      log "Starting restored canonical TrustFirst release."
-      start_production
+      log "No rollback file copy exists and no retained external TrustFirst runtime is available."
     fi
 
-    local restored=0
-    for attempt in $(seq 1 45); do
-      if curl --silent --show-error --fail --max-time 3 "http://127.0.0.1:${PRODUCTION_PORT}/api/auth/session" >/dev/null 2>&1; then
-        restored=1
-        break
-      fi
-      sleep 1
-    done
+    if [ "$rollback_started" = "1" ]; then
+      local restored=0
+      for attempt in $(seq 1 45); do
+        if curl --silent --show-error --fail --max-time 3 "http://127.0.0.1:${PRODUCTION_PORT}/api/auth/session" >/dev/null 2>&1; then
+          restored=1
+          break
+        fi
+        sleep 1
+      done
 
-    if [ "$restored" = "1" ]; then
-      log "Previous TrustFirst release restored successfully."
-    else
-      log "Rollback actions completed, but runtime health verification failed."
+      if [ "$restored" = "1" ]; then
+        log "Previous TrustFirst release restored successfully."
+      else
+        log "Rollback actions completed, but runtime health verification failed."
+      fi
     fi
   else
     log "Production was not switched; existing release remains unchanged."
   fi
 
+  cleanup_staging
   exit "$original_status"
 }
 
@@ -310,6 +345,7 @@ fail() {
   if [ "$SWITCHED" = "1" ]; then
     restore_previous_release "$message" 1
   fi
+  cleanup_staging
   exit 1
 }
 
@@ -367,7 +403,7 @@ if ss -ltn 2>/dev/null | grep -Eq "[:.]${CANARY_PORT}[[:space:]]"; then
 fi
 
 rm -rf "$RELEASE_DIR" "$BACKUP_DIR"
-mkdir -p "$RELEASE_DIR" "$BACKUP_DIR"
+mkdir -p "$RELEASE_DIR"
 tar -xzf "$DEPLOY_ARCHIVE" -C "$RELEASE_DIR"
 rm -f "$DEPLOY_ARCHIVE"
 printf '%s\n' "$DEPLOY_SHA" > "$RELEASE_DIR/.trustfirst-deployed-commit"
@@ -424,8 +460,13 @@ done
 log "Canary health check passed."
 cleanup_canary
 
-log "Creating rollback copy without the persistent storage directory."
-(cd "$DEPLOY_PATH" && tar --exclude='./storage' -cf - .) | (cd "$BACKUP_DIR" && tar -xf -)
+if [ -n "$OLD_PM2_ID" ] && old_runtime_uses_deploy_path; then
+  log "Creating rollback copy for the existing TrustFirst runtime in the deployment path."
+  mkdir -p "$BACKUP_DIR"
+  (cd "$DEPLOY_PATH" && tar --exclude='./storage' -cf - .) | (cd "$BACKUP_DIR" && tar -xf -)
+else
+  log "Retaining the existing external TrustFirst runtime for rollback; duplicate file copy skipped."
+fi
 
 SWITCHED=1
 stop_existing_runtime_for_switch
@@ -457,7 +498,7 @@ CAFE_AFTER="$(ss -ltnp 2>/dev/null | grep -E '[:.]3000[[:space:]]' || true)"
 
 printf '%s\n' "$DEPLOY_SHA" > "$DEPLOY_PATH/.trustfirst-deployed-commit"
 finalize_old_runtime
-rm -rf "$BACKUP_DIR" "$RELEASE_DIR"
+cleanup_staging
 SWITCHED=0
 trap - ERR EXIT
 cleanup_canary
