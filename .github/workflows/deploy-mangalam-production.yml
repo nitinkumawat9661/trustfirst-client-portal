@@ -175,7 +175,13 @@ jobs:
           echo "PREFLIGHT_PATH=$PATH"
           check user_matches test "$(id -un)" = "$EXPECTED_USER"
           check app_directory_exists test -d "$APP_DIR"
-          check app_directory_writable test -w "$APP_DIR"
+          if [ -w "$APP_DIR" ]; then
+            echo "PREFLIGHT_OK:app_directory_writable"
+          else
+            check sudo_available command -v sudo
+            check passwordless_sudo sudo -n true
+            echo "PREFLIGHT_OK:app_directory_repairable_via_sudo"
+          fi
           check env_file_readable test -r /etc/trustfirst-client-portal.env
           check node_available command -v node
           check npm_available command -v npm
