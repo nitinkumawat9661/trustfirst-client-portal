@@ -23,6 +23,7 @@ export function CreatableCombobox({
   disabled,
   label,
   onCreate,
+  onQueryChange,
   onSelect,
   options,
   placeholder,
@@ -31,7 +32,8 @@ export function CreatableCombobox({
   createLabel?: string;
   disabled?: boolean;
   label: string;
-  onCreate: (name: string) => void;
+  onCreate?: ((name: string) => void) | undefined;
+  onQueryChange?: ((query: string) => void) | undefined;
   onSelect: (id: string) => void;
   options: CreatableComboboxOption[];
   placeholder?: string;
@@ -134,6 +136,7 @@ export function CreatableCombobox({
           setOpen(true);
           setActiveIndex(0);
           onSelect("");
+          onQueryChange?.(event.target.value);
         }}
         onFocus={() => {
           setQuery(value);
@@ -160,7 +163,7 @@ export function CreatableCombobox({
           event.preventDefault();
           const selected = matches[activeIndex] ?? matches[0];
           if (selected) select(selected.id);
-          else if (normalizedQuery && !exactMatch) onCreate(query.trim());
+          else if (onCreate && normalizedQuery && !exactMatch) onCreate(query.trim());
         }}
       />
       {showPanel ? (
@@ -177,7 +180,7 @@ export function CreatableCombobox({
                   {categories.map((category) => <option key={category} value={category}>{category}</option>)}
                 </select>
               </div>
-              {!normalizedQuery ? <p className="text-xs text-muted-foreground">Favorites and recently billed products appear first. Search by name, SKU, part number, barcode, brand, category, size, or price.</p> : null}
+              {!normalizedQuery ? <p className="text-xs text-muted-foreground">Favorites and recently billed products appear first. Search by name, SKU, model, brand, category, size, colour, or price—even with spelling mistakes.</p> : null}
               {categories.slice(0, 6).length ? (
                 <div className="flex flex-wrap gap-1">
                   {categories.slice(0, 6).map((category) => (
@@ -205,7 +208,7 @@ export function CreatableCombobox({
                   {product ? (
                     <>
                       <span className="mt-0.5 block text-xs text-muted-foreground">{[product.brandName, product.categoryName, product.sku].filter(Boolean).join(" • ")}</span>
-                      <span className="mt-0.5 block text-xs">{money(product.salesPriceCents)} • Stock {product.currentStock} {product.unitCode ?? "PCS"}{product.barcode ? ` • ${product.barcode}` : ""}</span>
+                      <span className="mt-0.5 block text-xs">{money(product.salesPriceCents)} • Stock {product.currentStock} {product.unitCode ?? "PCS"}</span>
                     </>
                   ) : option.keywords?.length ? <span className="block text-xs text-muted-foreground">{option.keywords.filter(Boolean).join(" • ")}</span> : null}
                 </button>
@@ -218,7 +221,7 @@ export function CreatableCombobox({
             );
           })}
           {!matches.length ? <p className="px-2 py-3 text-sm text-muted-foreground">No matching product found.</p> : null}
-          {normalizedQuery && !exactMatch ? (
+          {onCreate && normalizedQuery && !exactMatch ? (
             <Button className="mt-1 w-full justify-start" onMouseDown={(event) => event.preventDefault()} onClick={() => onCreate(query.trim())} size="sm" type="button" variant="ghost">
               <Plus className="size-4" />{createLabel} &quot;{query.trim()}&quot;
             </Button>
@@ -232,18 +235,15 @@ export function CreatableCombobox({
 function rankOption(option: CreatableComboboxOption, query: string, product: ProductSearchMetadata | undefined) {
   const label = normalize(option.label);
   const sku = normalize(product?.sku ?? option.keywords?.[0] ?? "");
-  const barcode = normalize(product?.barcode ?? option.keywords?.[1] ?? "");
   const brand = normalize(product?.brandName ?? "");
   const category = normalize(product?.categoryName ?? "");
   const price = product ? String(product.salesPriceCents / 100) : "";
-  const haystack = [label, sku, barcode, brand, category, price, ...(option.keywords ?? []).map(normalize)].join(" ");
+  const haystack = [label, sku, brand, category, price, ...(option.keywords ?? []).map(normalize)].join(" ");
   const tokens = query.split(" ").filter(Boolean);
-  if (barcode && barcode === query) return 1200;
   if (sku && sku === query) return 1150;
   if (label === query) return 1100;
   if (label.startsWith(query)) return 1000;
   if (sku.startsWith(query)) return 950;
-  if (barcode.startsWith(query)) return 925;
   if (tokens.every((token) => haystack.includes(token))) return 800 + tokens.length;
   if (haystack.includes(query)) return 700;
   return 0;

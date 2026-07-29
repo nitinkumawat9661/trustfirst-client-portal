@@ -28,7 +28,7 @@ export function HardwareProductCombobox({
   value,
 }: {
   label: string;
-  onCreate: (name: string) => void;
+  onCreate?: ((name: string) => void) | undefined;
   onQueryChange: (query: string) => void;
   onSelect: (product: HardwareProductSummary) => void;
   products: HardwareProductSummary[];
@@ -147,7 +147,7 @@ export function HardwareProductCombobox({
 
   const exactName = products.some((product) => normalizeProductSearchText(product.name) === normalizedQuery);
   const strongMatch = isStrongProductSearchMatch(topMatchScore);
-  const showCreateAction = Boolean(normalizedQuery) && !exactName && !strongMatch;
+  const showCreateAction = Boolean(onCreate && normalizedQuery) && !exactName && !strongMatch;
   const displayLabel = label.replace(/\s*\/\s*barcode/giu, "");
 
   return (
@@ -194,7 +194,7 @@ export function HardwareProductCombobox({
           event.preventDefault();
           const product = results[activeIndex] ?? results[0];
           if (product) select(product);
-          else if (showCreateAction) onCreate(query.trim());
+          else if (showCreateAction) onCreate?.(query.trim());
         }}
       />
 
@@ -296,7 +296,7 @@ export function HardwareProductCombobox({
               <Button
                 className="mt-1 w-full justify-start"
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => onCreate(query.trim())}
+                onClick={() => onCreate?.(query.trim())}
                 size="sm"
                 type="button"
                 variant="ghost"

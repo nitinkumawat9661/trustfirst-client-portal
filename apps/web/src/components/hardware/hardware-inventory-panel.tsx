@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import type { HardwareMovementSummary, HardwareProductSummary } from "@/server/hardware";
+import { HardwareProductCombobox } from "./hardware-product-combobox";
 import { postHardwareJson } from "./hardware-api-client";
 
 type LocationOption = { code: string; id: string; name: string };
@@ -45,6 +46,7 @@ export function HardwareInventoryPanel({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [locationOpen, setLocationOpen] = useState(locations.length === 0);
+  const [productName, setProductName] = useState("");
   const movementForm = useForm<z.infer<typeof movementSchema>>({
     defaultValues: { locationId: locations[0]?.id ?? "", notes: "", productId: "", quantity: 1, type: "STOCK_IN" },
     resolver: zodResolver(movementSchema),
@@ -72,7 +74,8 @@ export function HardwareInventoryPanel({
       setError(result.message);
       return;
     }
-    movementForm.reset({ ...values, notes: "", quantity: 1 });
+    movementForm.reset({ ...values, notes: "", productId: "", quantity: 1 });
+    setProductName("");
     router.refresh();
   }
 
@@ -102,12 +105,31 @@ export function HardwareInventoryPanel({
                   <option value="ADJUSTMENT">Set absolute stock level</option>
                 </select>
               </Field>
-              <Field error={movementForm.formState.errors.productId?.message} label="Product">
-                <select className={selectClassName} {...movementForm.register("productId")}>
-                  <option value="">Select product</option>
-                  {products.map((product) => <option key={product.id} value={product.id}>{product.name} ({product.sku})</option>)}
-                </select>
-              </Field>
+              <div>
+                <input type="hidden" {...movementForm.register("productId")} />
+                <HardwareProductCombobox
+                  label="Product"
+                  onQueryChange={(query) => {
+                    setProductName(query);
+                    movementForm.setValue("productId", "", { shouldValidate: Boolean(query) });
+                  }}
+                  onSelect={(product) => {
+                    setProductName(product.name);
+                    movementForm.setValue("productId", product.id, { shouldDirty: true, shouldValidate: true });
+                  }}
+                  products={products}
+                  storageKey="trustfirst.hardware.inventory.product-search"
+                  value={productName}
+                />
+                {movementForm.formState.errors.productId?.message ? (
+                  <span className="mt-1 block text-xs font-normal text-red-700">
+                    {movementForm.formState.errors.productId.message}
+                  </span>
+                ) : null}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Typing mistakes, partial names, and words in any order are supported. Products cannot be created here.
+                </p>
+              </div>
               <Field error={movementForm.formState.errors.locationId?.message} label="Location / godown">
                 <select className={selectClassName} {...movementForm.register("locationId")}>
                   <option value="">Select location</option>

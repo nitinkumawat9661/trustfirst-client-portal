@@ -30,7 +30,7 @@ export function HardwareTradeList({
               <div className="flex flex-wrap items-center gap-2">
                 <FileText aria-hidden className="size-4 text-muted-foreground" />
                 <p className="font-medium">{document.documentNumber}</p>
-                <Badge>{document.type.toLowerCase().replaceAll("_", " ")}</Badge>
+                <Badge>{document.type === "SALES_QUOTATION" ? "estimate bill" : document.type.toLowerCase().replaceAll("_", " ")}</Badge>
                 <Badge>{document.status.toLowerCase()}</Badge>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">

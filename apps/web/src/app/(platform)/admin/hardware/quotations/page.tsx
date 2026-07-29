@@ -19,8 +19,15 @@ export default async function HardwareQuotationsPage() {
   ]);
   return (
     <div className="space-y-6">
-      <HardwarePageHeader actionHref="/admin/hardware/quotations/new" actionIcon={Plus} actionLabel="New quotation" description="Create a draft, finalize it, then convert the approved quotation to a sale." eyebrow="Sales" title="Quotations" />
-      <HardwareTradeList documents={documents} emptyMessage="No quotations have been created." locations={locations} title="Quotation history" />
+      <HardwarePageHeader
+        actionHref="/admin/hardware/quotations/new"
+        actionIcon={Plus}
+        actionLabel="New Estimate Bill"
+        description="Create and save a GST-free estimate, then print or reprint it directly. Estimates do not move stock."
+        eyebrow="Sales"
+        title="Estimate Bills"
+      />
+      <HardwareTradeList documents={documents} emptyMessage="No Estimate Bills have been created." locations={locations} title="Estimate Bill history" />
     </div>
   );
 }

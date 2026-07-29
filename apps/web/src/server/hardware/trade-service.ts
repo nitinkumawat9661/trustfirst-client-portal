@@ -340,6 +340,7 @@ export class HardwareTradeService {
             };
           }) as Prisma.InputJsonValue,
           metadata: {
+            customerAddress: input.customerAddress ?? null,
             idempotencyKey: input.idempotencyKey,
             invoiceDiscountCents,
             notes: input.notes ?? null,
@@ -388,6 +389,7 @@ export class HardwareTradeService {
             }),
           },
           metadata: {
+            customerAddress: input.customerAddress ?? null,
             idempotencyKey: input.idempotencyKey,
             invoiceDiscountCents,
             notes: input.notes ?? null,

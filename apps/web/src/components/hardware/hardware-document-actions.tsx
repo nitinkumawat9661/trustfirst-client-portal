@@ -38,10 +38,10 @@ export function HardwareDocumentActions({
       (action === "confirm" || action === "convert") &&
       !window.confirm(
         action === "convert"
-          ? `Convert ${document.documentNumber} into a new sales order?`
+          ? `Convert Estimate Bill ${document.documentNumber} into a new sales order?`
           : isStockDocument
             ? `Confirm ${document.documentNumber} and post its stock movement?`
-            : `Finalize ${document.documentNumber}?`,
+            : `Finalize Estimate Bill ${document.documentNumber}?`,
       )
     ) {
       return;
@@ -116,7 +116,7 @@ export function HardwareDocumentActions({
             type="button"
             variant="outline"
           >
-            <Check className="size-4" />{isQuotation ? "Finalize" : "Confirm"}
+            <Check className="size-4" />{isQuotation ? "Finalize estimate" : "Confirm"}
           </Button>
         ) : null}
         {isQuotation && document.status === "CONFIRMED" ? (
@@ -135,7 +135,7 @@ export function HardwareDocumentActions({
           </Button>
         ) : null}
         <Button asChild size="sm" variant="ghost">
-          <Link href={`/admin/hardware/print/${document.id}`} target="_blank"><Printer className="size-4" />Print preview</Link>
+          <Link href={`/admin/hardware/print/${document.id}`} target="_blank"><Printer className="size-4" />{isQuotation ? "Print Estimate Bill" : "Print preview"}</Link>
         </Button>
       </div>
       {error ? <p className="text-xs text-red-700" role="alert">{error}</p> : null}

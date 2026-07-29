@@ -2,23 +2,26 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@trustfirst/ui";
-import { Plus, Save, ScanLine, Trash2 } from "lucide-react";
+import { Plus, Save, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import type { HardwarePartySummary, HardwareProductSummary } from "@/server/hardware";
+import { CreatableCombobox } from "./creatable-combobox";
+import { HardwareProductCombobox } from "./hardware-product-combobox";
 import { postHardwareJson } from "./hardware-api-client";
+import { normalizeProductSearchText } from "./product-search";
 
 const numericString = z.string().refine((value) => value !== "" && Number.isFinite(Number(value)) && Number(value) >= 0, {
   message: "Enter a valid non-negative number.",
 });
 
 const tradeFormSchema = z.object({
+  customerAddress: z.string().max(1000),
   documentDate: z.string().min(1, "Date is required."),
   documentType: z.enum(["PURCHASE_ENTRY", "PURCHASE_ORDER", "SALES_ORDER", "SALES_QUOTATION", "SUPPLIER_BILL"]),
   items: z.array(z.object({
-    barcode: z.string(),
     discountPercent: z.string().refine((value) => Number(value) >= 0 && Number(value) <= 100, {
       message: "Use 0 to 100.",
     }),
@@ -27,13 +30,14 @@ const tradeFormSchema = z.object({
     }),
     hsnCode: z.string(),
     productId: z.string().min(1, "Select a product."),
+    productName: z.string(),
     quantity: z.string().refine((value) => Number.isInteger(Number(value)) && Number(value) > 0, {
       message: "Quantity must be a positive whole number.",
     }),
     unitCode: z.string(),
     unitRate: numericString,
   })).min(1),
-  partyId: z.string().min(1, "Select a party."),
+  partyId: z.string(),
   paidAmount: z.string().refine((value) => value === "" || Number(value) >= 0, {
     message: "Paid amount must be zero or higher.",
   }),
@@ -49,11 +53,11 @@ type TradeFormValues = z.infer<typeof tradeFormSchema>;
 type TradeMode = "purchase" | "quotation" | "sale";
 
 const emptyItem = {
-  barcode: "",
   discountPercent: "0",
   gstRate: "0",
   hsnCode: "",
   productId: "",
+  productName: "",
   quantity: "1",
   unitCode: "",
   unitRate: "",
@@ -69,6 +73,8 @@ export function HardwareTradeForm({
   products: HardwareProductSummary[];
 }) {
   const router = useRouter();
+  const [availableParties, setAvailableParties] = useState(parties);
+  const [partyName, setPartyName] = useState("");
   const [serverError, setServerError] = useState<string | null>(null);
   const {
     control,
@@ -78,6 +84,7 @@ export function HardwareTradeForm({
     setValue,
   } = useForm<TradeFormValues>({
     defaultValues: {
+      customerAddress: "",
       documentDate: new Date().toISOString().slice(0, 10),
       documentType: defaultDocumentType(mode),
       items: [{ ...emptyItem }],
@@ -93,71 +100,119 @@ export function HardwareTradeForm({
   const { append, fields, remove } = useFieldArray({ control, name: "items" });
   const watchedItems = useWatch({ control, name: "items" });
   const watchedRoundOff = useWatch({ control, name: "roundOff" });
-  const totals = useMemo(() => calculatePreview(watchedItems, watchedRoundOff), [watchedItems, watchedRoundOff]);
+  const totals = useMemo(
+    () => calculatePreview(watchedItems, watchedRoundOff, mode === "quotation"),
+    [mode, watchedItems, watchedRoundOff],
+  );
   const disabledReason =
     products.length === 0
       ? "Add at least one verified product before creating a document."
-      : parties.length === 0
-        ? `Add at least one ${mode === "purchase" ? "supplier" : "customer"} before creating a document.`
+      : mode === "purchase" && parties.length === 0
+        ? "Add at least one supplier before creating a purchase document."
         : null;
 
-  function applyProduct(index: number, productId: string) {
-    const product = products.find((candidate) => candidate.id === productId);
-    if (!product) return;
+  function applyProduct(index: number, product: HardwareProductSummary) {
     const rateCents = mode === "purchase" ? product.purchaseCostCents : product.salesPriceCents;
-    setValue(`items.${index}.barcode`, product.barcode ?? "");
-    setValue(`items.${index}.gstRate`, product.gstRateBps === null ? "0" : String(product.gstRateBps / 100));
+    setValue(`items.${index}.productId`, product.id, { shouldDirty: true, shouldValidate: true });
+    setValue(`items.${index}.productName`, product.name, { shouldDirty: true });
+    setValue(
+      `items.${index}.gstRate`,
+      mode === "purchase" && product.gstRateBps !== null ? String(product.gstRateBps / 100) : "0",
+      { shouldDirty: true },
+    );
     setValue(`items.${index}.hsnCode`, product.hsnCode ?? "");
     setValue(`items.${index}.unitCode`, product.unitCode ?? "");
     setValue(`items.${index}.unitRate`, rateCents ? String(rateCents / 100) : "");
   }
 
-  function applyBarcode(index: number, barcode: string) {
-    const product = products.find((candidate) => candidate.barcode === barcode.trim());
-    if (!product) return;
-    setValue(`items.${index}.productId`, product.id, { shouldValidate: true });
-    applyProduct(index, product.id);
+  function updateProductQuery(index: number, query: string) {
+    setValue(`items.${index}.productName`, query, { shouldDirty: true });
+    setValue(`items.${index}.productId`, "", { shouldDirty: true, shouldValidate: Boolean(query) });
+  }
+
+  async function resolveCustomerId(values: TradeFormValues) {
+    if (mode === "purchase") return values.partyId;
+    if (values.partyId) return values.partyId;
+
+    const normalizedName = normalizeProductSearchText(partyName);
+    if (!normalizedName) {
+      throw new Error("Enter or select a customer name.");
+    }
+
+    const exact = availableParties.find(
+      (party) => normalizeProductSearchText(party.name) === normalizedName,
+    );
+    if (exact) return exact.id;
+
+    const created = await postHardwareJson<HardwarePartySummary>("/api/hardware/parties/quick-add", {
+      name: partyName.trim(),
+      role: "customer",
+    });
+    if (!created.ok) throw new Error(created.message);
+
+    setAvailableParties((current) => [created.data, ...current]);
+    setPartyName(created.data.name);
+    setValue("partyId", created.data.id, { shouldDirty: true });
+    return created.data.id;
   }
 
   async function onSubmit(values: TradeFormValues) {
     setServerError(null);
-    const endpoint = mode === "purchase" ? "/api/hardware/purchases" : "/api/hardware/sales";
-    const payload = {
-      currency: "INR",
-      ...(mode === "purchase" ? { supplierId: values.partyId } : { customerId: values.partyId }),
-      items: values.items.map((item) => {
-        const grossCents = Math.round(Number(item.quantity) * Number(item.unitRate) * 100);
-        const discountCents = Math.round(grossCents * Number(item.discountPercent) / 100);
-        return {
-          discountCents,
-          metadata: {
-            discountPercent: Number(item.discountPercent),
-            hsnCode: item.hsnCode || null,
-            unitCode: item.unitCode || null,
-          },
-          productId: item.productId,
-          quantity: Number(item.quantity),
-          taxRateBps: Math.round(Number(item.gstRate) * 100),
-          unitAmountCents: Math.round(Number(item.unitRate) * 100),
-        };
-      }),
-      metadata: {
-        documentDate: values.documentDate,
-        paidAmountCents: mode === "purchase" ? Math.round(Number(values.paidAmount || 0) * 100) : undefined,
-        paymentMode: values.paymentMode,
-        referenceNumber: values.referenceNumber || null,
-        taxMode: values.taxMode,
-      },
-      roundOffCents: Math.round(Number(values.roundOff || 0) * 100),
-      type: values.documentType,
-    };
-    const result = await postHardwareJson<{ documentNumber?: string }>(endpoint, payload);
-    if (!result.ok) {
-      setServerError(result.message);
-      return;
+    try {
+      const partyId = await resolveCustomerId(values);
+      if (!partyId) {
+        setServerError(mode === "purchase" ? "Select a supplier." : "Enter or select a customer name.");
+        return;
+      }
+
+      const endpoint = mode === "purchase" ? "/api/hardware/purchases" : "/api/hardware/sales";
+      const payload = {
+        currency: "INR",
+        ...(mode === "purchase" ? { supplierId: partyId } : { customerId: partyId }),
+        items: values.items.map((item) => {
+          const grossCents = Math.round(Number(item.quantity) * Number(item.unitRate) * 100);
+          const discountCents = Math.round(grossCents * Number(item.discountPercent) / 100);
+          return {
+            discountCents,
+            metadata: {
+              discountPercent: Number(item.discountPercent),
+              hsnCode: item.hsnCode || null,
+              unitCode: item.unitCode || null,
+            },
+            productId: item.productId,
+            quantity: Number(item.quantity),
+            taxRateBps: mode === "quotation" ? 0 : Math.round(Number(item.gstRate) * 100),
+            unitAmountCents: Math.round(Number(item.unitRate) * 100),
+          };
+        }),
+        metadata: {
+          customerAddress: mode === "purchase" ? undefined : values.customerAddress.trim() || null,
+          documentDate: values.documentDate,
+          estimateBill: mode === "quotation",
+          gstFree: mode === "quotation",
+          paidAmountCents: mode === "purchase" ? Math.round(Number(values.paidAmount || 0) * 100) : undefined,
+          paymentMode: values.paymentMode,
+          referenceNumber: values.referenceNumber || null,
+          taxMode: mode === "quotation" ? "gst-free" : values.taxMode,
+        },
+        roundOffCents: Math.round(Number(values.roundOff || 0) * 100),
+        type: values.documentType,
+      };
+      const result = await postHardwareJson<{ documentNumber: string; id: string }>(endpoint, payload);
+      if (!result.ok) {
+        setServerError(result.message);
+        return;
+      }
+
+      if (mode === "quotation") {
+        router.push(`/admin/hardware/print/${result.data.id}?print=1`);
+      } else {
+        router.push(mode === "purchase" ? "/admin/hardware/purchases?created=1" : "/admin/hardware/sales?created=1");
+      }
+      router.refresh();
+    } catch (error) {
+      setServerError(error instanceof Error ? error.message : "Unable to save this document.");
     }
-    router.push(mode === "purchase" ? "/admin/hardware/purchases?created=1" : mode === "quotation" ? "/admin/hardware/quotations?created=1" : "/admin/hardware/sales?created=1");
-    router.refresh();
   }
 
   return (
@@ -170,12 +225,48 @@ export function HardwareTradeForm({
       <Card>
         <CardHeader><CardTitle>{documentTitle(mode)}</CardTitle></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <FormField error={errors.partyId?.message} label={mode === "purchase" ? "Supplier" : "Customer"} required>
-            <select className={selectClassName} {...register("partyId")}>
-              <option value="">Select {mode === "purchase" ? "supplier" : "customer"}</option>
-              {parties.map((party) => <option key={party.id} value={party.id}>{party.name}</option>)}
-            </select>
-          </FormField>
+          {mode === "purchase" ? (
+            <FormField label="Supplier" required>
+              <select className={selectClassName} {...register("partyId")}>
+                <option value="">Select supplier</option>
+                {availableParties.map((party) => <option key={party.id} value={party.id}>{party.name}</option>)}
+              </select>
+            </FormField>
+          ) : (
+            <>
+              <div className="xl:col-span-2">
+                <input type="hidden" {...register("partyId")} />
+                <CreatableCombobox
+                  label="Customer"
+                  onQueryChange={(query) => {
+                    setPartyName(query);
+                    const exact = availableParties.find(
+                      (party) => normalizeProductSearchText(party.name) === normalizeProductSearchText(query),
+                    );
+                    setValue("partyId", exact?.id ?? "", { shouldDirty: true });
+                  }}
+                  onSelect={(id) => {
+                    const selected = availableParties.find((party) => party.id === id);
+                    setValue("partyId", id, { shouldDirty: true });
+                    setPartyName(selected?.name ?? "");
+                  }}
+                  options={availableParties.map((party) => ({
+                    id: party.id,
+                    keywords: [party.contact ?? ""],
+                    label: party.name,
+                  }))}
+                  placeholder="Select existing or type a new customer name"
+                  value={partyName}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  A new customer is created automatically with name only when no exact existing name is found.
+                </p>
+              </div>
+              <FormField error={errors.customerAddress?.message} label="Address">
+                <Input autoComplete="street-address" placeholder="Address for this document" {...register("customerAddress")} />
+              </FormField>
+            </>
+          )}
           <FormField error={errors.documentDate?.message} label="Document date" required>
             <Input type="date" {...register("documentDate")} />
           </FormField>
@@ -191,12 +282,19 @@ export function HardwareTradeForm({
               </select>
             </FormField>
           ) : null}
-          <FormField label="Tax treatment">
-            <select className={selectClassName} {...register("taxMode")}>
-              <option value="intra-state">Intra-state (CGST + SGST)</option>
-              <option value="inter-state">Inter-state (IGST)</option>
-            </select>
-          </FormField>
+          {mode !== "quotation" ? (
+            <FormField label="Tax treatment">
+              <select className={selectClassName} {...register("taxMode")}>
+                <option value="intra-state">Intra-state (CGST + SGST)</option>
+                <option value="inter-state">Inter-state (IGST)</option>
+              </select>
+            </FormField>
+          ) : (
+            <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
+              <p className="font-medium">GST-free Estimate Bill</p>
+              <p className="mt-1 text-xs text-muted-foreground">GST is fixed at 0% and no stock movement is posted.</p>
+            </div>
+          )}
           {mode !== "quotation" ? (
             <FormField label="Payment mode">
               <select className={selectClassName} {...register("paymentMode")}>
@@ -214,42 +312,34 @@ export function HardwareTradeForm({
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
-          <CardTitle>Line items</CardTitle>
+          <div>
+            <CardTitle>Line items</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Search tolerates spelling mistakes, partial words, and words in any order. Products cannot be created here.
+            </p>
+          </div>
           <Button onClick={() => append({ ...emptyItem })} size="sm" type="button" variant="outline"><Plus className="size-4" />Add line</Button>
         </CardHeader>
         <CardContent className="space-y-4">
           {fields.map((field, index) => (
             <fieldset className="grid gap-3 rounded-md border border-border p-3 lg:grid-cols-12" key={field.id}>
               <legend className="px-1 text-xs font-semibold text-muted-foreground">Item {index + 1}</legend>
-              <div className="lg:col-span-2">
-                <FormField label="Barcode">
-                  <div className="relative">
-                    <ScanLine className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
-                    <Input
-                      className="pl-9"
-                      {...register(`items.${index}.barcode`)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          applyBarcode(index, event.currentTarget.value);
-                        }
-                      }}
-                    />
-                  </div>
-                </FormField>
-              </div>
-              <div className="lg:col-span-3">
-                <FormField error={errors.items?.[index]?.productId?.message} label="Product" required>
-                  <select
-                    className={selectClassName}
-                    {...register(`items.${index}.productId`, {
-                      onChange: (event) => applyProduct(index, event.target.value),
-                    })}
-                  >
-                    <option value="">Select product</option>
-                    {products.map((product) => <option key={product.id} value={product.id}>{product.name} ({product.sku})</option>)}
-                  </select>
-                </FormField>
+              <div className="lg:col-span-4">
+                <input type="hidden" {...register(`items.${index}.productId`)} />
+                <input type="hidden" {...register(`items.${index}.productName`)} />
+                <HardwareProductCombobox
+                  label="Product"
+                  onQueryChange={(query) => updateProductQuery(index, query)}
+                  onSelect={(product) => applyProduct(index, product)}
+                  products={products}
+                  storageKey={`trustfirst.hardware.${mode}.product-search`}
+                  value={watchedItems?.[index]?.productName ?? ""}
+                />
+                {errors.items?.[index]?.productId?.message ? (
+                  <span className="mt-1 block text-xs font-normal text-red-700">
+                    {errors.items?.[index]?.productId?.message}
+                  </span>
+                ) : null}
               </div>
               <div className="lg:col-span-1">
                 <FormField error={errors.items?.[index]?.quantity?.message} label="Qty" required>
@@ -269,17 +359,23 @@ export function HardwareTradeForm({
                   <Input inputMode="decimal" min="0" max="100" step="0.01" type="number" {...register(`items.${index}.discountPercent`)} />
                 </FormField>
               </div>
-              <div className="lg:col-span-1">
-                <FormField error={errors.items?.[index]?.gstRate?.message} label="GST %">
-                  <Input inputMode="decimal" min="0" max="100" step="0.01" type="number" {...register(`items.${index}.gstRate`)} />
-                </FormField>
-              </div>
+              {mode === "quotation" ? (
+                <div className="lg:col-span-1">
+                  <FormField label="GST"><Input disabled value="0%" /></FormField>
+                </div>
+              ) : (
+                <div className="lg:col-span-1">
+                  <FormField error={errors.items?.[index]?.gstRate?.message} label="GST %">
+                    <GstRateSelect value={watchedItems?.[index]?.gstRate ?? "0"} {...register(`items.${index}.gstRate`)} />
+                  </FormField>
+                </div>
+              )}
               <div className="flex items-end lg:col-span-1">
                 <Button aria-label={`Remove item ${index + 1}`} className="w-full" disabled={fields.length === 1} onClick={() => remove(index)} type="button" variant="ghost">
                   <Trash2 className="size-4" />
                 </Button>
               </div>
-              <div className="lg:col-span-3">
+              <div className="lg:col-span-2">
                 <FormField label="HSN / SAC"><Input {...register(`items.${index}.hsnCode`)} /></FormField>
               </div>
             </fieldset>
@@ -295,8 +391,8 @@ export function HardwareTradeForm({
           <dl className="space-y-2 text-sm">
             <TotalRow label="Gross value" value={totals.grossCents} />
             <TotalRow label="Line discounts" value={-totals.discountCents} />
-            <TotalRow label="Taxable value" value={totals.taxableCents} />
-            <TotalRow label="GST" value={totals.taxCents} />
+            <TotalRow label={mode === "quotation" ? "Net estimate value" : "Taxable value"} value={totals.taxableCents} />
+            {mode !== "quotation" ? <TotalRow label="GST" value={totals.taxCents} /> : null}
             <TotalRow label="Round-off" value={totals.roundOffCents} />
             <div className="flex justify-between border-t border-border pt-2 text-base font-semibold"><dt>Grand total</dt><dd>{money(totals.totalCents)}</dd></div>
           </dl>
@@ -305,10 +401,23 @@ export function HardwareTradeForm({
       {serverError ? <p className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">{serverError}</p> : null}
       <div className="flex justify-end">
         <Button disabled={Boolean(disabledReason) || isSubmitting} type="submit">
-          <Save className="size-4" />{isSubmitting ? "Saving..." : `Save ${mode === "quotation" ? "quotation" : mode}`}
+          <Save className="size-4" />{isSubmitting ? "Saving..." : mode === "quotation" ? "Save and print Estimate Bill" : `Save ${mode}`}
         </Button>
       </div>
     </form>
+  );
+}
+
+function GstRateSelect({
+  value,
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement> & { value: string }) {
+  const commonRates = ["0", "5", "12", "18", "28"];
+  const rates = commonRates.includes(value) ? commonRates : [value, ...commonRates];
+  return (
+    <select className={selectClassName} value={value} {...props}>
+      {rates.map((rate) => <option key={rate} value={rate}>{rate}%</option>)}
+    </select>
   );
 }
 
@@ -326,12 +435,16 @@ function TotalRow({ label, value }: { label: string; value: number }) {
   return <div className="flex justify-between gap-4"><dt className="text-muted-foreground">{label}</dt><dd>{money(value)}</dd></div>;
 }
 
-function calculatePreview(items: TradeFormValues["items"] | undefined, roundOff: string | undefined) {
+function calculatePreview(
+  items: TradeFormValues["items"] | undefined,
+  roundOff: string | undefined,
+  gstFree: boolean,
+) {
   const result = (items ?? []).reduce((totals, item) => {
     const gross = Math.round((Number(item.quantity) || 0) * (Number(item.unitRate) || 0) * 100);
     const discount = Math.round(gross * (Number(item.discountPercent) || 0) / 100);
     const taxable = Math.max(gross - discount, 0);
-    const tax = Math.round(taxable * (Number(item.gstRate) || 0) / 100);
+    const tax = gstFree ? 0 : Math.round(taxable * (Number(item.gstRate) || 0) / 100);
     return {
       discountCents: totals.discountCents + discount,
       grossCents: totals.grossCents + gross,
@@ -351,12 +464,14 @@ function defaultDocumentType(mode: TradeMode): TradeFormValues["documentType"] {
 
 function documentTitle(mode: TradeMode) {
   if (mode === "purchase") return "Purchase details";
-  if (mode === "quotation") return "Quotation details";
+  if (mode === "quotation") return "Estimate Bill details";
   return "Billing details";
 }
 
 function money(amountCents: number) {
   return new Intl.NumberFormat("en-IN", { currency: "INR", style: "currency" }).format(amountCents / 100);
 }
+
+export const hardwareTradeFormTestUtils = { calculatePreview };
 
 const selectClassName = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";

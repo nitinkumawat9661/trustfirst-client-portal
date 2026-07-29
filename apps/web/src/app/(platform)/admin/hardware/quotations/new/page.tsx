@@ -16,7 +16,11 @@ export default async function NewHardwareQuotationPage() {
   ]);
   return (
     <div className="space-y-6">
-      <HardwarePageHeader description="Pricing and taxes remain editable while the quotation is a draft. Finalization does not move stock." eyebrow="Sales" title="New quotation" />
+      <HardwarePageHeader
+        description="Create a saved GST-free estimate with the same advanced product search as billing. Saving opens the printable A4 Estimate Bill."
+        eyebrow="Sales"
+        title="New Estimate Bill"
+      />
       <HardwareTradeForm mode="quotation" parties={parties} products={products} />
     </div>
   );

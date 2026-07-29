@@ -34,6 +34,8 @@ describe("quick POS print preview helpers", () => {
     const totals = quickPosPrintTestUtils.calculateTotals(lines, "100", "5");
     const preview = quickPosPrintTestUtils.buildBillPreview({
       cashierName: "Counter",
+      customerAddress: "Test billing address",
+      customerName: "TEST CUSTOMER",
       customer: {
         balanceSide: null,
         contact: "9999999999",

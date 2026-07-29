@@ -9,6 +9,7 @@ import type { HardwarePartySummary, HardwareProductSummary } from "@/server/hard
 import { buildWhatsAppBillUrl } from "@/server/hardware/whatsapp";
 import { CreatableCombobox } from "./creatable-combobox";
 import { HardwareProductCombobox } from "./hardware-product-combobox";
+import { normalizeProductSearchText } from "./product-search";
 import { postHardwareJson } from "./hardware-api-client";
 
 type LocationOption = { id: string; name: string };
@@ -81,6 +82,8 @@ export function QuickPosForm({
   const [availableProducts, setAvailableProducts] = useState(products);
   const [availableCustomers, setAvailableCustomers] = useState(customers);
   const [customerId, setCustomerId] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [invoiceDiscount, setInvoiceDiscount] = useState("0");
   const [lines, setLines] = useState<PosLine[]>([{ ...emptyLine }]);
@@ -123,7 +126,7 @@ export function QuickPosForm({
   function applyProduct(index: number, product: HardwareProductSummary) {
     updateLine(index, {
       barcode: product.barcode,
-      gstRate: product.gstRateBps === null ? "0" : String(product.gstRateBps / 100),
+      gstRate: "0",
       hsnCode: product.hsnCode,
       productId: product.id,
       productName: product.name,
@@ -137,9 +140,36 @@ export function QuickPosForm({
     setServerError(null);
     setPrintStatus(null);
     setSaving(true);
+    let resolvedCustomerId = customerId;
+    if (!resolvedCustomerId && customerName.trim()) {
+      const normalizedName = normalizeProductSearchText(customerName);
+      const exactCustomer = availableCustomers.find(
+        (customer) => normalizeProductSearchText(customer.name) === normalizedName,
+      );
+      if (exactCustomer) {
+        resolvedCustomerId = exactCustomer.id;
+        setCustomerId(exactCustomer.id);
+        setCustomerName(exactCustomer.name);
+      } else {
+        const createdCustomer = await postHardwareJson<HardwarePartySummary>("/api/hardware/parties/quick-add", {
+          name: customerName.trim(),
+          role: "customer",
+        });
+        if (!createdCustomer.ok) {
+          setSaving(false);
+          setServerError(createdCustomer.message);
+          return;
+        }
+        resolvedCustomerId = createdCustomer.data.id;
+        setAvailableCustomers((current) => [createdCustomer.data, ...current]);
+        setCustomerId(createdCustomer.data.id);
+        setCustomerName(createdCustomer.data.name);
+      }
+    }
     const result = await postHardwareJson<PostedSale>("/api/hardware/pos/sale", {
       clientTotalCents: totals.totalCents,
-      ...(customerId ? { customerId } : {}),
+      ...(resolvedCustomerId ? { customerId: resolvedCustomerId } : {}),
+      ...(customerAddress.trim() ? { customerAddress: customerAddress.trim() } : {}),
       idempotencyKey,
       invoiceDiscountCents: totals.invoiceDiscountCents,
       items: lines.map((line) => {
@@ -190,6 +220,8 @@ export function QuickPosForm({
   const preview = buildBillPreview({
     cashierName,
     customer: selectedCustomer,
+    customerAddress,
+    customerName,
     firm: defaultFirm,
     lines,
     notes,
@@ -228,16 +260,32 @@ export function QuickPosForm({
           <CardContent className="grid gap-4 md:grid-cols-3">
             <div className="md:col-span-2">
               <CreatableCombobox
-                createLabel="Create customer"
+                createLabel="Use new customer"
                 label="Customer"
-                onCreate={setQuickCustomer}
-                onSelect={setCustomerId}
+                onCreate={(name) => setCustomerName(name)}
+                onQueryChange={(query) => {
+                  setCustomerName(query);
+                  const exact = availableCustomers.find(
+                    (customer) => normalizeProductSearchText(customer.name) === normalizeProductSearchText(query),
+                  );
+                  setCustomerId(exact?.id ?? "");
+                }}
+                onSelect={(id) => {
+                  const selected = availableCustomers.find((customer) => customer.id === id);
+                  setCustomerId(id);
+                  setCustomerName(selected?.name ?? "");
+                }}
                 options={availableCustomers.map((customer) => ({ id: customer.id, keywords: [customer.contact ?? ""], label: customer.name }))}
                 placeholder="Walk-in customer or type customer name"
-                value={selectedCustomer?.name ?? ""}
+                value={customerName || selectedCustomer?.name || ""}
               />
-              <button className="mt-2 text-xs font-medium text-primary" onClick={() => setCustomerId("")} type="button">Use walk-in customer</button>
+              <p className="mt-1 text-xs text-muted-foreground">A new name is saved automatically as a customer when the bill is posted.</p>
+              <button className="mt-2 text-xs font-medium text-primary" onClick={() => { setCustomerId(""); setCustomerName(""); }} type="button">Use walk-in customer</button>
             </div>
+            <label className="grid gap-2 text-sm font-medium">
+              Address
+              <Input autoComplete="street-address" placeholder="Address for this bill" value={customerAddress} onChange={(event) => setCustomerAddress(event.target.value)} />
+            </label>
             <label className="grid gap-2 text-sm font-medium">
               Stock location
               <select className={selectClassName} value={locationId} onChange={(event) => setLocationId(event.target.value)}>
@@ -251,7 +299,7 @@ export function QuickPosForm({
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div>
               <CardTitle>Items</CardTitle>
-              <p className="mt-1 text-xs text-muted-foreground">Search by name, size, part code, SKU or barcode. Price and stock appear in every result.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Search by name, brand, category, SKU, model, size, or colour. Spelling mistakes and words in any order are supported.</p>
             </div>
             <Button onClick={() => setLines((current) => [...current, { ...emptyLine }])} type="button" variant="outline">Add line</Button>
           </CardHeader>
@@ -261,7 +309,7 @@ export function QuickPosForm({
                 <legend className="px-1 text-xs font-semibold text-muted-foreground">Item {index + 1}</legend>
                 <div className="md:col-span-5">
                   <HardwareProductCombobox
-                    label="Product name / SKU / barcode"
+                    label="Product name / SKU"
                     onCreate={(name) => setQuickAdd({ index, name })}
                     onQueryChange={(query) => clearProductSelection(index, query)}
                     onSelect={(product) => applyProduct(index, product)}
@@ -273,7 +321,12 @@ export function QuickPosForm({
                 <NumberField label="Qty" value={line.quantity} onChange={(value) => updateLine(index, { quantity: value })} className="md:col-span-1" />
                 <NumberField label="Rate" value={line.rate} onChange={(value) => updateLine(index, { rate: value })} className="md:col-span-2" />
                 <NumberField label="Disc. %" value={line.discountPercent} onChange={(value) => updateLine(index, { discountPercent: value })} className="md:col-span-1" />
-                <NumberField label="GST %" value={line.gstRate} onChange={(value) => updateLine(index, { gstRate: value })} className="md:col-span-1" />
+                <label className="grid gap-2 text-sm font-medium md:col-span-1">
+                  GST %
+                  <select className={selectClassName} value={line.gstRate} onChange={(event) => updateLine(index, { gstRate: event.target.value })}>
+                    {["0", "5", "12", "18", "28"].map((rate) => <option key={rate} value={rate}>{rate}%</option>)}
+                  </select>
+                </label>
                 <div className="flex items-end md:col-span-2">
                   <Button aria-label={`Remove item ${index + 1}`} className="w-full" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))} type="button" variant="ghost">
                     <Trash2 className="size-4" />
@@ -418,7 +471,6 @@ function QuickAddDialog({
   onCreated: (product: HardwareProductSummary) => void;
   units: UnitOption[];
 }) {
-  const [barcode, setBarcode] = useState("");
   const [availableBrands, setAvailableBrands] = useState(brands);
   const [availableCategories, setAvailableCategories] = useState(categories);
   const [availableUnits, setAvailableUnits] = useState(units);
@@ -464,7 +516,6 @@ function QuickAddDialog({
     setError(null);
     const result = await postHardwareJson<HardwareProductSummary>("/api/hardware/products/quick-add", {
       ...(gst ? { gstRateBps: Math.round(Number(gst) * 100) } : {}),
-      ...(barcode ? { barcode } : {}),
       ...(brandId ? { brandId } : {}),
       ...(categoryId ? { categoryId } : {}),
       ...(hsnCode ? { hsnCode } : {}),
@@ -486,7 +537,6 @@ function QuickAddDialog({
         <div className="mt-4 space-y-3">
           <label className="grid gap-2 text-sm font-medium">Product name<Input autoFocus value={name} onChange={(event) => setName(event.target.value)} /></label>
           <label className="grid gap-2 text-sm font-medium">Sale rate<Input inputMode="decimal" min="0.01" required step="0.01" type="number" value={rate} onChange={(event) => setRate(event.target.value)} /></label>
-          <label className="grid gap-2 text-sm font-medium">Barcode<Input value={barcode} onChange={(event) => setBarcode(event.target.value)} /></label>
           <CreatableCombobox createLabel="Create category" label="Category" onCreate={createCategory} onSelect={setCategoryId} options={availableCategories.map((category) => ({ id: category.id, label: category.name }))} placeholder="Search or add category" value={selectedCategory?.name ?? ""} />
           <CreatableCombobox createLabel="Create brand" label="Brand" onCreate={createBrand} onSelect={setBrandId} options={availableBrands.map((brand) => ({ id: brand.id, label: brand.name }))} placeholder="Search or add brand" value={selectedBrand?.name ?? ""} />
           <CreatableCombobox createLabel="Create unit" label="Unit" onCreate={createUnit} onSelect={setUnitId} options={availableUnits.map((unit) => ({ id: unit.id, keywords: [unit.code], label: `${unit.name} (${unit.code})` }))} placeholder="Search or add unit" value={selectedUnit ? `${selectedUnit.name} (${selectedUnit.code})` : ""} />
@@ -586,6 +636,7 @@ type BillPreviewLine = {
 type BillPreview = {
   balanceCents: number;
   cashierName: string;
+  customerAddress: string | null;
   customerGstin: string | null;
   customerMobile: string | null;
   customerName: string;
@@ -637,6 +688,7 @@ function InvoiceMarkup({ bill }: { bill: BillPreview }) {
         <div className="flex justify-between"><span>{bill.statusLabel}</span><span>{bill.documentNumber}</span></div>
         <div className="flex justify-between"><span>{formatDateTime(bill.dateTime)}</span><span>{bill.cashierName}</span></div>
         <div>Customer: {bill.customerName}</div>
+        {bill.customerAddress ? <div>Address: {bill.customerAddress}</div> : null}
         {bill.customerMobile ? <div>Mobile: {bill.customerMobile}</div> : null}
         {bill.customerGstin ? <div>GSTIN: {bill.customerGstin}</div> : null}
       </div>
@@ -645,7 +697,7 @@ function InvoiceMarkup({ bill }: { bill: BillPreview }) {
         <thead><tr className="border-b border-black text-left"><th className="py-1">Item</th><th>HSN</th><th className="text-right">Qty</th><th className="text-right">Rate</th><th className="text-right">GST</th><th className="text-right">Total</th></tr></thead>
         <tbody>{bill.lines.map((line, index) => (
           <tr className="border-b border-zinc-300 align-top" key={`${line.name}-${index}`}>
-            <td className="break-words py-1 pr-1"><div className="font-medium">{line.name}</div><div className="text-[9px]">{[line.sku, line.barcode, line.unitCode].filter(Boolean).join(" / ")}</div></td>
+            <td className="break-words py-1 pr-1"><div className="font-medium">{line.name}</div><div className="text-[9px]">{[line.sku, line.unitCode].filter(Boolean).join(" / ")}</div></td>
             <td>{line.hsnCode ?? "-"}</td><td className="text-right">{line.quantity}</td><td className="text-right">{money(line.rateCents)}</td><td className="text-right">{line.gstRate}%</td><td className="text-right font-medium">{money(line.lineTotalCents)}</td>
           </tr>
         ))}</tbody>
@@ -701,6 +753,8 @@ const selectClassName = "h-10 w-full rounded-md border border-input bg-backgroun
 function buildBillPreview(input: {
   cashierName: string;
   customer: HardwarePartySummary | undefined;
+  customerAddress: string;
+  customerName: string;
   firm: FirmPrintDetails;
   lines: PosLine[];
   notes: string;
@@ -724,9 +778,10 @@ function buildBillPreview(input: {
     balanceCents: input.totals.balanceCents,
     cashierName: input.cashierName,
     cgstCents,
+    customerAddress: input.customerAddress.trim() || null,
     customerGstin: input.customer?.gstin ?? null,
     customerMobile: input.customer?.contact ?? null,
-    customerName: input.customer?.name ?? "Walk-in Customer",
+    customerName: input.customer?.name ?? (input.customerName.trim() || "Walk-in Customer"),
     dateTime: new Date(),
     discountCents: input.totals.discountCents,
     documentNumber: input.posted?.invoiceNumber ?? input.posted?.documentNumber ?? "DRAFT PREVIEW",
@@ -750,7 +805,7 @@ function buildBillPreview(input: {
 function buildTestPrintPreview(input: { cashierName: string; firm: FirmPrintDetails; format?: string }): BillPreview {
   const now = new Date();
   return {
-    balanceCents: 0, cashierName: input.cashierName, cgstCents: 0, customerGstin: null, customerMobile: null, customerName: "TEST CUSTOMER", dateTime: now, discountCents: 0, documentNumber: `TEST-A4-${now.getTime()}`, firm: input.firm, footer: "TEST A4 PRINT ONLY. No sale, payment, stock, or ledger entry was created.", grandTotalCents: 0, invoiceDiscountCents: 0,
+    balanceCents: 0, cashierName: input.cashierName, cgstCents: 0, customerAddress: null, customerGstin: null, customerMobile: null, customerName: "TEST CUSTOMER", dateTime: now, discountCents: 0, documentNumber: `TEST-A4-${now.getTime()}`, firm: input.firm, footer: "TEST A4 PRINT ONLY. No sale, payment, stock, or ledger entry was created.", grandTotalCents: 0, invoiceDiscountCents: 0,
     lines: [{ barcode: "TEST", cgstCents: 0, discountCents: 0, gstRate: "0", hsnCode: null, lineTotalCents: 0, name: "TEST A4 INVOICE", quantity: "1", rateCents: 0, sgstCents: 0, sku: "TEST-A4", taxableCents: 0, taxCents: 0, unitCode: "PCS" }],
     notes: "TEST INVOICE", paidCents: 0, paymentMode: "TEST", roundOffCents: 0, sgstCents: 0, statusLabel: "TEST PRINT", subtotalCents: 0, taxableCents: 0, taxCents: 0,
   };
@@ -802,8 +857,8 @@ function printCss(_legacyFormat?: string) {
 }
 
 function invoiceHtml(bill: BillPreview) {
-  const rows = bill.lines.map((line, index) => `<tr><td><strong>${index + 1}. ${escapeHtml(line.name)}</strong><div class="item-meta">${escapeHtml([line.sku, line.barcode, line.unitCode].filter(Boolean).join(" / "))}</div></td><td>${escapeHtml(line.hsnCode ?? "-")}</td><td class="right">${escapeHtml(line.quantity)}</td><td class="right">${escapeHtml(money(line.rateCents))}</td><td class="right">${escapeHtml(line.gstRate)}%</td><td class="right"><strong>${escapeHtml(money(line.lineTotalCents))}</strong></td></tr>`).join("");
-  return `<header class="center"><img alt="Mangalam Sanitary approved logo" class="logo" src="/api/public/branding/mangalam-sanitary-logo" /><h1>${escapeHtml(bill.firm.firmName)}</h1><p class="muted"><strong>${escapeHtml(bill.firm.tagline)}</strong></p>${bill.firm.address ? `<p class="muted">${escapeHtml(bill.firm.address)}</p>` : ""}<p class="muted">${escapeHtml([bill.firm.phone, bill.firm.email].filter(Boolean).join(" | "))}</p><p class="muted"><strong>GSTIN: ${escapeHtml(bill.firm.gstin ?? "Not provided")}</strong></p></header><section class="block"><div class="row"><span>${escapeHtml(bill.statusLabel)}</span><strong>${escapeHtml(bill.documentNumber)}</strong></div><div class="row"><span>${escapeHtml(formatDateTime(bill.dateTime))}</span><span>${escapeHtml(bill.cashierName)}</span></div><p>Customer: ${escapeHtml(bill.customerName)}</p>${bill.customerMobile ? `<p>Mobile: ${escapeHtml(bill.customerMobile)}</p>` : ""}${bill.customerGstin ? `<p>GSTIN: ${escapeHtml(bill.customerGstin)}</p>` : ""}</section><table><colgroup><col style="width:36%"><col style="width:12%"><col style="width:8%"><col style="width:14%"><col style="width:10%"><col style="width:20%"></colgroup><thead><tr><th>Item</th><th>HSN</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">GST</th><th class="right">Total</th></tr></thead><tbody>${rows}</tbody></table><section class="totals">${amountHtml("Subtotal", bill.subtotalCents)}${amountHtml("Line discount", -bill.discountCents)}${amountHtml("Invoice discount", -bill.invoiceDiscountCents)}${amountHtml("Taxable", bill.taxableCents)}${amountHtml("CGST", bill.cgstCents)}${amountHtml("SGST", bill.sgstCents)}${amountHtml("Round-off", bill.roundOffCents)}<div class="row grand"><span>Grand total</span><span>${escapeHtml(money(bill.grandTotalCents))}</span></div>${amountHtml(`Paid (${humanize(bill.paymentMode)})`, bill.paidCents)}<div class="row grand"><span>Balance</span><span>${escapeHtml(money(bill.balanceCents))}</span></div></section>${bill.notes ? `<p class="block">Notes: ${escapeHtml(bill.notes)}</p>` : ""}<footer class="footer"><p>${escapeHtml(bill.footer)}</p><p>Invoice ref: ${escapeHtml(bill.documentNumber)}</p></footer>`;
+  const rows = bill.lines.map((line, index) => `<tr><td><strong>${index + 1}. ${escapeHtml(line.name)}</strong><div class="item-meta">${escapeHtml([line.sku, line.unitCode].filter(Boolean).join(" / "))}</div></td><td>${escapeHtml(line.hsnCode ?? "-")}</td><td class="right">${escapeHtml(line.quantity)}</td><td class="right">${escapeHtml(money(line.rateCents))}</td><td class="right">${escapeHtml(line.gstRate)}%</td><td class="right"><strong>${escapeHtml(money(line.lineTotalCents))}</strong></td></tr>`).join("");
+  return `<header class="center"><img alt="Mangalam Sanitary approved logo" class="logo" src="/api/public/branding/mangalam-sanitary-logo" /><h1>${escapeHtml(bill.firm.firmName)}</h1><p class="muted"><strong>${escapeHtml(bill.firm.tagline)}</strong></p>${bill.firm.address ? `<p class="muted">${escapeHtml(bill.firm.address)}</p>` : ""}<p class="muted">${escapeHtml([bill.firm.phone, bill.firm.email].filter(Boolean).join(" | "))}</p><p class="muted"><strong>GSTIN: ${escapeHtml(bill.firm.gstin ?? "Not provided")}</strong></p></header><section class="block"><div class="row"><span>${escapeHtml(bill.statusLabel)}</span><strong>${escapeHtml(bill.documentNumber)}</strong></div><div class="row"><span>${escapeHtml(formatDateTime(bill.dateTime))}</span><span>${escapeHtml(bill.cashierName)}</span></div><p>Customer: ${escapeHtml(bill.customerName)}</p>${bill.customerAddress ? `<p>Address: ${escapeHtml(bill.customerAddress)}</p>` : ""}${bill.customerMobile ? `<p>Mobile: ${escapeHtml(bill.customerMobile)}</p>` : ""}${bill.customerGstin ? `<p>GSTIN: ${escapeHtml(bill.customerGstin)}</p>` : ""}</section><table><colgroup><col style="width:36%"><col style="width:12%"><col style="width:8%"><col style="width:14%"><col style="width:10%"><col style="width:20%"></colgroup><thead><tr><th>Item</th><th>HSN</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">GST</th><th class="right">Total</th></tr></thead><tbody>${rows}</tbody></table><section class="totals">${amountHtml("Subtotal", bill.subtotalCents)}${amountHtml("Line discount", -bill.discountCents)}${amountHtml("Invoice discount", -bill.invoiceDiscountCents)}${amountHtml("Taxable", bill.taxableCents)}${amountHtml("CGST", bill.cgstCents)}${amountHtml("SGST", bill.sgstCents)}${amountHtml("Round-off", bill.roundOffCents)}<div class="row grand"><span>Grand total</span><span>${escapeHtml(money(bill.grandTotalCents))}</span></div>${amountHtml(`Paid (${humanize(bill.paymentMode)})`, bill.paidCents)}<div class="row grand"><span>Balance</span><span>${escapeHtml(money(bill.balanceCents))}</span></div></section>${bill.notes ? `<p class="block">Notes: ${escapeHtml(bill.notes)}</p>` : ""}<footer class="footer"><p>${escapeHtml(bill.footer)}</p><p>Invoice ref: ${escapeHtml(bill.documentNumber)}</p></footer>`;
 }
 
 function amountHtml(label: string, value: number) {

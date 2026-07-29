@@ -9,10 +9,13 @@ export const dynamic = "force-dynamic";
 
 export default async function HardwarePrintPreviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ documentId: string }>;
+  searchParams: Promise<{ print?: string }>;
 }) {
   const { documentId } = await params;
+  const { print } = await searchParams;
   const user = await requireCurrentUser();
   const service = new HardwareTradeService(getPrisma());
   const projection = await loadProjection(service, {
@@ -20,7 +23,12 @@ export default async function HardwarePrintPreviewPage({
     tenantId: user.activeTenantId ?? "public",
     userId: user.id,
   });
+  const isEstimate = projection.document.type === "SALES_QUOTATION";
   const taxMode = projection.document.metadata.taxMode === "inter-state" ? "inter-state" : "intra-state";
+  const documentAddress =
+    typeof projection.document.metadata.customerAddress === "string"
+      ? projection.document.metadata.customerAddress
+      : projection.customer?.address ?? null;
   const documentDate =
     typeof projection.document.metadata.documentDate === "string"
       ? projection.document.metadata.documentDate
@@ -72,10 +80,10 @@ export default async function HardwarePrintPreviewPage({
         `}</style>
         <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm">
           <div>
-            <p className="font-medium">A4 invoice preview</p>
+            <p className="font-medium">A4 {isEstimate ? "Estimate Bill" : "invoice"} preview</p>
             <p className="text-xs text-zinc-600">PDF name: {pdfFileName}.pdf</p>
           </div>
-          <PrintButton fileName={pdfFileName} />
+          <PrintButton autoPrint={print === "1"} fileName={pdfFileName} label={isEstimate ? "Print Estimate Bill" : "Print A4 invoice"} />
         </div>
         <header className="print-break-avoid flex flex-col gap-5 border-b-2 border-zinc-900 pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
@@ -117,7 +125,7 @@ export default async function HardwarePrintPreviewPage({
           <div>
             <p className="font-semibold uppercase">{isPurchaseDocument(projection.document.type) ? "Supplier" : "Bill to"}</p>
             <p className="mt-1 text-sm font-semibold">{customerName}</p>
-            {projection.customer?.address ? <p className="mt-1 max-w-md leading-5">{projection.customer.address}</p> : null}
+            {documentAddress ? <p className="mt-1 max-w-md leading-5">{documentAddress}</p> : null}
             {projection.customer?.phone ? <p>{projection.customer.phone}</p> : null}
             {projection.customer?.gstin ? <p>GSTIN: {projection.customer.gstin}</p> : null}
           </div>
@@ -125,7 +133,11 @@ export default async function HardwarePrintPreviewPage({
             {typeof projection.document.metadata.referenceNumber === "string" ? (
               <><p className="font-semibold uppercase">Reference</p><p className="mt-1">{projection.document.metadata.referenceNumber}</p></>
             ) : null}
-            <p className="mt-2">Tax treatment: {taxMode === "inter-state" ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)"}</p>
+            {isEstimate ? (
+              <p className="mt-2 font-semibold">GST-free estimate · No stock movement</p>
+            ) : (
+              <p className="mt-2">Tax treatment: {taxMode === "inter-state" ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)"}</p>
+            )}
           </div>
         </section>
 
@@ -140,8 +152,8 @@ export default async function HardwarePrintPreviewPage({
               <col style={{ width: "10%" }} />
               <col style={{ width: "7%" }} />
               <col style={{ width: "10%" }} />
-              <col style={{ width: "6%" }} />
-              <col style={{ width: "10%" }} />
+              {!isEstimate ? <col style={{ width: "6%" }} /> : null}
+              <col style={{ width: isEstimate ? "16%" : "10%" }} />
             </colgroup>
             <thead>
               <tr className="border-y border-zinc-500 bg-zinc-100 text-left">
@@ -153,7 +165,7 @@ export default async function HardwarePrintPreviewPage({
                 <th className="px-2 py-2 text-right">Rate</th>
                 <th className="px-2 py-2 text-right">Disc.</th>
                 <th className="px-2 py-2 text-right">Taxable</th>
-                <th className="px-2 py-2 text-right">GST</th>
+                {!isEstimate ? <th className="px-2 py-2 text-right">GST</th> : null}
                 <th className="px-2 py-2 text-right">Total</th>
               </tr>
             </thead>
@@ -168,7 +180,7 @@ export default async function HardwarePrintPreviewPage({
                   <td className="px-2 py-2 text-right">{money(item.unitAmountCents)}</td>
                   <td className="px-2 py-2 text-right">{item.discountPercent === null ? money(item.discountCents) : `${item.discountPercent}%`}</td>
                   <td className="px-2 py-2 text-right">{money(item.taxableCents)}</td>
-                  <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td>
+                  {!isEstimate ? <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td> : null}
                   <td className="px-2 py-2 text-right font-medium">{money(item.lineTotalCents)}</td>
                 </tr>
               ))}
@@ -178,8 +190,10 @@ export default async function HardwarePrintPreviewPage({
 
         <section className="print-break-avoid mt-5 grid gap-6 sm:grid-cols-[minmax(0,1fr)_280px]">
           <div>
-            <p className="text-xs font-semibold uppercase">Tax summary</p>
-            {projection.gstSummary.length ? (
+            <p className="text-xs font-semibold uppercase">{isEstimate ? "Estimate summary" : "Tax summary"}</p>
+            {isEstimate ? (
+              <p className="mt-2 text-xs">GST-free Estimate Bill. This document does not reserve or move stock.</p>
+            ) : projection.gstSummary.length ? (
               <table className="mt-2 w-full max-w-md text-xs">
                 <thead className="border-b border-zinc-400 text-left"><tr><th className="py-1">Rate</th><th>Taxable</th><th>CGST</th><th>SGST</th><th>IGST</th></tr></thead>
                 <tbody>{projection.gstSummary.map((row) => {
@@ -195,7 +209,7 @@ export default async function HardwarePrintPreviewPage({
           <dl className="space-y-2 text-xs">
             <AmountRow label="Subtotal" value={projection.document.subtotalCents} />
             <AmountRow label="Line discounts" value={-projection.document.discountCents} />
-            <AmountRow label={taxMode === "inter-state" ? "IGST" : "CGST + SGST"} value={projection.document.taxCents} />
+            {!isEstimate ? <AmountRow label={taxMode === "inter-state" ? "IGST" : "CGST + SGST"} value={projection.document.taxCents} /> : null}
             <AmountRow label="Round-off" value={projection.document.roundOffCents} />
             <div className="flex justify-between border-t-2 border-zinc-900 pt-2 text-base font-bold"><dt>Grand total</dt><dd>{money(projection.document.totalCents)}</dd></div>
           </dl>
@@ -236,7 +250,7 @@ async function loadProjection(
 }
 
 function documentLabel(type: string) {
-  if (type === "SALES_QUOTATION") return "QUOTATION";
+  if (type === "SALES_QUOTATION") return "ESTIMATE BILL";
   if (type === "SALES_ORDER") return "TAX INVOICE";
   if (type === "SALE_RETURN") return "SALE RETURN";
   if (type === "PURCHASE_ORDER") return "PURCHASE ORDER";

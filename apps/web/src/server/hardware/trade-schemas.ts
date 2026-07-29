@@ -80,6 +80,7 @@ export const hardwarePurchaseReturnSchema = z.object({
 
 export const quickPosSaleSchema = z.object({
   clientTotalCents: z.number().int().nonnegative(),
+  customerAddress: z.string().trim().max(1000).optional(),
   customerId: z.string().optional(),
   idempotencyKey: z.string().min(12).max(120),
   invoiceDiscountCents: z.number().int().nonnegative().optional(),
