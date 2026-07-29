@@ -18,10 +18,10 @@ replace_once(branding, """            src: mangalamLogo,
 """, """            src: mangalamIcon,
 """)'''
 new_manifest_block = '''manifest_content = read(branding)
-manifest_old = """            src: mangalamLogo,
-            type: "image/jpeg",
+manifest_old = """        src: mangalamLogo,
+        type: "image/jpeg",
 """
-manifest_new = """            src: mangalamIcon,
+manifest_new = """        src: mangalamIcon,
 """
 manifest_count = manifest_content.count(manifest_old)
 if manifest_count < 1:
