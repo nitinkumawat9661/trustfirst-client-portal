@@ -43,20 +43,14 @@ export function CreatableCombobox({
   const [brandFilter, setBrandFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [metadataRevision, setMetadataRevision] = useState(0);
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
-  const [recentIds, setRecentIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    setQuery(value);
-  }, [value]);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => readStoredIds(FAVORITES_KEY));
+  const [recentIds, setRecentIds] = useState<string[]>(() => readStoredIds(RECENTS_KEY));
 
   useEffect(() => {
     function metadataReady() {
       setMetadataRevision((current) => current + 1);
     }
     window.addEventListener("hardware-product-search-metadata-ready", metadataReady);
-    setFavoriteIds(readStoredIds(FAVORITES_KEY));
-    setRecentIds(readStoredIds(RECENTS_KEY));
     return () => window.removeEventListener("hardware-product-search-metadata-ready", metadataReady);
   }, []);
 
@@ -66,7 +60,8 @@ export function CreatableCombobox({
     return (window as SearchWindow).__hardwareProductSearchMetadata ?? {};
   }, [metadataRevision]);
   const isProductSearch = options.some((option) => Boolean(metadata[option.id]));
-  const normalizedQuery = normalize(query);
+  const displayedQuery = open ? query : value;
+  const normalizedQuery = normalize(displayedQuery);
 
   const brands = useMemo(() => uniqueSorted(options.map((option) => metadata[option.id]?.brandName ?? null)), [metadata, options]);
   const categories = useMemo(() => uniqueSorted(options.map((option) => metadata[option.id]?.categoryName ?? null)), [metadata, options]);
@@ -132,7 +127,7 @@ export function CreatableCombobox({
         className="pl-9"
         disabled={disabled}
         placeholder={placeholder}
-        value={query}
+        value={displayedQuery}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         onChange={(event) => {
           setQuery(event.target.value);
@@ -140,7 +135,11 @@ export function CreatableCombobox({
           setActiveIndex(0);
           onSelect("");
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setQuery(value);
+          setOpen(true);
+          setActiveIndex(0);
+        }}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown") {
             event.preventDefault();
@@ -259,6 +258,7 @@ function uniqueSorted(values: Array<string | null>) {
 }
 
 function readStoredIds(key: string) {
+  if (typeof window === "undefined") return [];
   try {
     const value = JSON.parse(window.localStorage.getItem(key) ?? "[]");
     return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];

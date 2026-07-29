@@ -60,21 +60,22 @@ describe("quick POS print preview helpers", () => {
     expect(preview.lines[0]?.sku).toBe("TEST-SKU");
   });
 
-  it("emits paper-specific CSS for thermal and A4 printing", () => {
-    expect(quickPosPrintTestUtils.printCss("58mm")).toContain("@page { size: 58mm auto");
-    expect(quickPosPrintTestUtils.printCss("80mm")).toContain("@page { size: 80mm auto");
-    expect(quickPosPrintTestUtils.printCss("a4")).toContain("@page { size: A4 portrait");
+  it("emits A4-only CSS and safely ignores legacy thermal format arguments", () => {
+    const a4Css = quickPosPrintTestUtils.printCss();
+
+    expect(a4Css).toContain("@page { size: A4 portrait");
+    expect(quickPosPrintTestUtils.printCss("58mm")).toBe(a4Css);
+    expect(quickPosPrintTestUtils.printCss("80mm")).toBe(a4Css);
   });
 
   it("renders a print-only document without ERP controls", () => {
     const bill = quickPosPrintTestUtils.buildTestPrintPreview({
       cashierName: "Counter",
       firm,
-      format: "80mm",
     });
-    const html = quickPosPrintTestUtils.printDocumentHtml(bill, "80mm", "TEST PRINT");
+    const html = quickPosPrintTestUtils.printDocumentHtml(bill);
 
-    expect(html).toContain("TEST PRINT ONLY");
+    expect(html).toContain("TEST A4 PRINT ONLY");
     expect(html).toContain("MANGALAM SANITARY");
     expect(html).not.toContain("Post bill");
     expect(html).not.toContain("Reprint receipt");
