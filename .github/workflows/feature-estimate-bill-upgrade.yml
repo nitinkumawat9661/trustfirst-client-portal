@@ -1,25 +1,34 @@
-name: Validate Estimate Bill Upgrade
+name: Finalize Estimate Bill Upgrade
 
 on:
-  workflow_dispatch:
   push:
     branches:
-      - feature/estimate-bill-line-gst-fuzzy-search
+      - main
+    paths:
+      - ".github/workflows/feature-estimate-bill-upgrade.yml"
+      - "scripts/apply_estimate_bill_upgrade.py"
+      - "scripts/run-estimate-bill-upgrade.mjs"
+      - "package.json"
 
 permissions:
+  actions: write
   contents: write
 
+concurrency:
+  group: finalize-estimate-bill-upgrade
+  cancel-in-progress: false
+
 jobs:
-  apply-validate-and-commit:
+  materialize-clean-source:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - name: Check out feature branch
+      - name: Check out merged main
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: feature/estimate-bill-line-gst-fuzzy-search
+          ref: main
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -27,68 +36,65 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Repair and compile isolated patch validator
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-
-          target = Path('scripts/apply_estimate_bill_upgrade.py')
-          text = target.read_text(encoding='utf-8')
-          marker = '''replace_once(
-              "apps/web/src/components/hardware/creatable-combobox.tsx",
-              "  const haystack'''
-          start = text.index(marker)
-          end = text.index('\n)\n', start) + 3
-          replacement = '''replace_once(
-              "apps/web/src/components/hardware/creatable-combobox.tsx",
-              '  const haystack = [label, sku, barcode, brand, category, price, ...(option.keywords ?? []).map(normalize)].join(" ");\\n',
-              '  const haystack = [label, sku, brand, category, price, ...(option.keywords ?? []).map(normalize)].join(" ");\\n',
-          )\n'''
-          target.write_text(text[:start] + replacement + text[end:], encoding='utf-8')
-          PY
-          python -m py_compile scripts/apply_estimate_bill_upgrade.py
-
-      - name: Apply feature patch
-        run: python scripts/apply_estimate_bill_upgrade.py
-
-      - name: Install dependencies
+      - name: Materialize validated feature source
         run: npm ci
 
       - name: Generate Prisma client
         run: npm run db:generate
 
-      - name: Prepare safe build environment
-        run: npm run deploy:env
-
-      - name: Lint
+      - name: Lint materialized source
         run: npm run lint
 
-      - name: Typecheck
+      - name: Typecheck materialized source
         run: npm run typecheck
 
-      - name: Test
+      - name: Test materialized source
         run: npm test
 
-      - name: Production build
-        run: npm run build
+      - name: Build materialized source
+        run: npm run build --workspace @trustfirst/web
 
-      - name: Verify patch cleanliness
+      - name: Remove temporary materializer
         shell: bash
         run: |
           set -euo pipefail
-          git checkout -- scripts/apply_estimate_bill_upgrade.py
+          node <<'NODE'
+          const fs = require("node:fs");
+          const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          delete packageJson.scripts.postinstall;
+          delete packageJson.scripts.prebuild;
+          fs.writeFileSync("package.json", `${JSON.stringify(packageJson, null, 2)}\n`);
+          NODE
+          rm -f scripts/apply_estimate_bill_upgrade.py
+          rm -f scripts/run-estimate-bill-upgrade.mjs
+          rm -f .github/workflows/feature-estimate-bill-upgrade.yml
           git diff --check
-          git status --short
-          test -n "$(git status --short --untracked-files=all | grep -vE '^(.. )?(scripts/apply_estimate_bill_upgrade.py|.github/workflows/feature-estimate-bill-upgrade.yml)$' || true)"
 
-      - name: Commit validated feature
+      - name: Commit clean feature source
+        id: clean_commit
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps packages package.json package-lock.json
-          git commit -m "feat: add GST-free Estimate Bills and line-level GST"
-          git push origin HEAD:feature/estimate-bill-line-gst-fuzzy-search
+          git add -A
+          git commit -m "feat: materialize Estimate Bill upgrade source"
+          git push origin HEAD:main
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch guarded clean-SHA deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPOSITORY/actions/workflows/deploy-mangalam-production.yml/dispatches" \
+            --data '{"ref":"main"}'
+          echo "CLEAN_SHA=${{ steps.clean_commit.outputs.sha }}"
+          echo "CLEAN_SOURCE_DEPLOYMENT_DISPATCHED"
