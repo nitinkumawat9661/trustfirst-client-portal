@@ -173,6 +173,13 @@ jobs:
             fi
           }
 
+          safe_trustfirst_path() {
+            case "$1" in
+              /var/www/trustfirst-client-portal|/var/www/trustfirst-client-portal/*|/var/www/trustfirst-client-portal-releases/*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
           echo "PREFLIGHT_PATH=$PATH"
           check user_matches test "$(id -un)" = "$EXPECTED_USER"
           check app_directory_exists test -d "$APP_DIR"
@@ -190,17 +197,77 @@ jobs:
           check curl_available command -v curl
           check tar_available command -v tar
           check ss_available command -v ss
+          check ps_available command -v ps
           node --version
           npm --version
           pm2 --version
 
-          if pm2 describe "$PM2_PROCESS" >/dev/null 2>&1; then
-            echo "PREFLIGHT_OK:trustfirst_pm2_process"
-          elif ss -ltn 2>/dev/null | grep -Eq "[:.]${PROD_PORT}[[:space:]]"; then
-            echo "PREFLIGHT_FAIL:production_port_occupied_without_expected_pm2" >&2
-            exit 1
+          LISTENER_LINE="$(ss -ltnp 2>/dev/null | grep -E "[:.]${PROD_PORT}[[:space:]]" | head -n 1 || true)"
+          if [ -z "$LISTENER_LINE" ]; then
+            if pm2 describe "$PM2_PROCESS" >/dev/null 2>&1; then
+              echo "PREFLIGHT_OK:stopped_canonical_pm2_process"
+            else
+              echo "PREFLIGHT_OK:trustfirst_pm2_first_start"
+            fi
           else
-            echo "PREFLIGHT_OK:trustfirst_pm2_first_start"
+            LISTENER_PID="$(printf '%s\n' "$LISTENER_LINE" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+            [ -n "$LISTENER_PID" ] || {
+              echo "PREFLIGHT_FAIL:production_listener_pid_unresolved" >&2
+              exit 1
+            }
+            LISTENER_CWD="$(readlink -f "/proc/$LISTENER_PID/cwd" 2>/dev/null || true)"
+            safe_trustfirst_path "$LISTENER_CWD" || {
+              echo "PREFLIGHT_FAIL:production_listener_outside_trustfirst:$LISTENER_CWD" >&2
+              exit 1
+            }
+            LISTENER_CMD="$(tr '\0' ' ' < "/proc/$LISTENER_PID/cmdline" 2>/dev/null || true)"
+            case "$LISTENER_CMD" in
+              *next-server*|*node*) ;;
+              *)
+                echo "PREFLIGHT_FAIL:unexpected_production_listener_command" >&2
+                exit 1
+                ;;
+            esac
+
+            ANCESTORS=""
+            CURRENT_PID="$LISTENER_PID"
+            while [ -n "$CURRENT_PID" ] && [ "$CURRENT_PID" -gt 1 ] 2>/dev/null; do
+              ANCESTORS="${ANCESTORS}${ANCESTORS:+,}${CURRENT_PID}"
+              CURRENT_PID="$(ps -o ppid= -p "$CURRENT_PID" 2>/dev/null | tr -d ' ' || true)"
+            done
+
+            PM2_MATCH="$(pm2 jlist | node -e '
+              const fs = require("fs");
+              const ancestors = new Set((process.argv[1] || "").split(",").filter(Boolean));
+              const listenerCwd = process.argv[2] || "";
+              const list = JSON.parse(fs.readFileSync(0, "utf8"));
+              const safe = (value) => value === "/var/www/trustfirst-client-portal" || value.startsWith("/var/www/trustfirst-client-portal/") || value.startsWith("/var/www/trustfirst-client-portal-releases/");
+              const eligible = (item) => {
+                const env = item.pm2_env || {};
+                const name = String(item.name || env.name || "");
+                const cwd = String(env.pm_cwd || "");
+                return safe(cwd) && !/cafeluxe/i.test(name + cwd);
+              };
+              let matches = list.filter((item) => eligible(item) && ancestors.has(String(item.pid)));
+              if (matches.length === 0) {
+                matches = list.filter((item) => {
+                  if (!eligible(item)) return false;
+                  const cwd = String((item.pm2_env || {}).pm_cwd || "");
+                  return listenerCwd === cwd || listenerCwd.startsWith(cwd + "/");
+                });
+              }
+              if (matches.length !== 1) process.exit(2);
+              const item = matches[0];
+              process.stdout.write(`${item.pm_id}\t${item.name}\t${(item.pm2_env || {}).pm_cwd || ""}`);
+            ' "$ANCESTORS" "$LISTENER_CWD")" || {
+              echo "PREFLIGHT_FAIL:trustfirst_listener_pm2_mapping" >&2
+              exit 1
+            }
+            [ -n "$PM2_MATCH" ] || {
+              echo "PREFLIGHT_FAIL:empty_trustfirst_listener_pm2_mapping" >&2
+              exit 1
+            }
+            echo "PREFLIGHT_OK:adoptable_existing_trustfirst_runtime:$PM2_MATCH"
           fi
 
           echo VPS_PREFLIGHT_PASSED
