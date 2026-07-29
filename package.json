@@ -8,6 +8,8 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "python3 scripts/run_estimate_sale_fast_entry.py",
+    "prebuild": "python3 scripts/run_estimate_sale_fast_entry.py",
     "dev": "npm run dev --workspace @trustfirst/web",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
