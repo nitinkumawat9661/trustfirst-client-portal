@@ -35,6 +35,16 @@ replacePatchBlock(
   `replace_once(\n    "apps/web/src/app/(platform)/admin/hardware/print/[documentId]/page.tsx",\n    '''              <col style={{ width: "6%" }} />\n              <col style={{ width: "10%" }} />\n''',\n    '''              {!isEstimate ? <col style={{ width: "6%" }} /> : null}\n              <col style={{ width: isEstimate ? "16%" : "10%" }} />\n''',\n)\n`,
 );
 
+replacePatchBlock(
+  `replace_once(\n    "apps/web/src/app/(platform)/admin/hardware/print/[documentId]/page.tsx",\n    '''                 <th className="px-2 py-2 text-right">GST</th>`,
+  `replace_once(\n    "apps/web/src/app/(platform)/admin/hardware/print/[documentId]/page.tsx",\n    '''                <th className="px-2 py-2 text-right">GST</th>\n                <th className="px-2 py-2 text-right">Total</th>\n''',\n    '''                {!isEstimate ? <th className="px-2 py-2 text-right">GST</th> : null}\n                <th className="px-2 py-2 text-right">Total</th>\n''',\n)\n`,
+);
+
+replacePatchBlock(
+  `replace_once(\n    "apps/web/src/app/(platform)/admin/hardware/print/[documentId]/page.tsx",\n    '''                   <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td>`,
+  `replace_once(\n    "apps/web/src/app/(platform)/admin/hardware/print/[documentId]/page.tsx",\n    '''                  <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td>\n                  <td className="px-2 py-2 text-right font-medium">{money(item.lineTotalCents)}</td>\n''',\n    '''                  {!isEstimate ? <td className="px-2 py-2 text-right">{item.taxRateBps / 100}%</td> : null}\n                  <td className="px-2 py-2 text-right font-medium">{money(item.lineTotalCents)}</td>\n''',\n)\n`,
+);
+
 const strictHelper = `def replace_once(relative: str, before: str, after: str) -> None:\n    content = read(relative)\n    count = content.count(before)\n    if count != 1:\n        raise RuntimeError(f"{relative}: expected one occurrence, found {count}: {before[:120]!r}")\n    write(relative, content.replace(before, after, 1))\n`;
 const idempotentHelper = `def replace_once(relative: str, before: str, after: str) -> None:\n    content = read(relative)\n    count = content.count(before)\n    if count == 0:\n        if not after or after in content:\n            return\n        raise RuntimeError(f"{relative}: source block missing and replacement not present: {before[:120]!r}")\n    if count != 1:\n        raise RuntimeError(f"{relative}: expected at most one occurrence, found {count}: {before[:120]!r}")\n    write(relative, content.replace(before, after, 1))\n`;
 if (source.includes(strictHelper)) {
