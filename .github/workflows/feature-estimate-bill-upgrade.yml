@@ -1,6 +1,7 @@
 name: Validate Estimate Bill Upgrade
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - feature/estimate-bill-line-gst-fuzzy-search
