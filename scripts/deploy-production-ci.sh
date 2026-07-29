@@ -51,6 +51,13 @@ safe_trustfirst_path() {
   esac
 }
 
+trustfirst_process_name() {
+  case "$1" in
+    [Tt][Rr][Uu][Ss][Tt][Ff][Ii][Rr][Ss][Tt]*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 copy_tree() {
   local source_dir="$1"
   local target_dir="$2"
@@ -106,7 +113,7 @@ resolve_pm2_mapping() {
   ' "$ancestors" "$listener_cwd"
 }
 
-resolve_unique_online_safe_process() {
+resolve_unique_online_trustfirst_process() {
   pm2 jlist | node -e '
     const fs = require("fs");
     const list = JSON.parse(fs.readFileSync(0, "utf8"));
@@ -115,7 +122,8 @@ resolve_unique_online_safe_process() {
       const env = item.pm2_env || {};
       const name = String(item.name || env.name || "");
       const cwd = String(env.pm_cwd || "");
-      return env.status === "online" && safe(cwd) && !/cafeluxe/i.test(name + cwd);
+      const trustfirstNamed = /^trustfirst/i.test(name);
+      return env.status === "online" && !/cafeluxe/i.test(name + cwd) && (safe(cwd) || trustfirstNamed);
     });
     if (matches.length !== 1) process.exit(2);
     const item = matches[0];
@@ -145,10 +153,14 @@ resolve_stopped_canonical_process() {
 
 validate_old_pm2_mapping() {
   [ -n "$OLD_PM2_ID" ] || fail "Existing TrustFirst PM2 id was empty."
-  safe_trustfirst_path "$OLD_PM2_CWD" || fail "Existing PM2 cwd is outside TrustFirst: $OLD_PM2_CWD"
   case "$OLD_PM2_NAME:$OLD_PM2_CWD" in
     *[Cc]afe[Ll]uxe*) fail "Existing production process unexpectedly references CafeLuxe." ;;
   esac
+  if ! safe_trustfirst_path "$OLD_PM2_CWD"; then
+    trustfirst_process_name "$OLD_PM2_NAME" \
+      || fail "Existing PM2 process is neither TrustFirst-named nor in an approved TrustFirst path."
+    log "Accepting TrustFirst-named PM2 wrapper with external cwd: $OLD_PM2_CWD"
+  fi
 }
 
 resolve_existing_runtime() {
@@ -171,8 +183,8 @@ resolve_existing_runtime() {
 
   listener_pid="$(printf '%s\n' "$listener_line" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
   if [ -z "$listener_pid" ]; then
-    mapping="$(resolve_unique_online_safe_process)" \
-      || fail "Socket PID is hidden and exactly one online safe TrustFirst PM2 process was not found."
+    mapping="$(resolve_unique_online_trustfirst_process)" \
+      || fail "Socket PID is hidden and exactly one online TrustFirst PM2 process was not found."
     [ -n "$mapping" ] || fail "Socket PID is hidden and TrustFirst PM2 mapping was empty."
     curl --silent --show-error --fail --max-time 5 "http://127.0.0.1:${PRODUCTION_PORT}/api/auth/session" >/dev/null \
       || fail "Existing TrustFirst loopback health check failed."
@@ -213,10 +225,8 @@ stop_existing_runtime_for_switch() {
     return 0
   fi
 
-  if [ "$OLD_PM2_NAME" != "$PM2_APP_NAME" ] && \
-     [ "$OLD_PM2_CWD" != "$DEPLOY_PATH" ] && \
-     [[ "$OLD_PM2_CWD" != "$DEPLOY_PATH/"* ]]; then
-    log "Stopping and retaining existing external TrustFirst PM2 process id=$OLD_PM2_ID for rollback."
+  if [ "$OLD_PM2_NAME" != "$PM2_APP_NAME" ]; then
+    log "Stopping and retaining existing TrustFirst PM2 process id=$OLD_PM2_ID for rollback."
     pm2 stop "$OLD_PM2_ID"
     OLD_PM2_RETAINED=1
   else

@@ -180,7 +180,7 @@ jobs:
             esac
           }
 
-          unique_online_safe_pm2_match() {
+          unique_online_trustfirst_pm2_match() {
             pm2 jlist | node -e '
               const fs = require("fs");
               const list = JSON.parse(fs.readFileSync(0, "utf8"));
@@ -189,7 +189,8 @@ jobs:
                 const env = item.pm2_env || {};
                 const name = String(item.name || env.name || "");
                 const cwd = String(env.pm_cwd || "");
-                return env.status === "online" && safe(cwd) && !/cafeluxe/i.test(name + cwd);
+                const trustfirstNamed = /^trustfirst/i.test(name);
+                return env.status === "online" && !/cafeluxe/i.test(name + cwd) && (safe(cwd) || trustfirstNamed);
               });
               if (matches.length !== 1) process.exit(2);
               const item = matches[0];
@@ -229,7 +230,7 @@ jobs:
           else
             LISTENER_PID="$(printf '%s\n' "$LISTENER_LINE" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
             if [ -z "$LISTENER_PID" ]; then
-              PM2_MATCH="$(unique_online_safe_pm2_match)" || {
+              PM2_MATCH="$(unique_online_trustfirst_pm2_match)" || {
                 echo "PREFLIGHT_FAIL:unique_online_trustfirst_pm2_mapping" >&2
                 exit 1
               }
