@@ -29,11 +29,15 @@ if (!/^\d+\.\d+\.\d+(?:[-+].+)?$/u.test(version)) {
   process.exit(1);
 }
 
-console.log(`Installing ${bindingPackage}@${version} for Linux CI.`);
+console.log(`Installing ${bindingPackage}@${version} for Linux CI without pruning workspace dev dependencies.`);
 const installArgs = [
   "install",
   "--no-save",
   "--no-package-lock",
+  "--include=dev",
+  "--include=optional",
+  "--ignore-scripts",
+  "--legacy-peer-deps",
   `${bindingPackage}@${version}`,
 ];
 
@@ -42,6 +46,12 @@ const args = process.env.npm_execpath ? [process.env.npm_execpath, ...installArg
 const result = spawnSync(command, args, {
   cwd: repoRoot,
   encoding: "utf8",
+  env: {
+    ...process.env,
+    NODE_ENV: "development",
+    npm_config_omit: "",
+    npm_config_production: "false",
+  },
   shell: false,
   stdio: "inherit",
 });
