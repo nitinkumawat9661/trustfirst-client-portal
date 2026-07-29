@@ -1,0 +1,206 @@
+name: Deploy Mangalam ERP Production
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-mangalam-production.yml"
+      - "apps/**"
+      - "packages/**"
+      - "scripts/deploy-production-ci.sh"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mangalam-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.1
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Validate deployment script syntax
+        run: bash -n scripts/deploy-production-ci.sh
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+  deploy:
+    name: Canary and production deploy
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+      PM2_APP_NAME: ${{ vars.PM2_APP_NAME }}
+      PRODUCTION_PORT: ${{ vars.PRODUCTION_PORT }}
+      CANARY_PORT: ${{ vars.CANARY_PORT }}
+      PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+      PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            VPS_HOST VPS_PORT VPS_USER VPS_SSH_PRIVATE_KEY VPS_KNOWN_HOSTS
+            DEPLOY_PATH PM2_APP_NAME PRODUCTION_PORT CANARY_PORT
+            PRODUCTION_URL PUBLIC_URL
+          )
+          for name in "${required[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing GitHub production environment value: $name" >&2
+              exit 1
+            fi
+          done
+          [ "$DEPLOY_PATH" = "/var/www/trustfirst-client-portal" ]
+          [ "$PM2_APP_NAME" = "trustfirst-client-portal" ]
+          [ "$PRODUCTION_PORT" = "3010" ]
+          [ "$CANARY_PORT" = "3012" ]
+          [ "$PRODUCTION_PORT" != "3000" ]
+          [ "$CANARY_PORT" != "3000" ]
+
+      - name: Configure verified SSH access
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s' "$VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/trustfirst_deploy"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/trustfirst_deploy" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/trustfirst_deploy" >/dev/null
+
+      - name: Read-only VPS preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -p "$VPS_PORT" \
+            -i "$HOME/.ssh/trustfirst_deploy" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            "set -e; \
+             test \"\$(id -un)\" = '$VPS_USER'; \
+             test -d '$DEPLOY_PATH'; \
+             test -w '$DEPLOY_PATH'; \
+             test -r /etc/trustfirst-client-portal.env; \
+             command -v node >/dev/null; \
+             command -v npm >/dev/null; \
+             command -v pm2 >/dev/null; \
+             command -v curl >/dev/null; \
+             command -v tar >/dev/null; \
+             pm2 describe '$PM2_APP_NAME' >/dev/null; \
+             echo VPS_PREFLIGHT_PASSED"
+
+      - name: Package exact tracked release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=tar.gz --output="trustfirst-${GITHUB_SHA}.tar.gz" "$GITHUB_SHA"
+          test -s "trustfirst-${GITHUB_SHA}.tar.gz"
+
+      - name: Upload release and deployment script
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp \
+            -P "$VPS_PORT" \
+            -i "$HOME/.ssh/trustfirst_deploy" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "trustfirst-${GITHUB_SHA}.tar.gz" \
+            "scripts/deploy-production-ci.sh" \
+            "$VPS_USER@$VPS_HOST:/tmp/"
+
+      - name: Deploy through canary with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_archive="/tmp/trustfirst-${GITHUB_SHA}.tar.gz"
+          remote_script="/tmp/deploy-production-ci.sh"
+
+          ssh \
+            -p "$VPS_PORT" \
+            -i "$HOME/.ssh/trustfirst_deploy" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            "chmod 700 '$remote_script' && \
+             DEPLOY_SHA='$GITHUB_SHA' \
+             DEPLOY_ARCHIVE='$remote_archive' \
+             DEPLOY_PATH='$DEPLOY_PATH' \
+             PM2_APP_NAME='$PM2_APP_NAME' \
+             PRODUCTION_PORT='$PRODUCTION_PORT' \
+             CANARY_PORT='$CANARY_PORT' \
+             PRODUCTION_URL='$PRODUCTION_URL' \
+             PUBLIC_URL='$PUBLIC_URL' \
+             bash '$remote_script'; \
+             status=\$?; \
+             rm -f '$remote_script' '$remote_archive'; \
+             exit \$status"
+
+      - name: Verify deployed commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployed_sha="$(ssh \
+            -p "$VPS_PORT" \
+            -i "$HOME/.ssh/trustfirst_deploy" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            "cat '$DEPLOY_PATH/.trustfirst-deployed-commit'")"
+          [ "$deployed_sha" = "$GITHUB_SHA" ]
+          curl --silent --show-error --fail --max-time 15 "$PRODUCTION_URL/api/auth/session" >/dev/null
+          curl --silent --show-error --fail --max-time 15 "$PUBLIC_URL" >/dev/null
+          echo "DEPLOYED_SHA=$deployed_sha"
+          echo "MANGALAM_PRODUCTION_DEPLOYMENT_SUCCESSFUL"
