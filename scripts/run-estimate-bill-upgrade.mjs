@@ -83,4 +83,17 @@ if (quickPosTest.includes(testNeedle)) {
   throw new Error("Could not update the Quick POS preview test fixture.");
 }
 
+const estimateTestPath = path.join(repoRoot, "apps/web/src/components/hardware/estimate-bill-gst.test.ts");
+let estimateTest = fs.readFileSync(estimateTestPath, "utf8");
+const estimateImport = 'import { describe, expect, it } from "vitest";';
+if (estimateTest.includes(estimateImport)) {
+  estimateTest = estimateTest.replace(
+    estimateImport,
+    `import { describe, expect, it, vi } from "vitest";\n\nvi.mock("@/server/hardware/whatsapp", () => ({\n  buildWhatsAppBillUrl: () => null,\n}));`,
+  );
+  fs.writeFileSync(estimateTestPath, estimateTest, "utf8");
+} else if (!estimateTest.includes('vi.mock("@/server/hardware/whatsapp"')) {
+  throw new Error("Could not add the WhatsApp mock to the Estimate Bill GST test.");
+}
+
 console.log("Estimate Bill upgrade materialized successfully.");
