@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-if (!process.env.CI || process.platform !== "linux" || process.arch !== "x64") {
+if (process.platform !== "linux" || process.arch !== "x64") {
   process.exit(0);
 }
 
@@ -32,7 +32,7 @@ if (!/^\d+\.\d+\.\d+(?:[-+].+)?$/u.test(version)) {
 }
 
 const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "trustfirst-rolldown-"));
-console.log(`Extracting ${bindingPackage}@${version} for Linux CI without mutating the workspace dependency tree.`);
+console.log(`Extracting ${bindingPackage}@${version} for Linux x64 without mutating the workspace dependency tree.`);
 
 const npmCommand = process.env.npm_execpath ? process.execPath : "npm";
 const npmArgs = process.env.npm_execpath

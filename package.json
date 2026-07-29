@@ -13,6 +13,7 @@
     "lint": "npm run lint --workspaces --if-present",
     "pretest": "node scripts/ensure-rolldown-binding.mjs",
     "test": "npm run test --workspaces --if-present",
+    "test:binding": "node scripts/ensure-rolldown-binding.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "format": "npm run format --workspaces --if-present",
     "deploy:env": "node scripts/validate-env.mjs",
