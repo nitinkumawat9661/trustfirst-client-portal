@@ -71,4 +71,16 @@ try {
 
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
+
+const quickPosTestPath = path.join(repoRoot, "apps/web/src/components/hardware/quick-pos-form.test.ts");
+let quickPosTest = fs.readFileSync(quickPosTestPath, "utf8");
+const testNeedle = `      cashierName: "Counter",\n      customer: {`;
+const testReplacement = `      cashierName: "Counter",\n      customerAddress: "Test billing address",\n      customerName: "TEST CUSTOMER",\n      customer: {`;
+if (quickPosTest.includes(testNeedle)) {
+  quickPosTest = quickPosTest.replace(testNeedle, testReplacement);
+  fs.writeFileSync(quickPosTestPath, quickPosTest, "utf8");
+} else if (!quickPosTest.includes('customerAddress: "Test billing address"')) {
+  throw new Error("Could not update the Quick POS preview test fixture.");
+}
+
 console.log("Estimate Bill upgrade materialized successfully.");
