@@ -4,6 +4,11 @@ import { Button, Input } from "@trustfirst/ui";
 import { Plus, Search, Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ProductSearchMetadata } from "./product-search-metadata-bridge";
+import {
+  isStrongProductSearchMatch,
+  normalizeProductSearchText,
+  rankProductSearchEntry,
+} from "./product-search";
 
 export type CreatableComboboxOption = {
   id: string;
@@ -13,6 +18,11 @@ export type CreatableComboboxOption = {
 
 type SearchWindow = Window & {
   __hardwareProductSearchMetadata?: Record<string, ProductSearchMetadata>;
+};
+
+type RankedOption = {
+  option: CreatableComboboxOption;
+  score: number;
 };
 
 const FAVORITES_KEY = "trustfirst.hardware.product-favorites";
@@ -61,12 +71,12 @@ export function CreatableCombobox({
   }, [metadataRevision]);
   const isProductSearch = options.some((option) => Boolean(metadata[option.id]));
   const displayedQuery = open ? query : value;
-  const normalizedQuery = normalize(displayedQuery);
+  const normalizedQuery = normalizeProductSearchText(displayedQuery);
 
   const brands = useMemo(() => uniqueSorted(options.map((option) => metadata[option.id]?.brandName ?? null)), [metadata, options]);
   const categories = useMemo(() => uniqueSorted(options.map((option) => metadata[option.id]?.categoryName ?? null)), [metadata, options]);
 
-  const matches = useMemo(() => {
+  const rankedMatches = useMemo(() => {
     const filtered = options.filter((option) => {
       const product = metadata[option.id];
       if (brandFilter && product?.brandName !== brandFilter) return false;
@@ -75,25 +85,40 @@ export function CreatableCombobox({
     });
 
     if (!normalizedQuery) {
-      if (!isProductSearch) return [];
+      if (!isProductSearch) return [] as RankedOption[];
       const priority = [...favoriteIds, ...recentIds].filter((id, index, values) => values.indexOf(id) === index);
       const byId = new Map(filtered.map((option) => [option.id, option]));
       const preferred = priority.map((id) => byId.get(id)).filter((option): option is CreatableComboboxOption => Boolean(option));
       const remaining = filtered
         .filter((option) => !priority.includes(option.id))
         .sort((left, right) => left.label.localeCompare(right.label));
-      return [...preferred, ...remaining].slice(0, 20);
+      return [...preferred, ...remaining].slice(0, 20).map((option) => ({ option, score: 0 }));
     }
 
     return filtered
-      .map((option) => ({ option, score: rankOption(option, normalizedQuery, metadata[option.id]) }))
+      .map((option) => ({
+        option,
+        score: isProductSearch
+          ? rankProductSearchEntry({
+            brandName: metadata[option.id]?.brandName,
+            categoryName: metadata[option.id]?.categoryName,
+            keywords: option.keywords,
+            label: option.label,
+            salesPriceCents: metadata[option.id]?.salesPriceCents,
+            sku: metadata[option.id]?.sku,
+          }, displayedQuery)
+          : rankGenericOption(option, normalizedQuery),
+      }))
       .filter((entry) => entry.score > 0)
       .sort((left, right) => right.score - left.score || left.option.label.localeCompare(right.option.label))
-      .slice(0, 20)
-      .map((entry) => entry.option);
-  }, [brandFilter, categoryFilter, favoriteIds, isProductSearch, metadata, normalizedQuery, options, recentIds]);
+      .slice(0, 20);
+  }, [brandFilter, categoryFilter, displayedQuery, favoriteIds, isProductSearch, metadata, normalizedQuery, options, recentIds]);
 
-  const exactMatch = options.some((option) => normalize(option.label) === normalizedQuery);
+  const matches = rankedMatches.map((entry) => entry.option);
+  const topMatchScore = rankedMatches[0]?.score ?? 0;
+  const exactMatch = options.some((option) => normalizeProductSearchText(option.label) === normalizedQuery);
+  const strongProductMatch = isProductSearch && isStrongProductSearchMatch(topMatchScore);
+  const showCreateAction = Boolean(normalizedQuery) && !exactMatch && !strongProductMatch;
   const showPanel = open && (isProductSearch || Boolean(normalizedQuery));
 
   function select(id: string) {
@@ -160,7 +185,7 @@ export function CreatableCombobox({
           event.preventDefault();
           const selected = matches[activeIndex] ?? matches[0];
           if (selected) select(selected.id);
-          else if (normalizedQuery && !exactMatch) onCreate(query.trim());
+          else if (showCreateAction) onCreate(query.trim());
         }}
       />
       {showPanel ? (
@@ -177,7 +202,14 @@ export function CreatableCombobox({
                   {categories.map((category) => <option key={category} value={category}>{category}</option>)}
                 </select>
               </div>
-              {!normalizedQuery ? <p className="text-xs text-muted-foreground">Favorites and recently billed products appear first. Search by name, SKU, part number, barcode, brand, category, size, or price.</p> : null}
+              {!normalizedQuery ? (
+                <p className="text-xs text-muted-foreground">
+                  Favorites and recently billed products appear first. Search by product name, brand, category, SKU, model, part number, size, colour, or price.
+                </p>
+              ) : null}
+              {normalizedQuery && matches.length && !exactMatch ? (
+                <p className="text-xs text-muted-foreground">Closest matches are ranked first, including spelling mistakes and words typed in any order.</p>
+              ) : null}
               {categories.slice(0, 6).length ? (
                 <div className="flex flex-wrap gap-1">
                   {categories.slice(0, 6).map((category) => (
@@ -205,7 +237,7 @@ export function CreatableCombobox({
                   {product ? (
                     <>
                       <span className="mt-0.5 block text-xs text-muted-foreground">{[product.brandName, product.categoryName, product.sku].filter(Boolean).join(" • ")}</span>
-                      <span className="mt-0.5 block text-xs">{money(product.salesPriceCents)} • Stock {product.currentStock} {product.unitCode ?? "PCS"}{product.barcode ? ` • ${product.barcode}` : ""}</span>
+                      <span className="mt-0.5 block text-xs">{money(product.salesPriceCents)} • Stock {product.currentStock} {product.unitCode ?? "PCS"}</span>
                     </>
                   ) : option.keywords?.length ? <span className="block text-xs text-muted-foreground">{option.keywords.filter(Boolean).join(" • ")}</span> : null}
                 </button>
@@ -218,7 +250,7 @@ export function CreatableCombobox({
             );
           })}
           {!matches.length ? <p className="px-2 py-3 text-sm text-muted-foreground">No matching product found.</p> : null}
-          {normalizedQuery && !exactMatch ? (
+          {showCreateAction ? (
             <Button className="mt-1 w-full justify-start" onMouseDown={(event) => event.preventDefault()} onClick={() => onCreate(query.trim())} size="sm" type="button" variant="ghost">
               <Plus className="size-4" />{createLabel} &quot;{query.trim()}&quot;
             </Button>
@@ -229,28 +261,16 @@ export function CreatableCombobox({
   );
 }
 
-function rankOption(option: CreatableComboboxOption, query: string, product: ProductSearchMetadata | undefined) {
-  const label = normalize(option.label);
-  const sku = normalize(product?.sku ?? option.keywords?.[0] ?? "");
-  const barcode = normalize(product?.barcode ?? option.keywords?.[1] ?? "");
-  const brand = normalize(product?.brandName ?? "");
-  const category = normalize(product?.categoryName ?? "");
-  const price = product ? String(product.salesPriceCents / 100) : "";
-  const haystack = [label, sku, barcode, brand, category, price, ...(option.keywords ?? []).map(normalize)].join(" ");
+function rankGenericOption(option: CreatableComboboxOption, query: string) {
+  const label = normalizeProductSearchText(option.label);
+  const keywords = (option.keywords ?? []).map(normalizeProductSearchText);
+  const haystack = [label, ...keywords].join(" ");
   const tokens = query.split(" ").filter(Boolean);
-  if (barcode && barcode === query) return 1200;
-  if (sku && sku === query) return 1150;
-  if (label === query) return 1100;
-  if (label.startsWith(query)) return 1000;
-  if (sku.startsWith(query)) return 950;
-  if (barcode.startsWith(query)) return 925;
+  if (label === query) return 1_100;
+  if (label.startsWith(query)) return 1_000;
   if (tokens.every((token) => haystack.includes(token))) return 800 + tokens.length;
   if (haystack.includes(query)) return 700;
   return 0;
-}
-
-function normalize(value: string) {
-  return value.trim().replace(/[^\p{L}\p{N}.]+/gu, " ").replace(/\s+/gu, " ").toLowerCase();
 }
 
 function uniqueSorted(values: Array<string | null>) {
@@ -260,8 +280,8 @@ function uniqueSorted(values: Array<string | null>) {
 function readStoredIds(key: string) {
   if (typeof window === "undefined") return [];
   try {
-    const value = JSON.parse(window.localStorage.getItem(key) ?? "[]");
-    return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+    const storedValue = JSON.parse(window.localStorage.getItem(key) ?? "[]");
+    return Array.isArray(storedValue) ? storedValue.filter((entry): entry is string => typeof entry === "string") : [];
   } catch {
     return [];
   }
