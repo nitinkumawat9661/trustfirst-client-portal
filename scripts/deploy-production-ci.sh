@@ -32,6 +32,14 @@ log() {
   printf '[trustfirst-deploy] %s\n' "$*"
 }
 
+need_sudo() {
+  if [ "$(id -u)" -eq 0 ]; then
+    "$@"
+  else
+    sudo -n "$@"
+  fi
+}
+
 copy_tree() {
   local source_dir="$1"
   local target_dir="$2"
@@ -127,7 +135,15 @@ trap 'cleanup_canary' EXIT
 [ -f "$ENV_FILE" ] || fail "Missing production environment file: $ENV_FILE"
 [ -f "$DEPLOY_ARCHIVE" ] || fail "Missing uploaded release archive: $DEPLOY_ARCHIVE"
 [ -d "$DEPLOY_PATH" ] || fail "Existing TrustFirst application directory is missing: $DEPLOY_PATH"
-[ -w "$DEPLOY_PATH" ] || fail "Deploy user cannot write to $DEPLOY_PATH"
+
+if [ ! -w "$DEPLOY_PATH" ]; then
+  command -v sudo >/dev/null 2>&1 || fail "Deploy user cannot write to $DEPLOY_PATH and sudo is unavailable."
+  sudo -n true >/dev/null 2>&1 || fail "Deploy user cannot write to $DEPLOY_PATH and passwordless sudo is unavailable."
+  log "Repairing ownership of the isolated TrustFirst application directory."
+  need_sudo chown -R "$(id -un):$(id -gn)" "$DEPLOY_PATH"
+fi
+[ -w "$DEPLOY_PATH" ] || fail "Deploy user still cannot write to $DEPLOY_PATH after ownership repair."
+
 command -v node >/dev/null 2>&1 || fail "Node.js is not installed."
 command -v npm >/dev/null 2>&1 || fail "npm is not installed."
 command -v pm2 >/dev/null 2>&1 || fail "PM2 is not installed."
