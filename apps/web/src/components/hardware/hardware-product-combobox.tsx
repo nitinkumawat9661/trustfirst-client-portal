@@ -4,6 +4,11 @@ import { Button, Input } from "@trustfirst/ui";
 import { Plus, Search, Star } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { HardwareProductSummary } from "@/server/hardware";
+import {
+  isStrongProductSearchMatch,
+  normalizeProductSearchText,
+  rankProductSearchEntry,
+} from "./product-search";
 
 const MAX_RESULTS = 20;
 const MAX_RECENT = 20;
@@ -44,7 +49,7 @@ export function HardwareProductCombobox({
   const duplicateCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const product of products) {
-      const key = normalize(product.name);
+      const key = normalizeProductSearchText(product.name);
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return counts;
@@ -68,8 +73,8 @@ export function HardwareProductCombobox({
   }, [products]);
 
   const displayedQuery = open ? query : value;
-  const results = useMemo(() => {
-    const normalizedQuery = normalize(displayedQuery);
+  const normalizedQuery = normalizeProductSearchText(displayedQuery);
+  const rankedResults = useMemo(() => {
     const recentRank = new Map(memory.recent.map((id, index) => [id, index]));
     const favoriteSet = new Set(memory.favorites);
     const filtered = products.filter((product) =>
@@ -85,14 +90,25 @@ export function HardwareProductCombobox({
           if (favoriteDifference) return favoriteDifference;
           return (recentRank.get(left.id) ?? 999) - (recentRank.get(right.id) ?? 999);
         })
-        .slice(0, MAX_RESULTS);
+        .slice(0, MAX_RESULTS)
+        .map((product) => ({ product, score: 0 }));
     }
 
     return filtered
-      .map((product) => ({ product, score: searchScore(product, normalizedQuery) }))
-      .filter((entry) => Number.isFinite(entry.score))
+      .map((product) => ({
+        product,
+        score: rankProductSearchEntry({
+          brandName: product.brandName,
+          categoryName: product.categoryName,
+          keywords: [product.hsnCode ?? "", product.unitCode ?? ""],
+          label: product.name,
+          salesPriceCents: product.salesPriceCents,
+          sku: product.sku,
+        }, displayedQuery),
+      }))
+      .filter((entry) => entry.score > 0)
       .sort((left, right) => {
-        const scoreDifference = left.score - right.score;
+        const scoreDifference = right.score - left.score;
         if (scoreDifference) return scoreDifference;
         const favoriteDifference = Number(favoriteSet.has(right.product.id)) - Number(favoriteSet.has(left.product.id));
         if (favoriteDifference) return favoriteDifference;
@@ -100,9 +116,11 @@ export function HardwareProductCombobox({
         if (recentDifference) return recentDifference;
         return localeCompare(left.product.name, right.product.name);
       })
-      .slice(0, MAX_RESULTS)
-      .map((entry) => entry.product);
-  }, [brand, category, displayedQuery, memory.favorites, memory.recent, products]);
+      .slice(0, MAX_RESULTS);
+  }, [brand, category, displayedQuery, memory.favorites, memory.recent, normalizedQuery, products]);
+
+  const results = rankedResults.map((entry) => entry.product);
+  const topMatchScore = rankedResults[0]?.score ?? 0;
 
   function select(product: HardwareProductSummary) {
     setQuery(product.name);
@@ -127,8 +145,9 @@ export function HardwareProductCombobox({
     writeMemory(storageKey, nextMemory);
   }
 
-  const normalizedQuery = normalize(displayedQuery);
-  const exactName = products.some((product) => normalize(product.name) === normalizedQuery);
+  const exactName = products.some((product) => normalizeProductSearchText(product.name) === normalizedQuery);
+  const strongMatch = isStrongProductSearchMatch(topMatchScore);
+  const showCreateAction = Boolean(normalizedQuery) && !exactName && !strongMatch;
 
   return (
     <label className="relative grid gap-2 text-sm font-medium">
@@ -137,7 +156,7 @@ export function HardwareProductCombobox({
       <Input
         autoComplete="off"
         className="pl-9"
-        placeholder="Type name, SKU, part code, size or scan barcode"
+        placeholder="Type product, brand, category, SKU, model, size or colour"
         value={displayedQuery}
         onBlur={() => {
           closeTimer.current = setTimeout(() => setOpen(false), 160);
@@ -174,7 +193,7 @@ export function HardwareProductCombobox({
           event.preventDefault();
           const product = results[activeIndex] ?? results[0];
           if (product) select(product);
-          else if (normalizedQuery && !exactName) onCreate(query.trim());
+          else if (showCreateAction) onCreate(query.trim());
         }}
       />
 
@@ -220,13 +239,17 @@ export function HardwareProductCombobox({
                   </button>
                 ))}
               </div>
-            ) : null}
+            ) : (
+              <p className="text-xs font-normal text-muted-foreground sm:col-span-2">
+                Closest matches appear first. Spelling mistakes, partial words, and words in any order are supported.
+              </p>
+            )}
           </div>
 
           <div className="max-h-96 overflow-y-auto p-1">
             {results.map((product, index) => {
               const favorite = memory.favorites.includes(product.id);
-              const variants = duplicateCounts.get(normalize(product.name)) ?? 1;
+              const variants = duplicateCounts.get(normalizeProductSearchText(product.name)) ?? 1;
               return (
                 <div
                   className={`grid grid-cols-[minmax(0,1fr)_36px] items-stretch rounded-md ${index === activeIndex ? "bg-muted" : "hover:bg-muted/70"}`}
@@ -248,7 +271,6 @@ export function HardwareProductCombobox({
                     </span>
                     <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-normal text-muted-foreground">
                       <span>Stock {product.currentStock} {product.unitCode ?? "PCS"}</span>
-                      {product.barcode ? <span>Barcode {product.barcode}</span> : null}
                       {variants > 1 ? <span className="font-medium text-amber-700 dark:text-amber-300">{variants} variants</span> : null}
                     </span>
                   </button>
@@ -266,10 +288,10 @@ export function HardwareProductCombobox({
             })}
             {!results.length ? (
               <p className="px-3 py-4 text-sm font-normal text-muted-foreground">
-                No matching product. Search by SKU/barcode or create a new product.
+                No matching product. Try another name, brand, category, SKU, model, size, or colour.
               </p>
             ) : null}
-            {normalizedQuery && !exactName ? (
+            {showCreateAction ? (
               <Button
                 className="mt-1 w-full justify-start"
                 onMouseDown={(event) => event.preventDefault()}
@@ -283,33 +305,12 @@ export function HardwareProductCombobox({
             ) : null}
           </div>
           <p className="border-t border-border px-3 py-2 text-[11px] font-normal text-muted-foreground">
-            ↑/↓ choose • Enter select • Esc close • scanner Enter selects exact barcode
+            ↑/↓ choose • Enter select • Esc close
           </p>
         </div>
       ) : null}
     </label>
   );
-}
-
-function searchScore(product: HardwareProductSummary, query: string) {
-  const barcode = normalize(product.barcode ?? "");
-  const sku = normalize(product.sku);
-  const name = normalize(product.name);
-  const brand = normalize(product.brandName ?? "");
-  const category = normalize(product.categoryName ?? "");
-  const hsn = normalize(product.hsnCode ?? "");
-  const haystack = `${name} ${sku} ${barcode} ${brand} ${category} ${hsn}`;
-
-  if (barcode && barcode === query) return 0;
-  if (sku === query) return 1;
-  if (name === query) return 2;
-  if (sku.startsWith(query)) return 3;
-  if (name.startsWith(query)) return 4;
-  if (name.split(" ").some((word) => word.startsWith(query))) return 5;
-  if (barcode.startsWith(query)) return 6;
-  if (name.includes(query)) return 7;
-  if (haystack.includes(query)) return 8;
-  return Number.POSITIVE_INFINITY;
 }
 
 function readMemory(key: string): ProductSearchMemory {
@@ -331,10 +332,6 @@ function writeMemory(key: string, memory: ProductSearchMemory) {
   } catch {
     // Billing remains functional when storage is unavailable.
   }
-}
-
-function normalize(value: string) {
-  return value.trim().replace(/\s+/gu, " ").toLowerCase();
 }
 
 function unique(values: string[]) {
