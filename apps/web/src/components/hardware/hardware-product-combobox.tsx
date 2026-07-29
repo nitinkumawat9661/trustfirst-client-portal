@@ -148,10 +148,11 @@ export function HardwareProductCombobox({
   const exactName = products.some((product) => normalizeProductSearchText(product.name) === normalizedQuery);
   const strongMatch = isStrongProductSearchMatch(topMatchScore);
   const showCreateAction = Boolean(normalizedQuery) && !exactName && !strongMatch;
+  const displayLabel = label.replace(/\s*\/\s*barcode/giu, "");
 
   return (
     <label className="relative grid gap-2 text-sm font-medium">
-      {label}
+      {displayLabel}
       <Search className="pointer-events-none absolute left-3 top-9 size-4 text-muted-foreground" />
       <Input
         autoComplete="off"
