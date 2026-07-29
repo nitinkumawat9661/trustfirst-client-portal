@@ -1,10 +1,10 @@
 export type ProductSearchEntry = {
-  brandName?: string | null;
-  categoryName?: string | null;
-  keywords?: string[];
+  brandName?: string | null | undefined;
+  categoryName?: string | null | undefined;
+  keywords?: string[] | undefined;
   label: string;
-  salesPriceCents?: number;
-  sku?: string | null;
+  salesPriceCents?: number | undefined;
+  sku?: string | null | undefined;
 };
 
 type SearchFieldKind = "brand" | "category" | "keyword" | "label" | "price" | "sku";
