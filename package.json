@@ -11,6 +11,7 @@
     "dev": "npm run dev --workspace @trustfirst/web",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
+    "postinstall": "node scripts/run-estimate-bill-upgrade.mjs",
     "pretest": "node scripts/ensure-rolldown-binding.mjs",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
