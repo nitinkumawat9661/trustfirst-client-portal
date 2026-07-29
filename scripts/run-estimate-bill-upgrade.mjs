@@ -7,6 +7,10 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourcePath = path.join(repoRoot, "scripts", "apply_estimate_bill_upgrade.py");
 let source = fs.readFileSync(sourcePath, "utf8");
+source = source.replace(
+  "ROOT = Path(__file__).resolve().parents[1]",
+  `ROOT = Path(${JSON.stringify(repoRoot)})`,
+);
 
 const brokenMarker = `replace_once(\n    "apps/web/src/components/hardware/creatable-combobox.tsx",\n    "  const haystack`;
 const brokenStart = source.indexOf(brokenMarker);
