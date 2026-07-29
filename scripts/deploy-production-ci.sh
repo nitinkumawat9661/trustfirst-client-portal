@@ -106,6 +106,23 @@ resolve_pm2_mapping() {
   ' "$ancestors" "$listener_cwd"
 }
 
+resolve_unique_online_safe_process() {
+  pm2 jlist | node -e '
+    const fs = require("fs");
+    const list = JSON.parse(fs.readFileSync(0, "utf8"));
+    const safe = (value) => value === "/var/www/trustfirst-client-portal" || value.startsWith("/var/www/trustfirst-client-portal/") || value.startsWith("/var/www/trustfirst-client-portal-releases/");
+    const matches = list.filter((item) => {
+      const env = item.pm2_env || {};
+      const name = String(item.name || env.name || "");
+      const cwd = String(env.pm_cwd || "");
+      return env.status === "online" && safe(cwd) && !/cafeluxe/i.test(name + cwd);
+    });
+    if (matches.length !== 1) process.exit(2);
+    const item = matches[0];
+    process.stdout.write(`${item.pm_id}\t${item.name}\t${(item.pm2_env || {}).pm_cwd || ""}`);
+  '
+}
+
 resolve_stopped_canonical_process() {
   pm2 jlist | node -e '
     const fs = require("fs");
@@ -126,6 +143,14 @@ resolve_stopped_canonical_process() {
   ' "$PM2_APP_NAME"
 }
 
+validate_old_pm2_mapping() {
+  [ -n "$OLD_PM2_ID" ] || fail "Existing TrustFirst PM2 id was empty."
+  safe_trustfirst_path "$OLD_PM2_CWD" || fail "Existing PM2 cwd is outside TrustFirst: $OLD_PM2_CWD"
+  case "$OLD_PM2_NAME:$OLD_PM2_CWD" in
+    *[Cc]afe[Ll]uxe*) fail "Existing production process unexpectedly references CafeLuxe." ;;
+  esac
+}
+
 resolve_existing_runtime() {
   local listener_line listener_pid listener_cwd listener_cmd
   local ancestors current_pid mapping
@@ -136,6 +161,7 @@ resolve_existing_runtime() {
     mapping="$(resolve_stopped_canonical_process)" || fail "Canonical PM2 process lookup was ambiguous."
     if [ -n "$mapping" ]; then
       IFS=$'\t' read -r OLD_PM2_ID OLD_PM2_NAME OLD_PM2_CWD <<< "$mapping"
+      validate_old_pm2_mapping
       log "Found stopped canonical TrustFirst PM2 process id=$OLD_PM2_ID."
     else
       log "No existing TrustFirst production listener was found; this is a first start."
@@ -144,7 +170,17 @@ resolve_existing_runtime() {
   fi
 
   listener_pid="$(printf '%s\n' "$listener_line" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
-  [ -n "$listener_pid" ] || fail "Production listener PID could not be resolved."
+  if [ -z "$listener_pid" ]; then
+    mapping="$(resolve_unique_online_safe_process)" \
+      || fail "Socket PID is hidden and exactly one online safe TrustFirst PM2 process was not found."
+    [ -n "$mapping" ] || fail "Socket PID is hidden and TrustFirst PM2 mapping was empty."
+    curl --silent --show-error --fail --max-time 5 "http://127.0.0.1:${PRODUCTION_PORT}/api/auth/session" >/dev/null \
+      || fail "Existing TrustFirst loopback health check failed."
+    IFS=$'\t' read -r OLD_PM2_ID OLD_PM2_NAME OLD_PM2_CWD <<< "$mapping"
+    validate_old_pm2_mapping
+    log "Existing TrustFirst runtime identified without socket PID: pm2_id=$OLD_PM2_ID name=$OLD_PM2_NAME cwd=$OLD_PM2_CWD"
+    return 0
+  fi
 
   listener_cwd="$(readlink -f "/proc/$listener_pid/cwd" 2>/dev/null || true)"
   safe_trustfirst_path "$listener_cwd" || fail "Production port $PRODUCTION_PORT listener is outside TrustFirst: $listener_cwd"
@@ -167,12 +203,7 @@ resolve_existing_runtime() {
   [ -n "$mapping" ] || fail "Existing TrustFirst PM2 mapping was empty."
 
   IFS=$'\t' read -r OLD_PM2_ID OLD_PM2_NAME OLD_PM2_CWD <<< "$mapping"
-  [ -n "$OLD_PM2_ID" ] || fail "Existing TrustFirst PM2 id was empty."
-  safe_trustfirst_path "$OLD_PM2_CWD" || fail "Existing PM2 cwd is outside TrustFirst: $OLD_PM2_CWD"
-  case "$OLD_PM2_NAME:$OLD_PM2_CWD" in
-    *[Cc]afe[Ll]uxe*) fail "Existing production process unexpectedly references CafeLuxe." ;;
-  esac
-
+  validate_old_pm2_mapping
   log "Existing TrustFirst runtime identified: pm2_id=$OLD_PM2_ID name=$OLD_PM2_NAME cwd=$OLD_PM2_CWD"
 }
 
