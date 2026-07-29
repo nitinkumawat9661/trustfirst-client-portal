@@ -12,14 +12,23 @@ source = source.replace(
   `ROOT = Path(${JSON.stringify(repoRoot)})`,
 );
 
-const brokenMarker = `replace_once(\n    "apps/web/src/components/hardware/creatable-combobox.tsx",\n    "  const haystack`;
-const brokenStart = source.indexOf(brokenMarker);
-if (brokenStart >= 0) {
-  const brokenEnd = source.indexOf("\n)\n", brokenStart);
-  if (brokenEnd < 0) throw new Error("Could not isolate generated haystack patch block.");
-  const replacement = `replace_once(\n    "apps/web/src/components/hardware/creatable-combobox.tsx",\n    '  const haystack = [label, sku, barcode, brand, category, price, ...(option.keywords ?? []).map(normalize)].join(" ");\\n',\n    '  const haystack = [label, sku, brand, category, price, ...(option.keywords ?? []).map(normalize)].join(" ");\\n',\n)\n`;
-  source = source.slice(0, brokenStart) + replacement + source.slice(brokenEnd + 3);
+function replacePatchBlock(marker, replacement) {
+  const start = source.indexOf(marker);
+  if (start < 0) return;
+  const end = source.indexOf("\n)\n", start);
+  if (end < 0) throw new Error(`Could not isolate generated patch block: ${marker}`);
+  source = source.slice(0, start) + replacement + source.slice(end + 3);
 }
+
+replacePatchBlock(
+  `replace_once(\n    "apps/web/src/components/hardware/creatable-combobox.tsx",\n    "  const haystack`,
+  `replace_once(\n    "apps/web/src/components/hardware/creatable-combobox.tsx",\n    '  const haystack = [label, sku, barcode, brand, category, price, ...(option.keywords ?? []).map(normalize)].join(" ");\\n',\n    '  const haystack = [label, sku, brand, category, price, ...(option.keywords ?? []).map(normalize)].join(" ");\\n',\n)\n`,
+);
+
+replacePatchBlock(
+  `replace_once(\n    "apps/web/src/components/hardware/creatable-combobox.tsx",\n    "           setQuery(event.target.value);`,
+  `replace_once(\n    "apps/web/src/components/hardware/creatable-combobox.tsx",\n    '          setQuery(event.target.value);\\n          setOpen(true);\\n          setActiveIndex(0);\\n          onSelect("");\\n',\n    '          setQuery(event.target.value);\\n          setOpen(true);\\n          setActiveIndex(0);\\n          onSelect("");\\n          onQueryChange?.(event.target.value);\\n',\n)\n`,
+);
 
 const strictHelper = `def replace_once(relative: str, before: str, after: str) -> None:\n    content = read(relative)\n    count = content.count(before)\n    if count != 1:\n        raise RuntimeError(f"{relative}: expected one occurrence, found {count}: {before[:120]!r}")\n    write(relative, content.replace(before, after, 1))\n`;
 const idempotentHelper = `def replace_once(relative: str, before: str, after: str) -> None:\n    content = read(relative)\n    count = content.count(before)\n    if count == 0:\n        if not after or after in content:\n            return\n        raise RuntimeError(f"{relative}: source block missing and replacement not present: {before[:120]!r}")\n    if count != 1:\n        raise RuntimeError(f"{relative}: expected at most one occurrence, found {count}: {before[:120]!r}")\n    write(relative, content.replace(before, after, 1))\n`;
