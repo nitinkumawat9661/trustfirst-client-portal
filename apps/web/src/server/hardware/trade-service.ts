@@ -901,8 +901,13 @@ export class HardwareTradeService {
   async cancelSale(context: ActorContext, documentId: string, input: HardwareTradeCancelInput) {
     const document = await this.getOrThrow(context.tenantId, documentId);
     await this.enforce(context, "hardware.sales.manage");
-    await this.ensureLocation(context.tenantId, input.locationId);
     const isEstimateSale = document.type === HardwareTradeDocumentType.SALES_QUOTATION;
+    if (!isEstimateSale) {
+      if (!input.locationId) {
+        throw validation("A stock location is required to cancel a normal sale.");
+      }
+      await this.ensureLocation(context.tenantId, input.locationId);
+    }
     if (document.type !== HardwareTradeDocumentType.SALES_ORDER && !isEstimateSale) {
       throw validation("Only a sale can be cancelled through this workflow.");
     }
@@ -936,6 +941,7 @@ export class HardwareTradeService {
     });
     const estimateMetadata = asRecord(document.metadata);
     const estimateVersion = readString(estimateMetadata.estimateSaleVersion);
+    const fallbackLocationId = input.locationId ?? readString(estimateMetadata.stockLocationId);
     const estimateStockMovements = isEstimateSale
       ? await this.prisma.hardwareInventoryMovement.findMany({
           where: {
@@ -965,7 +971,7 @@ export class HardwareTradeService {
         actorId: context.userId,
         cancelledAt: now.toISOString(),
         idempotencyKey: input.idempotencyKey,
-        locationId: input.locationId,
+        locationId: fallbackLocationId,
         reason: input.reason,
       };
       await tx.hardwareTradeDocument.update({
@@ -1003,11 +1009,14 @@ export class HardwareTradeService {
             });
           }
         } else {
+          if (!fallbackLocationId) {
+            throw validation("Stock location for cancellation could not be resolved.");
+          }
           for (const item of document.items.filter((candidate) => !isStockSetupPending(candidate.product?.metadata))) {
             await tx.hardwareInventoryMovement.create({
               data: stripUndefined({
                 customerId: document.customerId,
-                locationId: input.locationId,
+                locationId: fallbackLocationId,
                 metadata: {
                   cancelledDocumentNumber: document.documentNumber,
                   idempotencyKey: input.idempotencyKey,
