@@ -62,7 +62,7 @@ jobs:
           cache: npm
 
       - name: Install repository dependencies
-        run: npm ci
+        run: npm ci --include=dev
 
       - name: Generate Prisma client
         run: npm run db:generate
