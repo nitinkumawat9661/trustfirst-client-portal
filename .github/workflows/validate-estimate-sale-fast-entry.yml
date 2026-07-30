@@ -26,7 +26,7 @@ jobs:
       - name: Check out pull request merge ref
         uses: actions/checkout@v4
 
-      - name: Decode materializer gap boundaries
+      - name: Decode second materializer gap boundaries
         shell: bash
         run: |
           python3 - <<'PY'
@@ -34,18 +34,18 @@ jobs:
           from pathlib import Path
 
           root = Path("scripts/.estimate-sale-fast-entry")
-          prefix_encoded = "".join((root / name).read_text().strip() for name in ["part-00.b64", "part-01.b64"])
-          prefix = base64.b64decode(prefix_encoded).decode("utf-8")
-          shifted = (root / "part-02.b64").read_text().strip()
-          suffix_encoded = shifted[3:]
-          suffix_encoded = suffix_encoded[:len(suffix_encoded) - (len(suffix_encoded) % 4)]
-          suffix = base64.b64decode(suffix_encoded).decode("utf-8")
-          print("ESTIMATE_PREFIX_TAIL_BEGIN")
-          print(prefix[-3500:])
-          print("ESTIMATE_PREFIX_TAIL_END")
-          print("ESTIMATE_SUFFIX_HEAD_BEGIN")
-          print(suffix[:3500])
-          print("ESTIMATE_SUFFIX_HEAD_END")
+          part_02 = (root / "part-02.b64").read_text().strip()
+          part_03 = (root / "part-03.b64").read_text().strip()
+          left = base64.b64decode(part_02[3:]).decode("utf-8")
+          right_encoded = part_03[3:]
+          right_encoded = right_encoded[:len(right_encoded) - (len(right_encoded) % 4)]
+          right = base64.b64decode(right_encoded).decode("utf-8")
+          print("ESTIMATE_SECOND_LEFT_TAIL_BEGIN")
+          print(left[-4200:])
+          print("ESTIMATE_SECOND_LEFT_TAIL_END")
+          print("ESTIMATE_SECOND_RIGHT_HEAD_BEGIN")
+          print(right[:4200])
+          print("ESTIMATE_SECOND_RIGHT_HEAD_END")
           PY
 
       - name: Use Node.js 22
