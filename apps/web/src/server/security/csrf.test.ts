@@ -20,6 +20,22 @@ describe("assertCsrfSafeRequest", () => {
     expect(() => assertCsrfSafeRequest(request)).not.toThrow();
   });
 
+  it("accepts HTTP only for explicit same-origin loopback staging", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("TRUSTFIRST_DEMO_MODE", "staging");
+    vi.stubEnv("TRUSTFIRST_ALLOW_LOOPBACK_STAGING", "true");
+    const request = new Request("http://127.0.0.1:3100/api/hardware", {
+      method: "POST",
+      headers: {
+        host: "127.0.0.1:3100",
+        origin: "http://127.0.0.1:3100",
+        "sec-fetch-site": "same-origin",
+      },
+    });
+
+    expect(() => assertCsrfSafeRequest(request)).not.toThrow();
+  });
+
   it("rejects cross-site requests before trusting origin headers", () => {
     vi.stubEnv("NODE_ENV", "production");
     const request = new Request("https://app.mangalamsanitary.in/api/hardware", {
