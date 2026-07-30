@@ -1,0 +1,50 @@
+name: Refresh Security Lockfile
+
+on:
+  push:
+    branches:
+      - agent/mangalam-security-hardening
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-security-lockfile
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out security branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/mangalam-security-hardening
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Refresh patched dependency copies
+        run: npm update postcss sharp --package-lock-only --ignore-scripts
+
+      - name: Commit lockfile only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git diff --cached --check
+          git commit -m "security: lock patched Next dependency copies"
+          git push origin HEAD:agent/mangalam-security-hardening
