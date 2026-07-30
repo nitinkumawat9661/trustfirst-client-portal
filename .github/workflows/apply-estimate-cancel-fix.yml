@@ -1,0 +1,34 @@
+name: Apply Estimate Cancellation Fix
+
+on:
+  push:
+    branches:
+      - feature/estimate-sale-edit-fast-entry
+    paths:
+      - ".github/workflows/apply-estimate-cancel-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/estimate-sale-edit-fast-entry
+
+      - name: Apply reviewed source correction
+        run: python3 scripts/apply_estimate_cancel_fix.py
+
+      - name: Commit source and remove one-shot tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/server/hardware/trade-service.ts
+          git rm scripts/apply_estimate_cancel_fix.py .github/workflows/apply-estimate-cancel-fix.yml
+          git commit -m "fix: resolve Estimate cancellation stock locations"
+          git push origin HEAD:feature/estimate-sale-edit-fast-entry
