@@ -26,7 +26,7 @@ jobs:
       - name: Check out pull request merge ref
         uses: actions/checkout@v4
 
-      - name: Print payload boundary diagnostic
+      - name: Locate payload corruption
         shell: bash
         run: |
           python3 - <<'PY'
@@ -34,17 +34,24 @@ jobs:
           from pathlib import Path
 
           root = Path("scripts/.estimate-sale-fast-entry")
-          prefix = "".join((root / name).read_text().strip() for name in ["part-00.b64", "part-01.b64", "part-02.b64", "part-02b.b64"])
-          suffix = (root / "part-03.b64").read_text().strip()
-          prefix_decoded = base64.b64decode(prefix + "=" * ((4 - len(prefix) % 4) % 4))
-          aligned_suffix = suffix[3:-1]
-          suffix_decoded = base64.b64decode(aligned_suffix)
-          print("ESTIMATE_PREFIX_DECODED_TAIL_BEGIN")
-          print(prefix_decoded[-1400:].decode("utf-8", errors="replace"))
-          print("ESTIMATE_PREFIX_DECODED_TAIL_END")
-          print("ESTIMATE_SUFFIX_DECODED_HEAD_BEGIN")
-          print(suffix_decoded[:1400].decode("utf-8", errors="replace"))
-          print("ESTIMATE_SUFFIX_DECODED_HEAD_END")
+          names = ["part-00.b64", "part-01.b64", "part-02.b64", "part-02b.b64"]
+          encoded = ""
+          for name in names:
+              value = (root / name).read_text().strip()
+              encoded += value
+              padded = encoded + "=" * ((4 - len(encoded) % 4) % 4)
+              decoded = base64.b64decode(padded)
+              try:
+                  text = decoded.decode("utf-8")
+                  print(f"STAGE {name}: UTF8_OK encoded={len(encoded)} decoded={len(decoded)} tail={text[-120:]!r}")
+              except UnicodeDecodeError as error:
+                  print(f"STAGE {name}: UTF8_FAIL encoded={len(encoded)} decoded={len(decoded)} start={error.start} end={error.end}")
+                  print("BAD_BYTES", decoded[max(0, error.start - 40):error.start + 120].hex())
+                  break
+          part = (root / "part-02b.b64").read_text().strip()
+          print("PART02B_FIRST", part[:120])
+          print("PART02B_LAST", part[-240:])
+          print("PART02B_LENGTH", len(part))
           PY
 
       - name: Use Node.js 22
