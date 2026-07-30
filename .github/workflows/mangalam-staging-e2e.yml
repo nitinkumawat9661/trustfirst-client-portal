@@ -51,6 +51,7 @@ jobs:
       MANGLAM_DEMO_ADMIN_PASSWORD: MangalamStaging!2026
       NEXTAUTH_URL: http://127.0.0.1:3100
       NODE_ENV: production
+      TRUSTFIRST_ALLOW_LOOPBACK_STAGING: "true"
       TRUSTFIRST_DEMO_MODE: staging
     steps:
       - name: Check out pull request merge ref
