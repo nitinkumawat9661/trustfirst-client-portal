@@ -11,7 +11,7 @@ import {
   InvoiceStatus,
   PaymentMode,
   PaymentProvider,
-  type Prisma,
+  Prisma,
   type PrismaClient,
 } from "@trustfirst/database";
 import { allocateDocumentNumber } from "../billing/document-sequence";
@@ -484,7 +484,9 @@ export class HardwareTradeService {
       await tx.hardwareTradeDocument.update({
         data: {
           confirmedAt: new Date(),
-          customerId: input.customerId,
+          customer: input.customerId
+            ? { connect: { id: input.customerId } }
+            : { disconnect: true },
           discountCents: totals.discountCents,
           items: {
             create: normalizedItems.map((item) => {
@@ -496,7 +498,7 @@ export class HardwareTradeService {
               return {
                 description: product.name,
                 discountCents: item.discountCents ?? 0,
-                lineTotalCents: item.totalCents,
+                lineTotalCents: line.totalCents,
                 metadata: {
                   ...itemMetadata,
                   hsnCode: readString(itemMetadata.hsnCode) ?? readString(productMetadata.hsnCode),
@@ -532,7 +534,7 @@ export class HardwareTradeService {
       for (const item of normalizedItems.filter((candidate) => !isStockSetupPending(products.get(candidate.productId)?.metadata))) {
         await tx.hardwareInventoryMovement.create({
           data: {
-            customerId: input.customerId,
+            customerId: input.customerId ?? null,
             locationId: input.locationId,
             metadata: {
               editIdempotencyKey: input.idempotencyKey,
@@ -557,7 +559,7 @@ export class HardwareTradeService {
         idempotencyKey: `${document.id}:${nextVersion}:receivable`,
         notes: readString(inputMetadata.referenceNumber) ?? null,
         occurredAt: new Date(),
-        partyId: input.customerId,
+        partyId: input.customerId ?? null,
         sourceId: document.id,
         sourceNumber: document.documentNumber,
         sourceType: "HardwareTradeDocument",
@@ -574,7 +576,7 @@ export class HardwareTradeService {
           mode: paymentMode,
           notes: readString(inputMetadata.referenceNumber) ?? null,
           occurredAt: new Date(),
-          partyId: input.customerId,
+          partyId: input.customerId ?? null,
           sourceId: document.id,
           sourceNumber: document.documentNumber,
           sourceType: "HardwareTradeDocument",
@@ -1995,7 +1997,7 @@ function taxRateFromConfig(config: Prisma.JsonValue) {
   return 0;
 }
 
-function paymentModeFromMetadata(metadata: Prisma.JsonValue) {
+function paymentModeFromMetadata(metadata: unknown) {
   const value = readString(asRecord(metadata).paymentMode);
   if (!value || value === "Credit") return null;
   if (value === "Bank Transfer") return PaymentMode.BANK_TRANSFER;
@@ -2006,7 +2008,7 @@ function paymentModeFromMetadata(metadata: Prisma.JsonValue) {
   return PaymentMode.OTHER;
 }
 
-function estimatePaymentAmountFromMetadata(metadata: Prisma.JsonValue, totalCents: number) {
+function estimatePaymentAmountFromMetadata(metadata: unknown, totalCents: number) {
   const amount = readNumber(asRecord(metadata).paidAmountCents) ?? 0;
   if (!Number.isInteger(amount) || amount < 0) {
     throw validation("Paid amount must be zero or higher.");
