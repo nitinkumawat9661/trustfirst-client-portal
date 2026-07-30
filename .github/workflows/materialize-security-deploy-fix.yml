@@ -1,5 +1,6 @@
 name: Materialize Security Deploy Fix
 
+# One-time branch-only workflow. It deletes itself after materializing the patch.
 on:
   push:
     branches:
