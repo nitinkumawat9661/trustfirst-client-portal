@@ -49,12 +49,17 @@ jobs:
       - name: Build
         run: npm run build --workspace @trustfirst/web
 
-      - name: Verify Estimate source
+      - name: Verify clean Estimate source
         shell: bash
         run: |
           set -euo pipefail
           test -f apps/web/src/components/hardware/estimate-bill-form.tsx
           test -f 'apps/web/src/app/(platform)/admin/hardware/quotations/[documentId]/edit/page.tsx'
           test -f 'apps/web/src/app/api/hardware/trade/[documentId]/estimate/route.ts'
+          test ! -e scripts/.estimate-sale-fast-entry
+          test ! -e scripts/.estimate-sale-fast-entry-v2
+          test ! -e scripts/run_estimate_sale_fast_entry.py
+          test ! -e scripts/run_estimate_sale_fast_entry_v2.py
+          test ! -e scripts/fix_estimate_sale_types.py
           git diff --check
           echo ESTIMATE_SALE_FAST_ENTRY_VALIDATION_SUCCESSFUL
