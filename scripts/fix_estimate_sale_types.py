@@ -24,7 +24,12 @@ def replace_count(content: str, old: str, new: str, expected: int) -> str:
 
 
 content = PATH.read_text(encoding="utf-8")
-content = replace_once(content, "  type Prisma,\n", "  Prisma,\n")
+content = replace_once(content, "  Prisma,\n", "  type Prisma,\n")
+content = replace_once(
+    content,
+    "{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable }",
+    '{ isolationLevel: "Serializable" }',
+)
 content = replace_once(
     content,
     "function paymentModeFromMetadata(metadata: Prisma.JsonValue) {",
