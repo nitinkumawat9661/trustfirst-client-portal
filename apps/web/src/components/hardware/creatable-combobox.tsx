@@ -124,6 +124,7 @@ export function CreatableCombobox({
       {label}
       <Search className="pointer-events-none absolute left-3 top-9 size-4 text-muted-foreground" />
       <Input
+        aria-label={label}
         autoComplete="off"
         className="pl-9"
         disabled={disabled}

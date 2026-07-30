@@ -1901,7 +1901,15 @@ export class HardwareTradeService {
       select: { customFields: true },
       where: { archivedAt: null, deletedAt: null, id, tenantId },
     });
-    if (!record || asRecord(record.customFields).hardwarePartyRole !== role) {
+    const customFields = asRecord(record?.customFields);
+    const roles = Array.isArray(customFields.hardwarePartyRoles)
+      ? customFields.hardwarePartyRoles.filter(
+          (candidate): candidate is "customer" | "supplier" =>
+            candidate === "customer" || candidate === "supplier",
+        )
+      : [];
+    const legacyRole = readString(customFields.hardwarePartyRole);
+    if (!record || (!roles.includes(role) && legacyRole !== role)) {
       throw validation(message);
     }
   }

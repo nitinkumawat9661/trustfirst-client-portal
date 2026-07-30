@@ -8,6 +8,7 @@ import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import type { HardwarePartySummary, HardwareProductSummary } from "@/server/hardware";
 import { buildWhatsAppBillUrl } from "@/server/hardware/whatsapp";
 import { nextBillingLineAction } from "./billing-keyboard";
+import { canPostBillingLines, completedBillingLines } from "./billing-lines";
 import { CreatableCombobox } from "./creatable-combobox";
 import { HardwareProductCombobox } from "./hardware-product-combobox";
 import { normalizeProductSearchText } from "./product-search";
@@ -104,8 +105,10 @@ export function QuickPosForm({
   const [whatsAppMobile, setWhatsAppMobile] = useState("");
   const productInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const quantityInputRefs = useRef<Array<HTMLInputElement | null>>([]);
-  const totals = useMemo(() => calculateTotals(lines, paid, invoiceDiscount), [invoiceDiscount, lines, paid]);
-  const pendingStockProducts = lines
+  const completedLines = useMemo(() => completedBillingLines(lines), [lines]);
+  const canPost = canPostBillingLines(lines);
+  const totals = useMemo(() => calculateTotals(completedLines, paid, invoiceDiscount), [completedLines, invoiceDiscount, paid]);
+  const pendingStockProducts = completedLines
     .map((line) => availableProducts.find((product) => product.id === line.productId))
     .filter((product): product is HardwareProductSummary => product?.stockSetupStatus === "PENDING");
 
@@ -199,7 +202,7 @@ export function QuickPosForm({
       ...(customerAddress.trim() ? { customerAddress: customerAddress.trim() } : {}),
       idempotencyKey,
       invoiceDiscountCents: totals.invoiceDiscountCents,
-      items: lines.map((line) => {
+      items: completedLines.map((line) => {
         const grossCents = Math.round(Number(line.quantity) * Number(line.rate) * 100);
         return {
           discountCents: Math.round(grossCents * Number(line.discountPercent) / 100),
@@ -250,7 +253,7 @@ export function QuickPosForm({
     customerAddress,
     customerName,
     firm: defaultFirm,
-    lines,
+    lines: completedLines,
     notes,
     paidCents: totals.paidCents,
     paymentMode,
@@ -422,10 +425,10 @@ export function QuickPosForm({
               Notes
               <textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" maxLength={1000} value={notes} onChange={(event) => setNotes(event.target.value)} />
             </label>
-            <Button className="w-full" disabled={saving || confirmed || !canSave(lines) || !locationId} onClick={() => postBill()} type="button">
+            <Button className="w-full" disabled={saving || confirmed || !canPost || !locationId} onClick={() => postBill()} type="button">
               <Check className="size-4" />{saving ? "Posting..." : confirmed ? "Posted" : "Post bill"}
             </Button>
-            <Button className="w-full" disabled={saving || postingPrint || (!confirmed && (!canSave(lines) || !locationId))} onClick={postAndPrint} type="button" variant="outline">
+            <Button className="w-full" disabled={saving || postingPrint || (!confirmed && (!canPost || !locationId))} onClick={postAndPrint} type="button" variant="outline">
               <Printer className="size-4" />{postingPrint ? "Posting..." : confirmed ? "Print A4 invoice" : "Post and print A4"}
             </Button>
           </CardContent>

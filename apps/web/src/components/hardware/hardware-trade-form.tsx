@@ -111,11 +111,9 @@ export function HardwareTradeForm({
   const disabledReason =
     products.length === 0
       ? "Add at least one verified product before creating a document."
-      : mode === "purchase" && parties.length === 0
-        ? "Add at least one supplier before creating a purchase document."
-        : mode === "quotation" && locations.length === 0
-          ? "Add at least one stock location before creating an Estimate Bill."
-          : null;
+      : mode === "quotation" && locations.length === 0
+        ? "Add at least one stock location before creating an Estimate Bill."
+        : null;
 
   function applyProduct(index: number, product: HardwareProductSummary) {
     const rateCents = mode === "purchase" ? product.purchaseCostCents : product.salesPriceCents;
@@ -136,36 +134,37 @@ export function HardwareTradeForm({
     setValue(`items.${index}.productId`, "", { shouldDirty: true, shouldValidate: Boolean(query) });
   }
 
-  async function resolveCustomerId(values: TradeFormValues) {
-    if (mode === "purchase") return values.partyId;
-    if (values.partyId) return values.partyId;
-
-    const normalizedName = normalizeProductSearchText(partyName);
-    if (!normalizedName) {
-      throw new Error("Enter or select a customer name.");
-    }
-
+  async function createOrSelectParty(name: string, role: "customer" | "supplier") {
+    const normalizedName = normalizeProductSearchText(name);
+    if (!normalizedName) throw new Error(`Enter or select a ${role} name.`);
     const exact = availableParties.find(
       (party) => normalizeProductSearchText(party.name) === normalizedName,
     );
-    if (exact) return exact.id;
-
+    if (exact) {
+      setPartyName(exact.name);
+      setValue("partyId", exact.id, { shouldDirty: true });
+      return exact.id;
+    }
     const created = await postHardwareJson<HardwarePartySummary>("/api/hardware/parties/quick-add", {
-      name: partyName.trim(),
-      role: "customer",
+      name: name.trim(),
+      role,
     });
     if (!created.ok) throw new Error(created.message);
-
-    setAvailableParties((current) => [created.data, ...current]);
+    setAvailableParties((current) => [created.data, ...current.filter((party) => party.id !== created.data.id)]);
     setPartyName(created.data.name);
     setValue("partyId", created.data.id, { shouldDirty: true });
     return created.data.id;
   }
 
+  async function resolvePartyId(values: TradeFormValues) {
+    if (values.partyId) return values.partyId;
+    return createOrSelectParty(partyName, mode === "purchase" ? "supplier" : "customer");
+  }
+
   async function onSubmit(values: TradeFormValues) {
     setServerError(null);
     try {
-      const partyId = await resolveCustomerId(values);
+      const partyId = await resolvePartyId(values);
       if (mode === "quotation" && !values.locationId) {
         setServerError("Select a stock location for this Estimate Bill.");
         return;
@@ -243,48 +242,46 @@ export function HardwareTradeForm({
       <Card>
         <CardHeader><CardTitle>{documentTitle(mode)}</CardTitle></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {mode === "purchase" ? (
-            <FormField label="Supplier" required>
-              <select className={selectClassName} {...register("partyId")}>
-                <option value="">Select supplier</option>
-                {availableParties.map((party) => <option key={party.id} value={party.id}>{party.name}</option>)}
-              </select>
+          <div className="xl:col-span-2">
+            <input type="hidden" {...register("partyId")} />
+            <CreatableCombobox
+              createLabel={mode === "purchase" ? "Use new supplier" : "Use new customer"}
+              label={mode === "purchase" ? "Supplier" : "Customer"}
+              onCreate={(name) => {
+                setServerError(null);
+                void createOrSelectParty(name, mode === "purchase" ? "supplier" : "customer").catch((error) => {
+                  setServerError(error instanceof Error ? error.message : "Party could not be created.");
+                });
+              }}
+              onQueryChange={(query) => {
+                setPartyName(query);
+                const exact = availableParties.find(
+                  (party) => normalizeProductSearchText(party.name) === normalizeProductSearchText(query),
+                );
+                setValue("partyId", exact?.id ?? "", { shouldDirty: true });
+              }}
+              onSelect={(id) => {
+                const selected = availableParties.find((party) => party.id === id);
+                setValue("partyId", id, { shouldDirty: true });
+                setPartyName(selected?.name ?? "");
+              }}
+              options={availableParties.map((party) => ({
+                id: party.id,
+                keywords: [party.contact ?? ""],
+                label: party.name,
+              }))}
+              placeholder={mode === "purchase" ? "Search or enter supplier" : "Search or enter customer"}
+              value={partyName}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Existing names are selected automatically. A party can act as both customer and supplier without creating a duplicate record.
+            </p>
+          </div>
+          {mode !== "purchase" ? (
+            <FormField error={errors.customerAddress?.message} label="Address">
+              <Input autoComplete="street-address" placeholder="Address for this document" {...register("customerAddress")} />
             </FormField>
-          ) : (
-            <>
-              <div className="xl:col-span-2">
-                <input type="hidden" {...register("partyId")} />
-                <CreatableCombobox
-                  label="Customer"
-                  onQueryChange={(query) => {
-                    setPartyName(query);
-                    const exact = availableParties.find(
-                      (party) => normalizeProductSearchText(party.name) === normalizeProductSearchText(query),
-                    );
-                    setValue("partyId", exact?.id ?? "", { shouldDirty: true });
-                  }}
-                  onSelect={(id) => {
-                    const selected = availableParties.find((party) => party.id === id);
-                    setValue("partyId", id, { shouldDirty: true });
-                    setPartyName(selected?.name ?? "");
-                  }}
-                  options={availableParties.map((party) => ({
-                    id: party.id,
-                    keywords: [party.contact ?? ""],
-                    label: party.name,
-                  }))}
-                  placeholder="Select existing or type a new customer name"
-                  value={partyName}
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  A new customer is created automatically with name only when no exact existing name is found.
-                </p>
-              </div>
-              <FormField error={errors.customerAddress?.message} label="Address">
-                <Input autoComplete="street-address" placeholder="Address for this document" {...register("customerAddress")} />
-              </FormField>
-            </>
-          )}
+          ) : null}
           <FormField error={errors.documentDate?.message} label="Document date" required>
             <Input type="date" {...register("documentDate")} />
           </FormField>

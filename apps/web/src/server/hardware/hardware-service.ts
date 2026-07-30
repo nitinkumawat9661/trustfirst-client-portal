@@ -228,8 +228,8 @@ export class HardwareService {
 
     return parties.flatMap((party) => {
       const customFields = asRecord(party.customFields);
-      if (customFields.hardwarePartyRole !== role) return [];
-      const openingBalanceCents = readInteger(customFields.openingBalanceCents) ?? 0;
+      if (!hardwarePartyRoles(customFields).includes(role)) return [];
+      const openingBalanceCents = openingBalanceForRole(customFields, role);
       const calculatedBalance =
         role === "supplier"
           ? party.supplierHardwareDocuments
@@ -356,20 +356,22 @@ export class HardwareService {
     const normalizedName = normalizeComparable(input.name);
     const normalizedMobile = normalizeMobile(input.mobile);
     const existing = await this.prisma.clientOrganization.findMany({
-      include: { contacts: { select: { phone: true } } },
+      include: {
+        contacts: {
+          orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+          select: { id: true, phone: true },
+          take: 1,
+        },
+      },
       where: { archivedAt: null, deletedAt: null, tenantId: context.tenantId },
     });
     const duplicate = existing.find((party) => {
       const customFields = asRecord(party.customFields);
-      if (customFields.hardwarePartyRole !== input.role) return false;
       const sameName = normalizeComparable(party.name) === normalizedName;
       const existingMobile = normalizeMobile(party.contacts[0]?.phone ?? readText(customFields.phone));
-      const sameMobile = normalizedMobile && existingMobile === normalizedMobile;
-      return sameName || Boolean(sameMobile);
+      const sameMobile = Boolean(normalizedMobile && existingMobile === normalizedMobile);
+      return sameName || sameMobile;
     });
-    if (duplicate) {
-      throw validation(`${input.role === "supplier" ? "Supplier" : "Customer"} already exists. Select the existing record.`);
-    }
     const openingBalanceCents = input.openingBalanceCents ?? 0;
     const signedOpening =
       openingBalanceCents === 0
@@ -377,12 +379,71 @@ export class HardwareService {
         : input.balanceDirection === "CR"
           ? -openingBalanceCents
           : openingBalanceCents;
+
+    if (duplicate) {
+      const customFields = asRecord(duplicate.customFields);
+      const roles = hardwarePartyRoles(customFields);
+      const mergedRoles = roles.includes(input.role) ? roles : [...roles, input.role];
+      const balances = {
+        customer: openingBalanceForRole(customFields, "customer"),
+        supplier: openingBalanceForRole(customFields, "supplier"),
+      };
+      if (input.openingBalanceCents !== undefined) balances[input.role] = signedOpening;
+      const nextCustomFields = stripUndefined({
+        ...customFields,
+        address: input.address ?? readText(customFields.address),
+        gstin: input.gstin ?? readText(customFields.gstin),
+        hardwareOpeningBalances: balances,
+        hardwarePartyRole: readText(customFields.hardwarePartyRole) ?? mergedRoles[0] ?? input.role,
+        hardwarePartyRoles: mergedRoles,
+        phone: normalizedMobile ?? readText(customFields.phone),
+      });
+      await this.prisma.clientOrganization.update({
+        data: { customFields: nextCustomFields as Prisma.InputJsonValue },
+        where: { id: duplicate.id },
+      });
+      const contact = duplicate.contacts[0];
+      if (normalizedMobile && contact?.phone !== normalizedMobile) {
+        if (contact) {
+          await this.prisma.clientContact.update({
+            data: { phone: normalizedMobile },
+            where: { id: contact.id },
+          });
+        } else {
+          await this.prisma.clientContact.create({
+            data: {
+              clientId: duplicate.id,
+              email: `${duplicate.id}@local.invalid`,
+              isPrimary: true,
+              name: duplicate.name,
+              normalizedEmail: `${duplicate.id}@local.invalid`,
+              phone: normalizedMobile,
+              tenantId: context.tenantId,
+            },
+          });
+        }
+      }
+      const roleOpeningBalance = balances[input.role];
+      return {
+        balanceSide: roleOpeningBalance === 0 ? null : input.role === "supplier" ? (roleOpeningBalance > 0 ? "CR" : "DR") : (roleOpeningBalance > 0 ? "DR" : "CR"),
+        contact: normalizedMobile ?? contact?.phone ?? readText(customFields.phone) ?? null,
+        currentBalanceCents: roleOpeningBalance,
+        gstin: input.gstin ?? readText(customFields.gstin) ?? null,
+        id: duplicate.id,
+        name: duplicate.name,
+        openingBalanceCents: roleOpeningBalance,
+        role: input.role,
+      };
+    }
+
     const party = await this.prisma.clientOrganization.create({
       data: {
         customFields: stripUndefined({
           address: input.address,
           gstin: input.gstin,
+          hardwareOpeningBalances: { [input.role]: signedOpening },
           hardwarePartyRole: input.role,
+          hardwarePartyRoles: [input.role],
           openingBalanceCents: signedOpening,
           openingBalanceDirection: input.balanceDirection,
           phone: normalizedMobile,
@@ -1432,6 +1493,28 @@ function normalizeMobile(value: string | null | undefined) {
   const digits = value?.replace(/\D/gu, "").replace(/^0+/u, "") ?? "";
   if (!digits) return undefined;
   return digits.length === 10 ? `91${digits}` : digits;
+}
+
+function hardwarePartyRoles(customFields: Record<string, unknown>): HardwarePartyRole[] {
+  const roles = Array.isArray(customFields.hardwarePartyRoles)
+    ? customFields.hardwarePartyRoles.filter(
+        (role): role is HardwarePartyRole => role === "customer" || role === "supplier",
+      )
+    : [];
+  const legacyRole = readText(customFields.hardwarePartyRole);
+  if ((legacyRole === "customer" || legacyRole === "supplier") && !roles.includes(legacyRole)) {
+    roles.push(legacyRole);
+  }
+  return roles;
+}
+
+function openingBalanceForRole(customFields: Record<string, unknown>, role: HardwarePartyRole) {
+  const balances = asRecord(customFields.hardwareOpeningBalances);
+  const explicit = readInteger(balances[role]);
+  if (explicit !== undefined) return explicit;
+  return readText(customFields.hardwarePartyRole) === role
+    ? readInteger(customFields.openingBalanceCents) ?? 0
+    : 0;
 }
 
 function readNumber(value: unknown) {
