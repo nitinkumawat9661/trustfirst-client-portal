@@ -1,0 +1,106 @@
+name: Mangalam Canary Read-only Diagnostics
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/mangalam-canary-readonly-diagnostics.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      PM2_APP_NAME: ${{ vars.PM2_APP_NAME }}
+      CANARY_PORT: ${{ vars.CANARY_PORT }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure verified SSH access
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" | tr -d '\r' > "$HOME/.ssh/trustfirst_diag"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/trustfirst_diag" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/trustfirst_diag" >/dev/null
+          ssh-keygen -F "$VPS_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
+
+      - name: Collect redacted canary diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -p "$VPS_PORT" \
+            -i "$HOME/.ssh/trustfirst_diag" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            bash -s -- "$PM2_APP_NAME" "$CANARY_PORT" <<'REMOTE'
+          set -euo pipefail
+          PM2_PROCESS="$1"
+          CANARY_PORT="$2"
+          CANARY_NAME="${PM2_PROCESS}-canary"
+
+          echo "=== PM2 redacted snapshot ==="
+          pm2 jlist | node -e '
+            const fs = require("fs");
+            const list = JSON.parse(fs.readFileSync(0, "utf8"));
+            for (const item of list) {
+              const env = item.pm2_env || {};
+              const name = String(item.name || env.name || "");
+              if (!/^trustfirst/i.test(name)) continue;
+              console.log(JSON.stringify({
+                name,
+                status: env.status,
+                pid: item.pid,
+                restarts: env.restart_time,
+                cwd: env.pm_cwd,
+                script: env.pm_exec_path,
+                args: env.args,
+              }));
+            }
+          '
+
+          echo "=== Listener snapshot ==="
+          ss -ltnp 2>/dev/null | grep -E "[:.]${CANARY_PORT}[[:space:]]" || true
+
+          echo "=== Direct canary HTTP response ==="
+          curl --silent --show-error --include --max-time 5 \
+            "http://127.0.0.1:${CANARY_PORT}/api/auth/session" || true
+
+          echo "=== Canonical-host canary HTTP response ==="
+          curl --silent --show-error --include --max-time 5 \
+            --header "Host: app.mangalamsanitary.in" \
+            "http://127.0.0.1:${CANARY_PORT}/api/auth/session" || true
+
+          echo "=== Runtime env file metadata ==="
+          release_dir="$(find /var/www/trustfirst-client-portal-releases -maxdepth 1 -mindepth 1 -type d -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1 | cut -d' ' -f2- || true)"
+          if [ -n "$release_dir" ]; then
+            echo "release_dir=$release_dir"
+            stat -c 'mode=%a owner=%U group=%G path=%n' "$release_dir/apps/web/.env.production.local" 2>/dev/null || true
+            awk -F= '/^[A-Z0-9_]+=/{print "env_key=" $1}' "$release_dir/apps/web/.env.production.local" 2>/dev/null || true
+          fi
+
+          echo "=== Canary PM2 logs ==="
+          for file in "$HOME/.pm2/logs/${CANARY_NAME}-error.log" "$HOME/.pm2/logs/${CANARY_NAME}-out.log"; do
+            if [ -f "$file" ]; then
+              echo "--- $file ---"
+              tail -n 160 "$file" \
+                | sed -E 's#(postgresql://)[^[:space:]]+#\1[REDACTED]#g; s#(AUTH_SECRET|DATABASE_URL|PASSWORD|TOKEN)=([^[:space:]]+)#\1=[REDACTED]#g'
+            fi
+          done
+          REMOTE
