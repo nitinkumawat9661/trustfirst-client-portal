@@ -64,7 +64,8 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   const estimateProduct = page.getByRole("textbox", { name: "Product", exact: true }).first();
   await estimateProduct.fill("bathrom towel ring");
   await page.keyboard.press("Enter");
-  await page.getByLabel("GST %", { exact: true }).first().selectOption("18");
+  const estimateItem = page.locator("fieldset").filter({ hasText: "Item 1" }).first();
+  await estimateItem.locator("select").selectOption("18");
   await page.getByRole("button", { name: "Save and print Estimate Bill" }).click();
   await page.waitForURL(/\/admin\/hardware\/print\//);
   await expect(page.getByText("Estimate Bill", { exact: true }).first()).toBeVisible();
