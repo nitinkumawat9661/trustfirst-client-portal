@@ -64,12 +64,6 @@ jobs:
       - name: Install repository dependencies
         run: npm ci
 
-      - name: Install isolated browser test runner
-        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
       - name: Generate Prisma client
         run: npm run db:generate
 
@@ -94,6 +88,19 @@ jobs:
       - name: Validate backup script syntax
         run: bash -n scripts/vps-mangalam-daily-backup.sh
 
+      - name: Install isolated browser test runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/trustfirst-playwright
+          npm install --prefix /tmp/trustfirst-playwright --ignore-scripts --no-audit --no-fund @playwright/test@1.55.0
+          ln -s /tmp/trustfirst-playwright/node_modules/@playwright node_modules/@playwright
+          ln -s /tmp/trustfirst-playwright/node_modules/playwright node_modules/playwright
+          ln -s /tmp/trustfirst-playwright/node_modules/playwright-core node_modules/playwright-core
+
+      - name: Install Chromium
+        run: /tmp/trustfirst-playwright/node_modules/.bin/playwright install --with-deps chromium
+
       - name: Start isolated staging application
         shell: bash
         run: |
@@ -111,7 +118,7 @@ jobs:
           exit 1
 
       - name: Run browser end-to-end journey
-        run: npx playwright test
+        run: /tmp/trustfirst-playwright/node_modules/.bin/playwright test
 
       - name: Verify browser transactions in PostgreSQL
         run: node scripts/verify-staging-e2e.mjs
