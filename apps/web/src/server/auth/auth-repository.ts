@@ -38,6 +38,10 @@ export class PrismaAuthRepository {
             },
             tenant: true,
           },
+          orderBy: {
+            createdAt: "asc",
+          },
+          take: 1,
           where: {
             status: "ACTIVE",
             tenant: {
