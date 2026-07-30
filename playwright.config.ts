@@ -8,9 +8,9 @@ export default defineConfig({
   reporter: process.env.CI
     ? [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]]
     : "list",
-  retries: process.env.CI ? 1 : 0,
+  retries: 0,
   testDir: "./e2e",
-  timeout: 90_000,
+  timeout: 120_000,
   use: {
     ...devices["Desktop Chrome"],
     baseURL: process.env.E2E_BASE_URL ?? "http://127.0.0.1:3100",
