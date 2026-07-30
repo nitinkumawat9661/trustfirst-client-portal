@@ -27,7 +27,7 @@ describe("readRequestMetadata", () => {
     const request = new Request("https://app.mangalamsanitary.in", {
       headers: {
         "user-agent": "x".repeat(513),
-        "x-correlation-id": "bad\r\nvalue",
+        "x-correlation-id": "contains spaces and unsafe symbols!",
         "x-request-id": "<script>alert(1)</script>",
       },
     });
