@@ -38,7 +38,10 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   const supplierInput = page.getByRole("textbox", { name: "Supplier", exact: true });
   await supplierInput.fill(partyName);
   await page.keyboard.press("Enter");
-  await expect(supplierInput).toHaveValue(partyName);
+  const upgradedSupplierOption = page.getByRole("button", { name: partyName, exact: true });
+  await expect(upgradedSupplierOption).toBeVisible();
+  await upgradedSupplierOption.click();
+  await expect(page.getByRole("textbox", { name: "Supplier", exact: true })).toHaveValue(partyName);
   await page.getByLabel("Supplier invoice / reference", { exact: true }).fill("E2E-PURCHASE-001");
   const purchaseProduct = page.getByRole("textbox", { name: "Product", exact: true }).first();
   await purchaseProduct.fill("cement portland 50");
@@ -51,7 +54,7 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   await existingSupplier.fill(partyName);
   await expect(page.getByRole("button", { name: partyName, exact: true })).toBeVisible();
   await page.getByRole("button", { name: partyName, exact: true }).click();
-  await expect(existingSupplier).toHaveValue(partyName);
+  await expect(page.getByRole("textbox", { name: "Supplier", exact: true })).toHaveValue(partyName);
 
   await page.goto("/admin/hardware/quotations/new");
   const estimateCustomer = page.getByRole("textbox", { name: "Customer", exact: true });
