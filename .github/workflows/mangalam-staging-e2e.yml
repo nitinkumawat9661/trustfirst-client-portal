@@ -46,6 +46,7 @@ jobs:
       AUTH_URL: http://127.0.0.1:3100
       DATABASE_URL: postgresql://trustfirst_staging:trustfirst_staging@127.0.0.1:5432/trustfirst_mangalam_staging?schema=public
       E2E_BASE_URL: http://127.0.0.1:3100
+      E2E_RUN_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
       MANGLAM_DEMO_ADMIN_EMAIL: mangalam-staging-admin@trustfirst.example.com
       MANGLAM_DEMO_ADMIN_PASSWORD: MangalamStaging!2026
       NEXTAUTH_URL: http://127.0.0.1:3100
