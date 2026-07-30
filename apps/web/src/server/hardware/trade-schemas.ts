@@ -57,7 +57,7 @@ export const hardwareEstimateUpdateSchema = hardwareTradeDocumentSchema.extend({
 export const hardwareTradeCancelSchema = z.object({
   confirm: z.literal(true),
   idempotencyKey: z.string().min(12).max(120),
-  locationId: z.string(),
+  locationId: z.string().optional(),
   reason: z.string().trim().min(3).max(1000),
 });
 
