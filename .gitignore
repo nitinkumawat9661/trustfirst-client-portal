@@ -18,6 +18,7 @@ next-env.d.ts
 !.env.example
 !.env.demo.example
 !.env.deploy.example
+!.env.staging.example
 
 # logs
 npm-debug.log*
