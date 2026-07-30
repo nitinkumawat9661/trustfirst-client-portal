@@ -2,9 +2,11 @@ import { expect, test } from "@playwright/test";
 
 const adminEmail = process.env.MANGLAM_DEMO_ADMIN_EMAIL ?? "mangalam-staging-admin@trustfirst.example.com";
 const adminPassword = process.env.MANGLAM_DEMO_ADMIN_PASSWORD ?? "MangalamStaging!2026";
-const partyName = "E2E Dual Role Traders";
 
-test("customer, supplier, sale, purchase and Estimate Bill work end to end", async ({ page }) => {
+test("customer, supplier, sale, purchase and Estimate Bill work end to end", async ({ page }, testInfo) => {
+  const runSuffix = `${testInfo.retry}-${Date.now()}`;
+  const partyName = `E2E Dual Role Traders ${runSuffix}`;
+
   await page.goto("/sign-in?callbackUrl=/admin/hardware/sales/new");
   await page.getByLabel("Email", { exact: true }).fill(adminEmail);
   await page.getByLabel("Password", { exact: true }).fill(adminPassword);
@@ -26,12 +28,12 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   const saleQuantity = page.getByLabel("Qty", { exact: true }).first();
   await expect(saleQuantity).toBeFocused();
   await saleQuantity.fill("1");
-  await saleQuantity.focus();
   await saleQuantity.press("Enter");
   await expect(page.getByText("Item 2", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Remove item 2" }).click();
-  await page.getByRole("button", { name: "Post bill", exact: true }).click();
+  const postBillButton = page.getByRole("button", { name: "Post bill", exact: true });
+  await expect(postBillButton).toBeEnabled();
+  await postBillButton.click();
   await expect(page.getByText("After issue")).toBeVisible();
 
   await page.goto("/admin/hardware/purchases/new");
@@ -42,7 +44,7 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   await expect(upgradedSupplierOption).toBeVisible();
   await upgradedSupplierOption.click();
   await expect(page.getByRole("textbox", { name: "Supplier", exact: true })).toHaveValue(partyName);
-  await page.getByLabel("Supplier invoice / reference", { exact: true }).fill("E2E-PURCHASE-001");
+  await page.getByLabel("Supplier invoice / reference", { exact: true }).fill(`E2E-PURCHASE-${runSuffix}`);
   const purchaseProduct = page.getByRole("textbox", { name: "Product", exact: true }).first();
   await purchaseProduct.fill("cement portland 50");
   await page.keyboard.press("Enter");
@@ -60,7 +62,7 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   const estimateCustomer = page.getByRole("textbox", { name: "Customer", exact: true });
   await estimateCustomer.fill(partyName);
   await page.keyboard.press("Enter");
-  await page.getByLabel("Customer reference", { exact: true }).fill("E2E-ESTIMATE-001");
+  await page.getByLabel("Customer reference", { exact: true }).fill(`E2E-ESTIMATE-${runSuffix}`);
   const estimateProduct = page.getByRole("textbox", { name: "Product", exact: true }).first();
   await estimateProduct.fill("bathrom towel ring");
   await page.keyboard.press("Enter");
