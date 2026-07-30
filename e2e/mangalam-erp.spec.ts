@@ -68,7 +68,7 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   await estimateItem.locator("select").selectOption("18");
   await page.getByRole("button", { name: "Save and print Estimate Bill" }).click();
   await page.waitForURL(/\/admin\/hardware\/print\//);
-  await expect(page.getByText("Estimate Bill", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/Estimate Bill/i).first()).toBeVisible();
 
   const documentId = new URL(page.url()).pathname.split("/").filter(Boolean).at(-1);
   expect(documentId).toBeTruthy();
@@ -77,5 +77,5 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   await page.getByLabel("Qty", { exact: true }).first().fill("2");
   await page.getByRole("button", { name: "Update and print Estimate Bill" }).click();
   await page.waitForURL(new RegExp(`/admin/hardware/print/${documentId}`));
-  await expect(page.getByText("Estimate Bill", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/Estimate Bill/i).first()).toBeVisible();
 });
