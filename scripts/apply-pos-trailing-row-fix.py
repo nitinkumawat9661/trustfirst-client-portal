@@ -68,4 +68,18 @@ source = replace_once(
 )
 
 path.write_text(source, encoding="utf-8")
-print("Applied Quick POS trailing blank-row fix.")
+
+combobox_path = Path("apps/web/src/components/hardware/creatable-combobox.tsx")
+combobox = combobox_path.read_text(encoding="utf-8")
+combobox = replace_once(
+    combobox,
+    '''      <Input
+        autoComplete="off"''',
+    '''      <Input
+        aria-label={label}
+        autoComplete="off"''',
+    "combobox accessible label",
+)
+combobox_path.write_text(combobox, encoding="utf-8")
+
+print("Applied Quick POS trailing blank-row and combobox accessibility fixes.")
