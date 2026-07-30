@@ -1,0 +1,225 @@
+name: Mangalam Encrypted Daily Backup
+
+on:
+  schedule:
+    - cron: "30 20 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mangalam-encrypted-daily-backup
+  cancel-in-progress: false
+
+jobs:
+  backup-and-restore-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: mangalam_restore
+          POSTGRES_PASSWORD: restore_only
+          POSTGRES_USER: restore_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U restore_only -d mangalam_restore"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+    steps:
+      - name: Check out backup tooling
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in VPS_HOST VPS_KNOWN_HOSTS VPS_PORT VPS_SSH_PRIVATE_KEY VPS_USER; do
+            if [ -z "${!key:-}" ]; then
+              echo "Missing required backup secret: $key" >&2
+              exit 1
+            fi
+          done
+
+      - name: Configure verified SSH access
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > "$HOME/.ssh/backup-recipient.pub"
+          ssh-keygen -lf "$HOME/.ssh/backup-recipient.pub" > "$HOME/.ssh/backup-recipient-fingerprint.txt"
+
+      - name: Install age encryption utility
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y age postgresql-client
+
+      - name: Create TrustFirst-only VPS backup
+        id: remote
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT="$(ssh -i "$HOME/.ssh/id_ed25519" -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' < scripts/vps-mangalam-daily-backup.sh)"
+          printf '%s\n' "$OUTPUT"
+          ARCHIVE="$(printf '%s\n' "$OUTPUT" | sed -n 's/^__BACKUP_ARCHIVE__=//p')"
+          STAMP="$(printf '%s\n' "$OUTPUT" | sed -n 's/^__BACKUP_STAMP__=//p')"
+          if [ -z "$ARCHIVE" ] || [ -z "$STAMP" ]; then
+            echo "Backup markers were not returned by the VPS." >&2
+            exit 1
+          fi
+          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "stamp=$STAMP" >> "$GITHUB_OUTPUT"
+
+      - name: Copy backup away from VPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOCAL_ARCHIVE="/tmp/mangalam-backup-${{ steps.remote.outputs.stamp }}.tar.gz"
+          scp -i "$HOME/.ssh/id_ed25519" -P "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST:${{ steps.remote.outputs.archive }}" "$LOCAL_ARCHIVE"
+          ssh -i "$HOME/.ssh/id_ed25519" -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" "rm -f -- '${{ steps.remote.outputs.archive }}'"
+          test -s "$LOCAL_ARCHIVE"
+
+      - name: Encrypt off-VPS backup
+        id: encrypted
+        shell: bash
+        run: |
+          set -euo pipefail
+          PLAIN="/tmp/mangalam-backup-${{ steps.remote.outputs.stamp }}.tar.gz"
+          ENCRYPTED="$RUNNER_TEMP/mangalam-backup-${{ steps.remote.outputs.stamp }}.tar.gz.age"
+          age --recipients-file "$HOME/.ssh/backup-recipient.pub" --output "$ENCRYPTED" "$PLAIN"
+          shred -u "$PLAIN"
+          cp "$HOME/.ssh/backup-recipient-fingerprint.txt" "$RUNNER_TEMP/encryption-recipient-fingerprint.txt"
+          test -s "$ENCRYPTED"
+          echo "archive=$ENCRYPTED" >> "$GITHUB_OUTPUT"
+
+      - name: Decrypt and verify archive checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESTORE_DIR="$RUNNER_TEMP/restore-check"
+          mkdir -p "$RESTORE_DIR"
+          age --decrypt --identity "$HOME/.ssh/id_ed25519" --output "$RUNNER_TEMP/restore.tar.gz" "${{ steps.encrypted.outputs.archive }}"
+          tar -xzf "$RUNNER_TEMP/restore.tar.gz" -C "$RESTORE_DIR"
+          (cd "$RESTORE_DIR" && sha256sum --check SHA256SUMS)
+          shred -u "$RUNNER_TEMP/restore.tar.gz"
+
+      - name: Restore into disposable PostgreSQL and compare counts
+        shell: bash
+        env:
+          RESTORE_URL: postgresql://restore_only:restore_only@127.0.0.1:5432/mangalam_restore
+        run: |
+          set -euo pipefail
+          RESTORE_DIR="$RUNNER_TEMP/restore-check"
+          pg_restore --clean --if-exists --no-owner --no-acl --dbname "$RESTORE_URL" "$RESTORE_DIR/trustfirst_demo.dump"
+          set -a
+          source "$RESTORE_DIR/record-counts.env"
+          set +a
+          TENANT_ID="$(psql "$RESTORE_URL" -X -A -t -c "SELECT id FROM \"Tenant\" WHERE slug='$TENANT_SLUG';" | tr -d '[:space:]')"
+          test -n "$TENANT_ID"
+          compare_count() {
+            local label="$1"
+            local expected="$2"
+            local query="$3"
+            local actual
+            actual="$(psql "$RESTORE_URL" -X -A -t -c "$query" | tr -d '[:space:]')"
+            if [ "$actual" != "$expected" ]; then
+              echo "$label count mismatch: expected $expected, got $actual" >&2
+              exit 1
+            fi
+            echo "$label=$actual"
+          }
+          compare_count PRODUCTS "$PRODUCTS" "SELECT count(*) FROM \"HardwareProduct\" WHERE \"tenantId\"='$TENANT_ID';"
+          compare_count MOVEMENTS "$MOVEMENTS" "SELECT count(*) FROM \"HardwareInventoryMovement\" WHERE \"tenantId\"='$TENANT_ID';"
+          compare_count PARTIES "$PARTIES" "SELECT count(*) FROM \"ClientOrganization\" WHERE \"tenantId\"='$TENANT_ID' AND \"deletedAt\" IS NULL;"
+          compare_count TRADE_DOCUMENTS "$TRADE_DOCUMENTS" "SELECT count(*) FROM \"HardwareTradeDocument\" WHERE \"tenantId\"='$TENANT_ID';"
+          compare_count INVOICES "$INVOICES" "SELECT count(*) FROM \"Invoice\" WHERE \"tenantId\"='$TENANT_ID';"
+          compare_count FINANCIAL_TRANSACTIONS "$FINANCIAL_TRANSACTIONS" "SELECT count(*) FROM \"FinancialTransaction\" WHERE \"tenantId\"='$TENANT_ID';"
+          echo MANGALAM_BACKUP_RESTORE_VERIFIED
+
+      - name: Upload encrypted off-VPS backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: mangalam-encrypted-backup-${{ steps.remote.outputs.stamp }}
+          path: |
+            ${{ steps.encrypted.outputs.archive }}
+            ${{ runner.temp }}/encryption-recipient-fingerprint.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove decrypted restore files
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/restore-check"
+          rm -f "$HOME/.ssh/id_ed25519" "$RUNNER_TEMP"/mangalam-backup-*.tar.gz
+
+  report-backup-status:
+    needs: backup-and-restore-check
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open, update, or resolve backup alert
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "[Alert] Mangalam encrypted daily backup failed";
+            const result = "${{ needs.backup-and-restore-check.result }}";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              per_page: 100,
+            });
+            const alert = issues.find((issue) => !issue.pull_request && issue.title === title);
+            if (result !== "success") {
+              const body = `Backup/restore verification result: **${result}**\n\nRun: ${runUrl}\n\nProduction data was not modified by this workflow. Investigate before relying on the latest backup.`;
+              if (alert) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: alert.number,
+                  body,
+                });
+              } else {
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title,
+                  body,
+                });
+              }
+              return;
+            }
+            if (alert) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: alert.number,
+                body: `Backup creation, encryption, off-VPS copy, restore and count verification recovered successfully.\n\nRun: ${runUrl}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: alert.number,
+                state: "closed",
+              });
+            }

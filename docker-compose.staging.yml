@@ -1,0 +1,18 @@
+services:
+  mangalam-staging-db:
+    image: postgres:16-alpine
+    container_name: trustfirst-mangalam-staging-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: trustfirst_mangalam_staging
+      POSTGRES_PASSWORD: trustfirst_staging
+      POSTGRES_USER: trustfirst_staging
+    ports:
+      - "127.0.0.1:55433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trustfirst_staging -d trustfirst_mangalam_staging"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /var/lib/postgresql/data
