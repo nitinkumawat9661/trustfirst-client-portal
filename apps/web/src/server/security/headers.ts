@@ -1,17 +1,62 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readNextRequestMetadata } from "./request-metadata";
 
-export function applySecurityHeaders(response: NextResponse, request: NextRequest) {
-  const nonce = crypto.randomUUID().replaceAll("-", "");
+export type SecurityHeaderContext = {
+  contentSecurityPolicy: string;
+  correlationId: string;
+  requestHeaders: Headers;
+  requestId: string;
+};
+
+export function createSecurityHeaderContext(request: NextRequest): SecurityHeaderContext {
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const isProduction = process.env.NODE_ENV === "production";
   const scriptSrc = isProduction
-    ? `'self' 'nonce-${nonce}'`
+    ? `'self' 'nonce-${nonce}' 'strict-dynamic'`
     : "'self' 'unsafe-eval' 'unsafe-inline'";
   const metadata = readNextRequestMetadata(request);
+  const contentSecurityPolicy = [
+    "default-src 'self'",
+    `script-src ${scriptSrc}`,
+    `style-src 'self' ${isProduction ? `'nonce-${nonce}'` : "'unsafe-inline'"}`,
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "media-src 'self'",
+    "manifest-src 'self'",
+    "worker-src 'self' blob:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    ...(isProduction ? ["upgrade-insecure-requests"] : []),
+  ].join("; ");
+  const requestHeaders = new Headers(request.headers);
+
+  requestHeaders.set("content-security-policy", contentSecurityPolicy);
+  requestHeaders.set("x-correlation-id", metadata.correlationId);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("x-request-id", metadata.requestId);
+
+  return {
+    contentSecurityPolicy,
+    correlationId: metadata.correlationId,
+    requestHeaders,
+    requestId: metadata.requestId,
+  };
+}
+
+export function applySecurityHeaders(
+  response: NextResponse,
+  request: NextRequest,
+  context: SecurityHeaderContext = createSecurityHeaderContext(request),
+) {
+  const isProduction = process.env.NODE_ENV === "production";
   const pathname = request.nextUrl.pathname;
 
-  response.headers.set("x-request-id", metadata.requestId);
-  response.headers.set("x-correlation-id", metadata.correlationId);
+  response.headers.set("content-security-policy", context.contentSecurityPolicy);
+  response.headers.set("x-request-id", context.requestId);
+  response.headers.set("x-correlation-id", context.correlationId);
   response.headers.set("x-content-type-options", "nosniff");
   response.headers.set("x-frame-options", "DENY");
   response.headers.set("x-permitted-cross-domain-policies", "none");
@@ -21,25 +66,6 @@ export function applySecurityHeaders(response: NextResponse, request: NextReques
   response.headers.set(
     "permissions-policy",
     "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
-  );
-  response.headers.set(
-    "content-security-policy",
-    [
-      "default-src 'self'",
-      `script-src ${scriptSrc}`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      "font-src 'self' data:",
-      "connect-src 'self'",
-      "object-src 'none'",
-      "media-src 'self'",
-      "manifest-src 'self'",
-      "worker-src 'self' blob:",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      ...(isProduction ? ["upgrade-insecure-requests"] : []),
-    ].join("; "),
   );
 
   if (isProduction) {
