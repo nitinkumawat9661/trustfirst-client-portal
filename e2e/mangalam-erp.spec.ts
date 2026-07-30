@@ -13,7 +13,7 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
 
   const customerInput = page.getByRole("textbox", { name: "Customer", exact: true });
   await customerInput.fill(partyName);
-  await customerInput.press("Enter");
+  await page.keyboard.press("Enter");
   const customerDialog = page.getByRole("dialog");
   await expect(customerDialog.getByRole("heading", { name: "Create customer" })).toBeVisible();
   await customerDialog.getByRole("button", { name: "Save" }).click();
@@ -22,11 +22,11 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
 
   const saleProduct = page.getByRole("textbox", { name: "Product name / SKU", exact: true }).first();
   await saleProduct.fill("basin ceramic");
-  await saleProduct.press("Enter");
+  await page.keyboard.press("Enter");
   const saleQuantity = page.getByLabel("Qty", { exact: true }).first();
   await expect(saleQuantity).toBeFocused();
   await saleQuantity.fill("1");
-  await saleQuantity.press("Enter");
+  await page.keyboard.press("Enter");
   await expect(page.getByRole("textbox", { name: "Product name / SKU", exact: true })).toHaveCount(2);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Remove item 2" }).click();
@@ -36,12 +36,12 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   await page.goto("/admin/hardware/purchases/new");
   const supplierInput = page.getByRole("textbox", { name: "Supplier", exact: true });
   await supplierInput.fill(partyName);
-  await supplierInput.press("Enter");
+  await page.keyboard.press("Enter");
   await expect(supplierInput).toHaveValue(partyName);
   await page.getByLabel("Supplier invoice / reference", { exact: true }).fill("E2E-PURCHASE-001");
   const purchaseProduct = page.getByRole("textbox", { name: "Product", exact: true }).first();
   await purchaseProduct.fill("cement portland 50");
-  await purchaseProduct.press("Enter");
+  await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Save purchase" }).click();
   await page.waitForURL(/\/admin\/hardware\/purchases\?created=1/);
 
@@ -55,11 +55,11 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   await page.goto("/admin/hardware/quotations/new");
   const estimateCustomer = page.getByRole("textbox", { name: "Customer", exact: true });
   await estimateCustomer.fill(partyName);
-  await estimateCustomer.press("Enter");
+  await page.keyboard.press("Enter");
   await page.getByLabel("Customer reference", { exact: true }).fill("E2E-ESTIMATE-001");
   const estimateProduct = page.getByRole("textbox", { name: "Product", exact: true }).first();
   await estimateProduct.fill("bathrom towel ring");
-  await estimateProduct.press("Enter");
+  await page.keyboard.press("Enter");
   await page.getByLabel("GST %", { exact: true }).first().selectOption("18");
   await page.getByRole("button", { name: "Save and print Estimate Bill" }).click();
   await page.waitForURL(/\/admin\/hardware\/print\//);
