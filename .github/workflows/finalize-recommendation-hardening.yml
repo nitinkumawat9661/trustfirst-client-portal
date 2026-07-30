@@ -60,6 +60,7 @@ jobs:
           rm scripts/apply-recommendation-hardening.py
           rm scripts/apply-recommendation-test-updates.py
           rm scripts/apply-trade-party-role-hardening.py
+          rm scripts/apply-pos-trailing-row-fix.py
           rm .github/workflows/finalize-recommendation-hardening.yml
 
       - name: Validate clean readable source
@@ -76,8 +77,10 @@ jobs:
           test ! -e scripts/apply-recommendation-hardening.py
           test ! -e scripts/apply-recommendation-test-updates.py
           test ! -e scripts/apply-trade-party-role-hardening.py
+          test ! -e scripts/apply-pos-trailing-row-fix.py
           ! grep -q 'apply-recommendation-' package.json
           ! grep -q 'apply-trade-party-role-hardening' package.json
+          ! grep -q 'apply-pos-trailing-row-fix' package.json
           git diff --check
 
       - name: Commit clean source
