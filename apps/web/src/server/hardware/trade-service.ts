@@ -11,7 +11,7 @@ import {
   InvoiceStatus,
   PaymentMode,
   PaymentProvider,
-  Prisma,
+  type Prisma,
   type PrismaClient,
 } from "@trustfirst/database";
 import { allocateDocumentNumber } from "../billing/document-sequence";
@@ -610,7 +610,7 @@ export class HardwareTradeService {
           tenantId: context.tenantId,
         },
       });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    }, { isolationLevel: "Serializable" });
 
     return toSummary(await this.getOrThrow(context.tenantId, documentId));
   }
