@@ -2,7 +2,7 @@
 
 import { Button, Input } from "@trustfirst/ui";
 import { Plus, Search, Star } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type Ref, useEffect, useMemo, useRef, useState } from "react";
 import type { HardwareProductSummary } from "@/server/hardware";
 import {
   isStrongProductSearchMatch,
@@ -19,6 +19,7 @@ type ProductSearchMemory = {
 };
 
 export function HardwareProductCombobox({
+  inputRef,
   label,
   onCreate,
   onQueryChange,
@@ -27,6 +28,7 @@ export function HardwareProductCombobox({
   storageKey,
   value,
 }: {
+  inputRef?: Ref<HTMLInputElement>;
   label: string;
   onCreate?: ((name: string) => void) | undefined;
   onQueryChange: (query: string) => void;
@@ -154,6 +156,7 @@ export function HardwareProductCombobox({
       {displayLabel}
       <Search className="pointer-events-none absolute left-3 top-9 size-4 text-muted-foreground" />
       <Input
+        ref={inputRef}
         autoComplete="off"
         className="pl-9"
         placeholder="Type product, brand, category, SKU, model, size or colour"

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@trustfirst/ui";
-import { Ban, Check, FileInput, FileText, Printer } from "lucide-react";
+import { Ban, Check, FileText, Pencil, Printer } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -21,11 +21,13 @@ export function HardwareDocumentActions({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
-  const isQuotation = document.type === "SALES_QUOTATION";
-  const isStockDocument = !["SALES_QUOTATION", "PURCHASE_ORDER"].includes(document.type);
-  const canCancelSale = document.type === "SALES_ORDER" && document.status === "CONFIRMED";
+  const isEstimate = document.type === "SALES_QUOTATION";
+  const isStockDocument = document.type !== "PURCHASE_ORDER";
+  const canCancelSale =
+    (document.type === "SALES_ORDER" || isEstimate) &&
+    document.status === "CONFIRMED";
 
-  async function run(action: "confirm" | "convert" | "invoice" | "cancel") {
+  async function run(action: "confirm" | "invoice" | "cancel") {
     const cancellationReason =
       action === "cancel"
         ? window.prompt(`Reason for cancelling ${document.documentNumber}`)
@@ -35,20 +37,18 @@ export function HardwareDocumentActions({
       return;
     }
     if (
-      (action === "confirm" || action === "convert") &&
+      action === "confirm" &&
       !window.confirm(
-        action === "convert"
-          ? `Convert Estimate Bill ${document.documentNumber} into a new sales order?`
-          : isStockDocument
-            ? `Confirm ${document.documentNumber} and post its stock movement?`
-            : `Finalize Estimate Bill ${document.documentNumber}?`,
+        isStockDocument
+          ? `Confirm ${document.documentNumber} and post its stock and financial sale impact?`
+          : `Confirm ${document.documentNumber}?`,
       )
     ) {
       return;
     }
     if (
       action === "cancel" &&
-      !window.confirm(`Cancel ${document.documentNumber}, void linked invoice, and reverse stock movement?`)
+      !window.confirm(`Cancel ${document.documentNumber} and reverse its stock and customer-balance impact?`)
     ) {
       return;
     }
@@ -57,11 +57,9 @@ export function HardwareDocumentActions({
     const endpoint =
       action === "confirm"
         ? `/api/hardware/trade/${document.id}/confirm`
-        : action === "convert"
-          ? `/api/hardware/trade/${document.id}/convert-to-sale`
-          : action === "invoice"
-            ? `/api/hardware/trade/${document.id}/invoice-draft`
-            : `/api/hardware/trade/${document.id}/cancel`;
+        : action === "invoice"
+          ? `/api/hardware/trade/${document.id}/invoice-draft`
+          : `/api/hardware/trade/${document.id}/cancel`;
     const result = await postHardwareJson<unknown>(
       endpoint,
       action === "confirm"
@@ -70,7 +68,7 @@ export function HardwareDocumentActions({
           ? {
               confirm: true,
               idempotencyKey: `sale-cancel-${document.id}-${Date.now()}`,
-              locationId,
+              ...(isEstimate ? {} : { locationId }),
               reason: cancellationReason?.trim(),
             }
           : undefined,
@@ -97,7 +95,7 @@ export function HardwareDocumentActions({
             {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
           </select>
         ) : null}
-        {canCancelSale ? (
+        {canCancelSale && !isEstimate ? (
           <select
             aria-label="Cancellation stock location"
             className="h-9 min-w-40 rounded-md border border-input bg-background px-2 text-xs"
@@ -116,12 +114,12 @@ export function HardwareDocumentActions({
             type="button"
             variant="outline"
           >
-            <Check className="size-4" />{isQuotation ? "Finalize estimate" : "Confirm"}
+            <Check className="size-4" />{isEstimate ? "Post Estimate Bill" : "Confirm"}
           </Button>
         ) : null}
-        {isQuotation && document.status === "CONFIRMED" ? (
-          <Button disabled={pending !== null} onClick={() => run("convert")} size="sm" type="button" variant="outline">
-            <FileInput className="size-4" />Convert to sale
+        {isEstimate && document.status === "CONFIRMED" ? (
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/admin/hardware/quotations/${document.id}/edit`}><Pencil className="size-4" />Edit Estimate Bill</Link>
           </Button>
         ) : null}
         {document.type === "SALES_ORDER" && document.status === "CONFIRMED" && !document.billingInvoiceId ? (
@@ -130,12 +128,18 @@ export function HardwareDocumentActions({
           </Button>
         ) : null}
         {canCancelSale ? (
-          <Button disabled={pending !== null || !locationId} onClick={() => run("cancel")} size="sm" type="button" variant="outline">
-            <Ban className="size-4" />Cancel sale
+          <Button
+            disabled={pending !== null || (!isEstimate && !locationId)}
+            onClick={() => run("cancel")}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <Ban className="size-4" />{isEstimate ? "Cancel Estimate Bill" : "Cancel sale"}
           </Button>
         ) : null}
         <Button asChild size="sm" variant="ghost">
-          <Link href={`/admin/hardware/print/${document.id}`} target="_blank"><Printer className="size-4" />{isQuotation ? "Print Estimate Bill" : "Print preview"}</Link>
+          <Link href={`/admin/hardware/print/${document.id}`} target="_blank"><Printer className="size-4" />{isEstimate ? "Print Estimate Bill" : "Print preview"}</Link>
         </Button>
       </div>
       {error ? <p className="text-xs text-red-700" role="alert">{error}</p> : null}

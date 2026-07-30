@@ -24,6 +24,32 @@ export type HardwareTradeSummary = HardwareTradeTotals & {
   updatedAt: Date;
 };
 
+export type HardwareEstimateEditData = {
+  customerAddress: string;
+  customerId: string;
+  customerName: string;
+  documentDate: string;
+  documentNumber: string;
+  id: string;
+  items: Array<{
+    discountPercent: number;
+    gstRate: number;
+    hsnCode: string;
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitCode: string;
+    unitRateCents: number;
+  }>;
+  locationId: string;
+  paidAmountCents: number;
+  paymentMode: string;
+  referenceNumber: string;
+  roundOffCents: number;
+  status: HardwareTradeDocumentStatus;
+  taxMode: "intra-state" | "inter-state";
+};
+
 export type HardwareReportSummary = {
   dailySalesCents: number;
   lowStockProducts: number;

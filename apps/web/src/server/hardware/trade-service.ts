@@ -2,6 +2,8 @@ import {
   AuditAction,
   BillingTimelineVerb,
   DocumentSequenceKind,
+  FinancialTransactionStatus,
+  FinancialTransactionType,
   HardwareInventoryMovementType,
   HardwareTradeDocumentType,
   HardwareTradeDocumentStatus,
@@ -30,6 +32,7 @@ import { stockForProduct } from "./hardware-service";
 import { calculateTradeTotals } from "./trade-calculations";
 import { movementTypeForDocument, PrismaHardwareTradeRepository } from "./trade-repository";
 import type {
+  HardwareEstimateUpdateInput,
   HardwareSaleReturnInput,
   HardwarePurchaseReturnInput,
   HardwareTradeCancelInput,
@@ -37,7 +40,7 @@ import type {
   HardwareTradeStatusInput,
   QuickPosSaleInput,
 } from "./trade-schemas";
-import type { HardwarePrintContract, HardwarePrintProjection, HardwareReportSummary, HardwareReturnOptions, HardwareTradeSummary, HardwareWhatsAppShareContract } from "./trade-types";
+import type { HardwareEstimateEditData, HardwarePrintContract, HardwarePrintProjection, HardwareReportSummary, HardwareReturnOptions, HardwareTradeSummary, HardwareWhatsAppShareContract } from "./trade-types";
 
 type ActorContext = { tenantId: string; userId: string };
 type TradeRecord = Awaited<ReturnType<PrismaHardwareTradeRepository["list"]>>[number];
@@ -175,9 +178,64 @@ export class HardwareTradeService {
     }
     const stockItems = document.items.filter((item) => !isStockSetupPending(item.product?.metadata));
     const purchasePaidAmountCents = purchasePaymentAmountFromMetadata(document.metadata, document.totalCents);
+    const isEstimateSale = document.type === HardwareTradeDocumentType.SALES_QUOTATION;
+    const estimatePaidAmountCents = isEstimateSale
+      ? estimatePaymentAmountFromMetadata(document.metadata, document.totalCents)
+      : 0;
+    const estimateVersion = isEstimateSale
+      ? readString(asRecord(document.metadata).estimateSaleVersion) ?? "initial"
+      : null;
     return this.repository.confirm({
       actorId: context.userId,
       afterConfirm: async (tx, confirmedDocument) => {
+        const now = new Date();
+        if (confirmedDocument.type === HardwareTradeDocumentType.SALES_QUOTATION) {
+          const version = estimateVersion ?? "initial";
+          await tx.hardwareTradeDocument.update({
+            data: {
+              metadata: {
+                ...asRecord(confirmedDocument.metadata),
+                estimateSaleVersion: version,
+                stockLocationId: input.locationId ?? null,
+                stockMovementVersion: version,
+              } as Prisma.InputJsonValue,
+            },
+            where: { id: confirmedDocument.id, tenantId: context.tenantId },
+          });
+          const receivable = await postSaleReceivable(tx, {
+            amountCents: confirmedDocument.totalCents,
+            createdById: context.userId,
+            hardwareDocumentId: confirmedDocument.id,
+            idempotencyKey: `${confirmedDocument.id}:${version}:receivable`,
+            notes: readString(asRecord(confirmedDocument.metadata).referenceNumber) ?? null,
+            occurredAt: now,
+            partyId: confirmedDocument.customerId,
+            sourceId: confirmedDocument.id,
+            sourceNumber: confirmedDocument.documentNumber,
+            sourceType: "HardwareTradeDocument",
+            tenantId: context.tenantId,
+          });
+          const paymentMode = paymentModeFromMetadata(confirmedDocument.metadata);
+          if (paymentMode && estimatePaidAmountCents > 0) {
+            await postCustomerPayment(tx, {
+              allocationTargetTransactionId: receivable.id,
+              amountCents: estimatePaidAmountCents,
+              createdById: context.userId,
+              hardwareDocumentId: confirmedDocument.id,
+              idempotencyKey: `${confirmedDocument.id}:${version}:payment`,
+              mode: paymentMode,
+              notes: readString(asRecord(confirmedDocument.metadata).referenceNumber) ?? null,
+              occurredAt: now,
+              partyId: confirmedDocument.customerId,
+              sourceId: confirmedDocument.id,
+              sourceNumber: confirmedDocument.documentNumber,
+              sourceType: "HardwareTradeDocument",
+              tenantId: context.tenantId,
+            });
+          }
+          return;
+        }
+
         if (
           confirmedDocument.type !== HardwareTradeDocumentType.PURCHASE_ENTRY &&
           confirmedDocument.type !== HardwareTradeDocumentType.SUPPLIER_BILL
@@ -185,7 +243,6 @@ export class HardwareTradeService {
           return;
         }
 
-        const now = new Date();
         const payable = await postPurchasePayable(tx, {
           amountCents: confirmedDocument.totalCents,
           createdById: context.userId,
@@ -223,7 +280,10 @@ export class HardwareTradeService {
         stripUndefined({
           customerId: document.customerId,
           locationId: input.locationId,
-          metadata: { tradeDocumentId: document.id } as Prisma.InputJsonValue,
+           metadata: {
+             tradeDocumentId: document.id,
+             ...(estimateVersion ? { stockMovementVersion: estimateVersion } : {}),
+           } as Prisma.InputJsonValue,
           productId: item.productId,
           quantity: item.quantity,
           referenceId: document.id,
@@ -235,15 +295,324 @@ export class HardwareTradeService {
           unitPriceCents: salesTypes.has(document.type) || document.type === HardwareTradeDocumentType.SALE_RETURN ? item.unitAmountCents : undefined,
         }) as Prisma.HardwareInventoryMovementUncheckedCreateInput,
       ),
-      paymentStatus: purchaseTypes.has(document.type)
-        ? purchasePaidAmountCents >= document.totalCents
-          ? "paid"
-          : purchasePaidAmountCents > 0
-            ? "partial"
-            : "unpaid"
-        : undefined,
+      paymentStatus: document.type === HardwareTradeDocumentType.SALES_QUOTATION
+        ? paymentStatusForAmount(estimatePaidAmountCents, document.totalCents)
+        : purchaseTypes.has(document.type)
+          ? paymentStatusForAmount(purchasePaidAmountCents, document.totalCents)
+          : undefined,
       tenantId: context.tenantId,
     });
+  }
+
+  async estimateForEdit(context: ActorContext, documentId: string): Promise<HardwareEstimateEditData> {
+    const document = await this.getOrThrow(context.tenantId, documentId);
+    await this.enforce(context, "hardware.sales.manage");
+    if (document.type !== HardwareTradeDocumentType.SALES_QUOTATION) {
+      throw validation("Only an Estimate Bill can be edited here.");
+    }
+    if (document.status === HardwareTradeDocumentStatus.CANCELLED) {
+      throw validation("A cancelled Estimate Bill cannot be edited.");
+    }
+    const metadata = asRecord(document.metadata);
+    const activeVersion = readString(metadata.stockMovementVersion);
+    const movement = await this.prisma.hardwareInventoryMovement.findFirst({
+      orderBy: { createdAt: "desc" },
+      where: {
+        referenceId: document.id,
+        referenceType: document.type,
+        tenantId: context.tenantId,
+        type: HardwareInventoryMovementType.STOCK_OUT,
+        ...(activeVersion ? { metadata: { equals: activeVersion, path: ["stockMovementVersion"] } } : {}),
+      },
+    });
+    return {
+      customerAddress: readString(metadata.customerAddress) ?? "",
+      customerId: document.customerId ?? "",
+      customerName: document.customer?.name ?? "",
+      documentDate: readString(metadata.documentDate) ?? document.createdAt.toISOString().slice(0, 10),
+      documentNumber: document.documentNumber,
+      id: document.id,
+      items: document.items.map((item) => {
+        const itemMetadata = asRecord(item.metadata);
+        const grossCents = item.quantity * item.unitAmountCents;
+        return {
+          discountPercent:
+            readNumber(itemMetadata.discountPercent) ??
+            (grossCents > 0 ? Math.round((item.discountCents / grossCents) * 10_000) / 100 : 0),
+          gstRate: item.taxRateBps / 100,
+          hsnCode: readString(itemMetadata.hsnCode) ?? "",
+          productId: item.productId,
+          productName: item.description,
+          quantity: item.quantity,
+          unitCode: readString(itemMetadata.unitCode) ?? item.product?.unit?.code ?? "",
+          unitRateCents: item.unitAmountCents,
+        };
+      }),
+      locationId: readString(metadata.stockLocationId) ?? movement?.locationId ?? "",
+      paidAmountCents: estimatePaymentAmountFromMetadata(document.metadata, document.totalCents),
+      paymentMode: readString(metadata.paymentMode) ?? "Credit",
+      referenceNumber: readString(metadata.referenceNumber) ?? "",
+      roundOffCents: document.roundOffCents,
+      status: document.status,
+      taxMode: metadata.taxMode === "inter-state" ? "inter-state" : "intra-state",
+    };
+  }
+
+  async updateEstimate(context: ActorContext, documentId: string, input: HardwareEstimateUpdateInput) {
+    const document = await this.getOrThrow(context.tenantId, documentId);
+    await this.enforce(context, "hardware.sales.manage");
+    if (document.type !== HardwareTradeDocumentType.SALES_QUOTATION) {
+      throw validation("Only an Estimate Bill can be edited here.");
+    }
+    if (document.status === HardwareTradeDocumentStatus.CANCELLED) {
+      throw validation("A cancelled Estimate Bill cannot be edited.");
+    }
+    const existingMetadata = asRecord(document.metadata);
+    if (readString(existingMetadata.lastEditIdempotencyKey) === input.idempotencyKey) {
+      return toSummary(document);
+    }
+    await this.validateTradeLinks(context.tenantId, input);
+    await this.ensureLocation(context.tenantId, input.locationId);
+    const products = await this.loadProducts(context.tenantId, input.items.map((item) => item.productId));
+    const normalizedItems = input.items.map((item) => {
+      const product = products.get(item.productId);
+      if (!product) throw validation("Product was not found.");
+      return { ...item, taxRateBps: item.taxRateBps ?? 0 };
+    });
+    const totals = calculateTradeTotals(normalizedItems, input.roundOffCents ?? 0);
+    const nextPaidAmountCents = estimatePaymentAmountFromMetadata(input.metadata ?? {}, totals.totalCents);
+    const nextPaymentStatus = paymentStatusForAmount(nextPaidAmountCents, totals.totalCents);
+    const previousVersion =
+      readString(existingMetadata.estimateSaleVersion) ??
+      readString(existingMetadata.stockMovementVersion);
+    const previousMovements = await this.prisma.hardwareInventoryMovement.findMany({
+      where: {
+        referenceId: document.id,
+        referenceType: document.type,
+        tenantId: context.tenantId,
+        type: HardwareInventoryMovementType.STOCK_OUT,
+        ...(previousVersion ? { metadata: { equals: previousVersion, path: ["stockMovementVersion"] } } : {}),
+      },
+    });
+    const reversibleAtNextLocation = new Map<string, number>();
+    for (const movement of previousMovements) {
+      if (movement.locationId !== input.locationId) continue;
+      reversibleAtNextLocation.set(
+        movement.productId,
+        (reversibleAtNextLocation.get(movement.productId) ?? 0) + movement.quantity,
+      );
+    }
+    const requiredByProduct = new Map<string, number>();
+    for (const item of normalizedItems) {
+      if (isStockSetupPending(products.get(item.productId)?.metadata)) continue;
+      requiredByProduct.set(item.productId, (requiredByProduct.get(item.productId) ?? 0) + item.quantity);
+    }
+    for (const [productId, required] of requiredByProduct) {
+      const movements = await this.prisma.hardwareInventoryMovement.findMany({
+        where: { locationId: input.locationId, productId, tenantId: context.tenantId },
+      });
+      const available = stockForProduct(movements) + (reversibleAtNextLocation.get(productId) ?? 0);
+      if (required > available) {
+        throw validation("Edited Estimate Bill cannot deduct more stock than available.");
+      }
+    }
+
+    const nextVersion = `edit-${input.idempotencyKey}`;
+    const inputMetadata = asRecord(input.metadata);
+    await this.prisma.$transaction(async (tx) => {
+      const activeReceivable = previousVersion
+        ? await tx.financialTransaction.findFirst({
+            where: {
+              hardwareDocumentId: document.id,
+              idempotencyKey: `${document.id}:${previousVersion}:receivable`,
+              status: FinancialTransactionStatus.POSTED,
+              tenantId: context.tenantId,
+              type: FinancialTransactionType.SALE_RECEIVABLE,
+            },
+          })
+        : await tx.financialTransaction.findFirst({
+            where: {
+              hardwareDocumentId: document.id,
+              status: FinancialTransactionStatus.POSTED,
+              tenantId: context.tenantId,
+              type: FinancialTransactionType.SALE_RECEIVABLE,
+            },
+          });
+      if (document.status === HardwareTradeDocumentStatus.CONFIRMED && activeReceivable) {
+        await postSaleCancellationFinancials(tx, {
+          amountCents: document.totalCents,
+          createdById: context.userId,
+          hardwareDocumentId: document.id,
+          idempotencyKey: `${input.idempotencyKey}:previous-sale`,
+          notes: `Repriced by Estimate Bill edit ${input.idempotencyKey}`,
+          occurredAt: new Date(),
+          paidAmountCents: estimatePaymentAmountFromMetadata(document.metadata, document.totalCents),
+          partyId: document.customerId,
+          reason: "Estimate Bill edited",
+          sourceId: document.id,
+          sourceNumber: document.documentNumber,
+          sourceType: "HardwareTradeDocument",
+          tenantId: context.tenantId,
+          totalAmountCents: document.totalCents,
+        });
+      }
+      if (document.status === HardwareTradeDocumentStatus.CONFIRMED) {
+        for (const movement of previousMovements) {
+          await tx.hardwareInventoryMovement.create({
+            data: {
+              customerId: document.customerId,
+              locationId: movement.locationId,
+              metadata: {
+                editIdempotencyKey: input.idempotencyKey,
+                reversedMovementId: movement.id,
+              },
+              productId: movement.productId,
+              quantity: movement.quantity,
+              referenceId: document.id,
+              referenceType: "ESTIMATE_EDIT_REVERSAL",
+              tenantId: context.tenantId,
+              type: HardwareInventoryMovementType.STOCK_IN,
+              unitPriceCents: movement.unitPriceCents,
+            },
+          });
+        }
+      }
+
+      await tx.hardwareTradeDocumentItem.deleteMany({
+        where: { documentId: document.id, tenantId: context.tenantId },
+      });
+      await tx.hardwareTradeDocument.update({
+        data: {
+          confirmedAt: new Date(),
+          customer: input.customerId
+            ? { connect: { id: input.customerId } }
+            : { disconnect: true },
+          discountCents: totals.discountCents,
+          items: {
+            create: normalizedItems.map((item) => {
+              const product = products.get(item.productId);
+              if (!product) throw validation("Product was not found.");
+              const line = calculateTradeTotals([item]);
+              const itemMetadata = asRecord(item.metadata);
+              const productMetadata = asRecord(product.metadata);
+              return {
+                description: product.name,
+                discountCents: item.discountCents ?? 0,
+                lineTotalCents: line.totalCents,
+                metadata: {
+                  ...itemMetadata,
+                  hsnCode: readString(itemMetadata.hsnCode) ?? readString(productMetadata.hsnCode),
+                } as Prisma.InputJsonValue,
+                productId: item.productId,
+                quantity: item.quantity,
+                taxCents: line.taxCents,
+                taxRateBps: item.taxRateBps ?? 0,
+                tenantId: context.tenantId,
+                unitAmountCents: item.unitAmountCents,
+              };
+            }),
+          },
+          metadata: {
+            ...existingMetadata,
+            ...inputMetadata,
+            estimateBill: true,
+            estimateSaleVersion: nextVersion,
+            lastEditIdempotencyKey: input.idempotencyKey,
+            stockLocationId: input.locationId,
+            stockMovementVersion: nextVersion,
+          } as Prisma.InputJsonValue,
+          paymentStatus: nextPaymentStatus,
+          roundOffCents: totals.roundOffCents,
+          status: HardwareTradeDocumentStatus.CONFIRMED,
+          subtotalCents: totals.subtotalCents,
+          taxCents: totals.taxCents,
+          totalCents: totals.totalCents,
+        },
+        where: { id: document.id, tenantId: context.tenantId },
+      });
+
+      for (const item of normalizedItems.filter((candidate) => !isStockSetupPending(products.get(candidate.productId)?.metadata))) {
+        await tx.hardwareInventoryMovement.create({
+          data: {
+            customerId: input.customerId ?? null,
+            locationId: input.locationId,
+            metadata: {
+              editIdempotencyKey: input.idempotencyKey,
+              stockMovementVersion: nextVersion,
+              tradeDocumentId: document.id,
+            },
+            productId: item.productId,
+            quantity: item.quantity,
+            referenceId: document.id,
+            referenceType: HardwareTradeDocumentType.SALES_QUOTATION,
+            tenantId: context.tenantId,
+            type: HardwareInventoryMovementType.STOCK_OUT,
+            unitPriceCents: item.unitAmountCents,
+          },
+        });
+      }
+
+      const receivable = await postSaleReceivable(tx, {
+        amountCents: totals.totalCents,
+        createdById: context.userId,
+        hardwareDocumentId: document.id,
+        idempotencyKey: `${document.id}:${nextVersion}:receivable`,
+        notes: readString(inputMetadata.referenceNumber) ?? null,
+        occurredAt: new Date(),
+        partyId: input.customerId ?? null,
+        sourceId: document.id,
+        sourceNumber: document.documentNumber,
+        sourceType: "HardwareTradeDocument",
+        tenantId: context.tenantId,
+      });
+      const paymentMode = paymentModeFromMetadata(input.metadata ?? {});
+      if (paymentMode && nextPaidAmountCents > 0) {
+        await postCustomerPayment(tx, {
+          allocationTargetTransactionId: receivable.id,
+          amountCents: nextPaidAmountCents,
+          createdById: context.userId,
+          hardwareDocumentId: document.id,
+          idempotencyKey: `${document.id}:${nextVersion}:payment`,
+          mode: paymentMode,
+          notes: readString(inputMetadata.referenceNumber) ?? null,
+          occurredAt: new Date(),
+          partyId: input.customerId ?? null,
+          sourceId: document.id,
+          sourceNumber: document.documentNumber,
+          sourceType: "HardwareTradeDocument",
+          tenantId: context.tenantId,
+        });
+      }
+      await tx.hardwareTradeTimelineEvent.create({
+        data: {
+          actorId: context.userId,
+          documentId: document.id,
+          metadata: {
+            editIdempotencyKey: input.idempotencyKey,
+            previousTotalCents: document.totalCents,
+            totalCents: totals.totalCents,
+          },
+          summary: `Updated final-sale Estimate Bill ${document.documentNumber}`,
+          tenantId: context.tenantId,
+          verb: HardwareTradeTimelineVerb.UPDATED,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          action: AuditAction.HARDWARE_STOCK_MOVED,
+          actorId: context.userId,
+          metadata: {
+            editIdempotencyKey: input.idempotencyKey,
+            tradeAction: "estimate_sale_edited",
+          },
+          targetId: document.id,
+          targetType: "HardwareTradeDocument",
+          tenantId: context.tenantId,
+        },
+      });
+    }, { isolationLevel: "Serializable" });
+
+    return toSummary(await this.getOrThrow(context.tenantId, documentId));
   }
 
   async postQuickPosSale(context: ActorContext, input: QuickPosSaleInput) {
@@ -532,8 +901,14 @@ export class HardwareTradeService {
   async cancelSale(context: ActorContext, documentId: string, input: HardwareTradeCancelInput) {
     const document = await this.getOrThrow(context.tenantId, documentId);
     await this.enforce(context, "hardware.sales.manage");
-    await this.ensureLocation(context.tenantId, input.locationId);
-    if (document.type !== HardwareTradeDocumentType.SALES_ORDER) {
+    const isEstimateSale = document.type === HardwareTradeDocumentType.SALES_QUOTATION;
+    if (!isEstimateSale) {
+      if (!input.locationId) {
+        throw validation("A stock location is required to cancel a normal sale.");
+      }
+      await this.ensureLocation(context.tenantId, input.locationId);
+    }
+    if (document.type !== HardwareTradeDocumentType.SALES_ORDER && !isEstimateSale) {
       throw validation("Only a sale can be cancelled through this workflow.");
     }
     if (document.status === HardwareTradeDocumentStatus.CANCELLED) {
@@ -564,6 +939,31 @@ export class HardwareTradeService {
         tenantId: context.tenantId,
       },
     });
+    const estimateMetadata = asRecord(document.metadata);
+    const estimateVersion = readString(estimateMetadata.estimateSaleVersion);
+    const fallbackLocationId = input.locationId ?? readString(estimateMetadata.stockLocationId);
+    const estimateStockMovements = isEstimateSale
+      ? await this.prisma.hardwareInventoryMovement.findMany({
+          where: {
+            referenceId: document.id,
+            referenceType: document.type,
+            tenantId: context.tenantId,
+            type: HardwareInventoryMovementType.STOCK_OUT,
+            ...(estimateVersion ? { metadata: { equals: estimateVersion, path: ["stockMovementVersion"] } } : {}),
+          },
+        })
+      : [];
+    const estimateReceivable = isEstimateSale
+      ? await this.prisma.financialTransaction.findFirst({
+          where: {
+            hardwareDocumentId: document.id,
+            ...(estimateVersion ? { idempotencyKey: `${document.id}:${estimateVersion}:receivable` } : {}),
+            status: FinancialTransactionStatus.POSTED,
+            tenantId: context.tenantId,
+            type: FinancialTransactionType.SALE_RECEIVABLE,
+          },
+        })
+      : null;
 
     await this.prisma.$transaction(async (tx) => {
       const now = new Date();
@@ -571,7 +971,7 @@ export class HardwareTradeService {
         actorId: context.userId,
         cancelledAt: now.toISOString(),
         idempotencyKey: input.idempotencyKey,
-        locationId: input.locationId,
+        locationId: fallbackLocationId,
         reason: input.reason,
       };
       await tx.hardwareTradeDocument.update({
@@ -586,25 +986,52 @@ export class HardwareTradeService {
         where: { id: document.id, tenantId: context.tenantId },
       });
       if (!existingCancellation) {
-        for (const item of document.items.filter((candidate) => !isStockSetupPending(candidate.product?.metadata))) {
-          await tx.hardwareInventoryMovement.create({
-            data: stripUndefined({
-              customerId: document.customerId,
-              locationId: input.locationId,
-              metadata: {
-                cancelledDocumentNumber: document.documentNumber,
-                idempotencyKey: input.idempotencyKey,
-                reason: input.reason,
+        if (isEstimateSale && estimateStockMovements.length) {
+          for (const movement of estimateStockMovements) {
+            await tx.hardwareInventoryMovement.create({
+              data: {
+                customerId: document.customerId,
+                locationId: movement.locationId,
+                metadata: {
+                  cancelledDocumentNumber: document.documentNumber,
+                  idempotencyKey: input.idempotencyKey,
+                  reason: input.reason,
+                  reversedMovementId: movement.id,
+                },
+                productId: movement.productId,
+                quantity: movement.quantity,
+                referenceId: document.id,
+                referenceType: "SALE_CANCELLATION",
+                tenantId: context.tenantId,
+                type: HardwareInventoryMovementType.STOCK_IN,
+                unitPriceCents: movement.unitPriceCents,
               },
-              productId: item.productId,
-              quantity: item.quantity,
-              referenceId: document.id,
-              referenceType: "SALE_CANCELLATION",
-              tenantId: context.tenantId,
-              type: HardwareInventoryMovementType.STOCK_IN,
-              unitPriceCents: item.unitAmountCents,
-            }) as Prisma.HardwareInventoryMovementUncheckedCreateInput,
-          });
+            });
+          }
+        } else {
+          if (!fallbackLocationId) {
+            throw validation("Stock location for cancellation could not be resolved.");
+          }
+          for (const item of document.items.filter((candidate) => !isStockSetupPending(candidate.product?.metadata))) {
+            await tx.hardwareInventoryMovement.create({
+              data: stripUndefined({
+                customerId: document.customerId,
+                locationId: fallbackLocationId,
+                metadata: {
+                  cancelledDocumentNumber: document.documentNumber,
+                  idempotencyKey: input.idempotencyKey,
+                  reason: input.reason,
+                },
+                productId: item.productId,
+                quantity: item.quantity,
+                referenceId: document.id,
+                referenceType: "SALE_CANCELLATION",
+                tenantId: context.tenantId,
+                type: HardwareInventoryMovementType.STOCK_IN,
+                unitPriceCents: item.unitAmountCents,
+              }) as Prisma.HardwareInventoryMovementUncheckedCreateInput,
+            });
+          }
         }
       }
       if (document.billingInvoiceId && document.billingInvoice) {
@@ -663,6 +1090,23 @@ export class HardwareTradeService {
           sourceType: "HardwareTradeDocument",
           tenantId: context.tenantId,
           totalAmountCents: document.billingInvoice.totalAmountCents,
+        });
+      } else if (isEstimateSale && estimateReceivable) {
+        await postSaleCancellationFinancials(tx, {
+          amountCents: document.totalCents,
+          createdById: context.userId,
+          hardwareDocumentId: document.id,
+          idempotencyKey: `${input.idempotencyKey}:estimate-sale-cancellation`,
+          notes: input.reason,
+          occurredAt: now,
+          paidAmountCents: estimatePaymentAmountFromMetadata(document.metadata, document.totalCents),
+          partyId: document.customerId,
+          reason: input.reason,
+          sourceId: document.id,
+          sourceNumber: document.documentNumber,
+          sourceType: "HardwareTradeDocument",
+          tenantId: context.tenantId,
+          totalAmountCents: document.totalCents,
         });
       }
       await tx.hardwareTradeTimelineEvent.create({
@@ -1198,46 +1642,12 @@ export class HardwareTradeService {
   }
 
   async convertQuotationToSale(context: ActorContext, documentId: string) {
-    const quotation = await this.getOrThrow(context.tenantId, documentId);
+    const estimate = await this.getOrThrow(context.tenantId, documentId);
     await this.enforce(context, "hardware.sales.manage");
-    if (quotation.type !== HardwareTradeDocumentType.SALES_QUOTATION) {
-      throw validation("Only sales quotations can be converted to sales orders.");
+    if (estimate.type !== HardwareTradeDocumentType.SALES_QUOTATION) {
+      throw validation("Only an Estimate Bill can use this action.");
     }
-    if (quotation.status !== "CONFIRMED") {
-      throw validation("Finalize the quotation before converting it to a sale.");
-    }
-    const existingSale = await this.prisma.hardwareTradeDocument.findFirst({
-      select: { documentNumber: true },
-      where: {
-        metadata: { equals: quotation.id, path: ["sourceQuotationId"] },
-        tenantId: context.tenantId,
-        type: HardwareTradeDocumentType.SALES_ORDER,
-      },
-    });
-    if (existingSale) {
-      throw validation(`Quotation was already converted to ${existingSale.documentNumber}.`);
-    }
-    const quotationMetadata = asRecord(quotation.metadata);
-    const input: HardwareTradeDocumentInput = {
-      currency: quotation.currency,
-      customerId: quotation.customerId ?? undefined,
-      items: quotation.items.map((item) => ({
-        discountCents: item.discountCents,
-        metadata: asRecord(item.metadata),
-        productId: item.productId,
-        quantity: item.quantity,
-        taxRateBps: item.taxRateBps,
-        unitAmountCents: item.unitAmountCents,
-      })),
-      metadata: {
-        ...quotationMetadata,
-        sourceQuotationId: quotation.id,
-        sourceQuotationNumber: quotation.documentNumber,
-      },
-      roundOffCents: quotation.roundOffCents,
-      type: HardwareTradeDocumentType.SALES_ORDER,
-    };
-    return this.create(context, input);
+    throw validation("Estimate Bill is already a final sale. Conversion would duplicate stock and sales totals.");
   }
 
   async reports(context: ActorContext): Promise<HardwareReportSummary> {
@@ -1252,7 +1662,8 @@ export class HardwareTradeService {
     return {
       dailySalesCents: documents
         .filter((document) =>
-          document.type === HardwareTradeDocumentType.SALES_ORDER &&
+          (document.type === HardwareTradeDocumentType.SALES_ORDER ||
+            document.type === HardwareTradeDocumentType.SALES_QUOTATION) &&
           document.status === "CONFIRMED" &&
           document.createdAt >= businessDay.gte &&
           document.createdAt < businessDay.lt,
@@ -1262,9 +1673,20 @@ export class HardwareTradeService {
         const stock = stockForProduct(movements.filter((movement) => movement.productId === product.id));
         return stock <= product.lowStockThreshold;
       }).length,
-      outstandingCustomersCents: invoices
-        .filter((invoice) => outstandingInvoiceStatuses.has(invoice.status))
-        .reduce((total, invoice) => total + Math.max(invoice.totalAmountCents - invoice.paidAmountCents, 0), 0),
+      outstandingCustomersCents:
+        invoices
+          .filter((invoice) => outstandingInvoiceStatuses.has(invoice.status))
+          .reduce((total, invoice) => total + Math.max(invoice.totalAmountCents - invoice.paidAmountCents, 0), 0)
+        + documents
+          .filter((document) =>
+            document.type === HardwareTradeDocumentType.SALES_QUOTATION &&
+            document.status === HardwareTradeDocumentStatus.CONFIRMED,
+          )
+          .reduce(
+            (total, document) =>
+              total + Math.max(document.totalCents - estimatePaymentAmountFromMetadata(document.metadata, document.totalCents), 0),
+            0,
+          ),
       outstandingSuppliersCents: documents
         .filter((document) =>
           document.type === HardwareTradeDocumentType.SUPPLIER_BILL &&
@@ -1584,7 +2006,7 @@ function taxRateFromConfig(config: Prisma.JsonValue) {
   return 0;
 }
 
-function paymentModeFromMetadata(metadata: Prisma.JsonValue) {
+function paymentModeFromMetadata(metadata: unknown) {
   const value = readString(asRecord(metadata).paymentMode);
   if (!value || value === "Credit") return null;
   if (value === "Bank Transfer") return PaymentMode.BANK_TRANSFER;
@@ -1593,6 +2015,23 @@ function paymentModeFromMetadata(metadata: Prisma.JsonValue) {
   if (value === "Cheque") return PaymentMode.CHEQUE;
   if (value === "Card") return PaymentMode.CARD;
   return PaymentMode.OTHER;
+}
+
+function estimatePaymentAmountFromMetadata(metadata: unknown, totalCents: number) {
+  const amount = readNumber(asRecord(metadata).paidAmountCents) ?? 0;
+  if (!Number.isInteger(amount) || amount < 0) {
+    throw validation("Paid amount must be zero or higher.");
+  }
+  if (amount > totalCents) {
+    throw validation("Paid amount cannot exceed Estimate Bill total.");
+  }
+  return amount;
+}
+
+function paymentStatusForAmount(paidAmountCents: number, totalCents: number) {
+  if (paidAmountCents >= totalCents) return "paid";
+  if (paidAmountCents > 0) return "partial";
+  return "unpaid";
 }
 
 function purchasePaymentAmountFromMetadata(metadata: Prisma.JsonValue, totalCents: number) {
