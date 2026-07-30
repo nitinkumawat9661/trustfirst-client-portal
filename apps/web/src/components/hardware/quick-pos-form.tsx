@@ -4,9 +4,10 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@trustf
 import { Check, FileText, MessageCircle, Printer, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import type { HardwarePartySummary, HardwareProductSummary } from "@/server/hardware";
 import { buildWhatsAppBillUrl } from "@/server/hardware/whatsapp";
+import { nextBillingLineAction } from "./billing-keyboard";
 import { CreatableCombobox } from "./creatable-combobox";
 import { HardwareProductCombobox } from "./hardware-product-combobox";
 import { normalizeProductSearchText } from "./product-search";
@@ -101,6 +102,8 @@ export function QuickPosForm({
   const [quickAdd, setQuickAdd] = useState<{ index: number; name: string } | null>(null);
   const [quickCustomer, setQuickCustomer] = useState<string | null>(null);
   const [whatsAppMobile, setWhatsAppMobile] = useState("");
+  const productInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const quantityInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const totals = useMemo(() => calculateTotals(lines, paid, invoiceDiscount), [invoiceDiscount, lines, paid]);
   const pendingStockProducts = lines
     .map((line) => availableProducts.find((product) => product.id === line.productId))
@@ -134,6 +137,30 @@ export function QuickPosForm({
       sku: product.sku,
       unitCode: product.unitCode,
     });
+    window.requestAnimationFrame(() => {
+      const input = quantityInputRefs.current[index];
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  function focusProduct(index: number) {
+    window.setTimeout(() => productInputRefs.current[index]?.focus(), 0);
+  }
+
+  function advanceFromQuantity(index: number, event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+    event.preventDefault();
+    const line = lines[index];
+    if (!line?.productId) {
+      productInputRefs.current[index]?.focus();
+      return;
+    }
+    const action = nextBillingLineAction(index, lines.length);
+    if (action.append) {
+      setLines((current) => [...current, { ...emptyLine }]);
+    }
+    focusProduct(action.nextIndex);
   }
 
   async function postBill(options: { printAfterPost?: boolean } = {}) {
@@ -299,7 +326,7 @@ export function QuickPosForm({
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div>
               <CardTitle>Items</CardTitle>
-              <p className="mt-1 text-xs text-muted-foreground">Search by name, brand, category, SKU, model, size, or colour. Spelling mistakes and words in any order are supported.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Type a product and press Enter, enter quantity, then press Enter again for the next line. Spelling mistakes, partial names, and words in any order are supported.</p>
             </div>
             <Button onClick={() => setLines((current) => [...current, { ...emptyLine }])} type="button" variant="outline">Add line</Button>
           </CardHeader>
@@ -309,6 +336,7 @@ export function QuickPosForm({
                 <legend className="px-1 text-xs font-semibold text-muted-foreground">Item {index + 1}</legend>
                 <div className="md:col-span-5">
                   <HardwareProductCombobox
+                    inputRef={(node) => { productInputRefs.current[index] = node; }}
                     label="Product name / SKU"
                     onCreate={(name) => setQuickAdd({ index, name })}
                     onQueryChange={(query) => clearProductSelection(index, query)}
@@ -318,7 +346,14 @@ export function QuickPosForm({
                     value={line.productName}
                   />
                 </div>
-                <NumberField label="Qty" value={line.quantity} onChange={(value) => updateLine(index, { quantity: value })} className="md:col-span-1" />
+                <NumberField
+                  className="md:col-span-1"
+                  inputRef={(node) => { quantityInputRefs.current[index] = node; }}
+                  label="Qty"
+                  onChange={(value) => updateLine(index, { quantity: value })}
+                  onKeyDown={(event) => advanceFromQuantity(index, event)}
+                  value={line.quantity}
+                />
                 <NumberField label="Rate" value={line.rate} onChange={(value) => updateLine(index, { rate: value })} className="md:col-span-2" />
                 <NumberField label="Disc. %" value={line.discountPercent} onChange={(value) => updateLine(index, { discountPercent: value })} className="md:col-span-1" />
                 <label className="grid gap-2 text-sm font-medium md:col-span-1">
@@ -717,8 +752,36 @@ function PreviewRow({ label, value }: { label: string; value: number }) {
   return <div className="flex justify-between gap-3"><dt>{label}</dt><dd>{money(value)}</dd></div>;
 }
 
-function NumberField({ className, label, onChange, value }: { className?: string; label: string; onChange: (value: string) => void; value: string }) {
-  return <label className={`grid gap-2 text-sm font-medium ${className ?? ""}`}>{label}<Input inputMode="decimal" min="0" step="0.01" type="number" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+function NumberField({
+  className,
+  inputRef,
+  label,
+  onChange,
+  onKeyDown,
+  value,
+}: {
+  className?: string;
+  inputRef?: (node: HTMLInputElement | null) => void;
+  label: string;
+  onChange: (value: string) => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
+  value: string;
+}) {
+  return (
+    <label className={`grid gap-2 text-sm font-medium ${className ?? ""}`}>
+      {label}
+      <Input
+        ref={inputRef}
+        inputMode="decimal"
+        min="0"
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={onKeyDown}
+        step="0.01"
+        type="number"
+        value={value}
+      />
+    </label>
+  );
 }
 
 function TotalRow({ label, value }: { label: string; value: number }) {

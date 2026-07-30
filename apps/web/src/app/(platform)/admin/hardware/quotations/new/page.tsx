@@ -1,6 +1,6 @@
 import { getPrisma } from "@trustfirst/database";
+import { EstimateBillForm } from "@/components/hardware/estimate-bill-form";
 import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
-import { HardwareTradeForm } from "@/components/hardware/hardware-trade-form";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareService } from "@/server/hardware";
 
@@ -18,11 +18,11 @@ export default async function NewHardwareQuotationPage() {
   return (
     <div className="space-y-6">
       <HardwarePageHeader
-        description="Create a saved Estimate Bill with editable line-wise GST, automatic GST reporting for taxed lines, immediate stock deduction, and direct A4 printing."
+        description="Fast counter-style Estimate Bill: line-wise GST defaults to 0%, stock and customer balance post as a final sale, and Enter moves through products without the mouse."
         eyebrow="Sales"
         title="New Estimate Bill"
       />
-      <HardwareTradeForm locations={locations} mode="quotation" parties={parties} products={products} />
+      <EstimateBillForm locations={locations} parties={parties} products={products} />
     </div>
   );
 }

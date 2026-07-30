@@ -46,6 +46,14 @@ export const hardwareTradeStatusSchema = z.object({
   locationId: z.string().optional(),
 });
 
+export const hardwareEstimateUpdateSchema = hardwareTradeDocumentSchema.extend({
+  idempotencyKey: z.string().min(12).max(120),
+  locationId: z.string(),
+}).refine(
+  (value) => value.type === HardwareTradeDocumentType.SALES_QUOTATION,
+  { message: "Estimate edit accepts only Estimate Bills.", path: ["type"] },
+);
+
 export const hardwareTradeCancelSchema = z.object({
   confirm: z.literal(true),
   idempotencyKey: z.string().min(12).max(120),
@@ -96,6 +104,7 @@ export const quickPosSaleSchema = z.object({
 export type HardwareTradeItemInput = z.infer<typeof hardwareTradeItemSchema>;
 export type HardwareTradeDocumentInput = z.infer<typeof hardwareTradeDocumentSchema>;
 export type HardwareTradeStatusInput = z.infer<typeof hardwareTradeStatusSchema>;
+export type HardwareEstimateUpdateInput = z.infer<typeof hardwareEstimateUpdateSchema>;
 export type HardwareTradeCancelInput = z.infer<typeof hardwareTradeCancelSchema>;
 export type HardwareSaleReturnInput = z.infer<typeof hardwareSaleReturnSchema>;
 export type HardwarePurchaseReturnInput = z.infer<typeof hardwarePurchaseReturnSchema>;

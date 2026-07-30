@@ -89,7 +89,8 @@ describe("HardwareTradeService", () => {
 
     const report = await service.reports({ tenantId: "tenant_1", userId: "user_1" });
 
-    expect(report.outstandingCustomersCents).toBe(55_000);
+    expect(report.dailySalesCents).toBe(11_800);
+    expect(report.outstandingCustomersCents).toBe(66_800);
     expect(report.outstandingSuppliersCents).toBe(50_000);
     expect(report.salesGstCents).toBe(1_800);
   });
