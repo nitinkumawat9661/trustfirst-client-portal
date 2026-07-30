@@ -34,13 +34,16 @@ describe("host routing", () => {
   });
 
   it("opens loopback only for explicitly configured production-like staging", () => {
+    const closedProductionEnv = {
+      NODE_ENV: "production",
+    };
     const stagingEnv = {
       NODE_ENV: "production",
       TRUSTFIRST_ALLOW_LOOPBACK_STAGING: "true",
       TRUSTFIRST_DEMO_MODE: "staging",
     };
 
-    expect(resolveAppSurfaceFromHost("127.0.0.1")).toBe("UNKNOWN");
+    expect(resolveAppSurfaceFromHost("127.0.0.1", closedProductionEnv)).toBe("UNKNOWN");
     expect(isExplicitStagingLoopbackHost("127.0.0.1", stagingEnv)).toBe(true);
     expect(resolveAppSurfaceFromHost("127.0.0.1:3100", stagingEnv)).toBe("MANGALAM_ERP");
     expect(tenantSlugForHost("localhost:3100", stagingEnv)).toBe("manglam-trading-demo");
