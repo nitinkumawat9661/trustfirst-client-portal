@@ -1,6 +1,12 @@
 name: Mangalam Encrypted Daily Backup
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/mangalam-daily-backup.yml"
+      - "scripts/vps-mangalam-daily-backup.sh"
   schedule:
     - cron: "30 20 * * *"
   workflow_dispatch:
