@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - ".github/workflows/validate-estimate-sale-fast-entry.yml"
-      - "scripts/.estimate-sale-fast-entry/**"
+      - "scripts/.estimate-sale-fast-entry*/**"
       - "scripts/run_estimate_sale_fast_entry*.py"
       - "package.json"
       - "apps/web/**"
@@ -26,32 +26,27 @@ jobs:
       - name: Check out pull request merge ref
         uses: actions/checkout@v4
 
-      - name: Locate payload corruption
+      - name: Verify standalone payload candidate
         shell: bash
         run: |
           python3 - <<'PY'
           import base64
+          import hashlib
           from pathlib import Path
 
-          root = Path("scripts/.estimate-sale-fast-entry")
-          names = ["part-00.b64", "part-01.b64", "part-02.b64", "part-02b.b64"]
-          encoded = ""
-          for name in names:
-              value = (root / name).read_text().strip()
-              encoded += value
-              padded = encoded + "=" * ((4 - len(encoded) % 4) % 4)
-              decoded = base64.b64decode(padded)
-              try:
-                  text = decoded.decode("utf-8")
-                  print(f"STAGE {name}: UTF8_OK encoded={len(encoded)} decoded={len(decoded)} tail={text[-120:]!r}")
-              except UnicodeDecodeError as error:
-                  print(f"STAGE {name}: UTF8_FAIL encoded={len(encoded)} decoded={len(decoded)} start={error.start} end={error.end}")
-                  print("BAD_BYTES", decoded[max(0, error.start - 40):error.start + 120].hex())
-                  break
-          part = (root / "part-02b.b64").read_text().strip()
-          print("PART02B_FIRST", part[:120])
-          print("PART02B_LAST", part[-240:])
-          print("PART02B_LENGTH", len(part))
+          path = Path("scripts/.estimate-sale-fast-entry-v2/part-00.b64")
+          encoded = path.read_text(encoding="utf-8").strip()
+          print("STANDALONE_LENGTH", len(encoded))
+          print("STANDALONE_SHA256", hashlib.sha256(encoded.encode("ascii")).hexdigest())
+          try:
+              decoded = base64.b64decode(encoded, validate=True)
+              print("STANDALONE_DECODED_LENGTH", len(decoded))
+              print("STANDALONE_DECODED_SHA256", hashlib.sha256(decoded).hexdigest())
+              decoded.decode("utf-8")
+              compile(decoded, str(path), "exec")
+              print("STANDALONE_SOURCE_VALID")
+          except Exception as error:
+              print("STANDALONE_SOURCE_INVALID", type(error).__name__, str(error))
           PY
 
       - name: Use Node.js 22
