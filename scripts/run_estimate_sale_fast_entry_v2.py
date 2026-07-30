@@ -20,27 +20,21 @@ missing = [str(path.relative_to(ROOT)) for path in required if not path.is_file(
 if missing:
     raise SystemExit("Missing Estimate Sale recovery chunks: " + ", ".join(missing))
 
-# Intact original source bytes 0:18,000.
 prefix_b64 = "".join(
     (PARTS_DIR / name).read_text(encoding="utf-8").strip()
     for name in ["part-00.b64", "part-01.b64"]
 )
 prefix = base64.b64decode(prefix_b64, validate=True)
 
-# Intact original source bytes 21,003:36,000. part-02 starts at a shifted
-# Base64 offset; dropping three characters resumes on a quartet boundary.
 part_02 = (PARTS_DIR / "part-02.b64").read_text(encoding="utf-8").strip()
 left_segment = base64.b64decode(part_02[3:], validate=True)
 
-# Intact original source bytes 39,003:end. part-03 has the same shifted
-# capture boundary; the remaining tail is continuous and ends with valid padding.
 tail_b64 = (PARTS_DIR / "part-03.b64").read_text(encoding="utf-8").strip()[3:] + "".join(
     (PARTS_DIR / name).read_text(encoding="utf-8").strip()
     for name in ["part-04.b64", "part-05.b64", "part-06.b64"]
 )
 tail = base64.b64decode(tail_b64, validate=True)
 
-# Recovered Estimate form save/edit request flow and the beginning of the form UI.
 middle_one = r'''items,
         locationId,
         metadata,
@@ -113,8 +107,6 @@ middle_one = r'''items,
           </Field>
           <Field label="'''.encode("utf-8")
 
-# Recovered HardwareDocumentActions logic between its cancellation confirmation
-# and the closing invoice-draft button. Estimate Bills no longer expose conversion.
 middle_two = r'''ustomer-balance impact?`)
     ) {
       return;
@@ -198,6 +190,11 @@ source = prefix + middle_one + left_segment + middle_two + tail
 source = source.replace(
     b'import { postHardwareJson } from "./hardware-api-client";',
     b'import { patchHardwareJson, postHardwareJson } from "./hardware-api-client";',
+    1,
+)
+source = source.replace(
+    b"'''           metadata: { tradeDocumentId: document.id } as Prisma.InputJsonValue,''',",
+    b"'''          metadata: { tradeDocumentId: document.id } as Prisma.InputJsonValue,''',",
     1,
 )
 
