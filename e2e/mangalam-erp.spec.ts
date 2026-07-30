@@ -26,7 +26,8 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   const saleQuantity = page.getByLabel("Qty", { exact: true }).first();
   await expect(saleQuantity).toBeFocused();
   await saleQuantity.fill("1");
-  await page.keyboard.press("Enter");
+  await saleQuantity.focus();
+  await saleQuantity.press("Enter");
   await expect(page.getByRole("textbox", { name: "Product name / SKU", exact: true })).toHaveCount(2);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Remove item 2" }).click();
