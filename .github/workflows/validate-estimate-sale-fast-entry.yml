@@ -54,6 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f apps/web/src/components/hardware/estimate-bill-form.tsx
+          test -f apps/web/src/server/hardware/estimate-sale-lifecycle.test.ts
           test -f 'apps/web/src/app/(platform)/admin/hardware/quotations/[documentId]/edit/page.tsx'
           test -f 'apps/web/src/app/api/hardware/trade/[documentId]/estimate/route.ts'
           test ! -e scripts/.estimate-sale-fast-entry
