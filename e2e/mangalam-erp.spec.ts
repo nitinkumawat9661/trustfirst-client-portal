@@ -39,7 +39,7 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   const supplierInput = page.getByRole("textbox", { name: "Supplier", exact: true });
   await supplierInput.fill(partyName);
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("textbox", { name: /^Supplier/ })).toHaveValue(partyName);
+  await expect(supplierInput).toHaveValue(partyName);
   await expect(page.locator('input[name="partyId"]')).toHaveValue(/.+/);
   await page.getByLabel("Supplier invoice / reference", { exact: true }).fill(`E2E-PURCHASE-${runSuffix}`);
   const purchaseProduct = page.getByRole("textbox", { name: "Product", exact: true }).first();
@@ -54,7 +54,7 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   const existingSupplierOption = page.getByRole("button", { name: partyName, exact: true });
   await expect(existingSupplierOption).toBeVisible();
   await existingSupplierOption.click();
-  await expect(page.getByRole("textbox", { name: /^Supplier/ })).toHaveValue(partyName);
+  await expect(existingSupplier).toHaveValue(partyName);
   await expect(page.locator('input[name="partyId"]')).toHaveValue(/.+/);
 
   await page.goto("/admin/hardware/quotations/new");
