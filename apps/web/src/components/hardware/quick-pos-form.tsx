@@ -289,7 +289,11 @@ export function QuickPosForm({
               <CreatableCombobox
                 createLabel="Use new customer"
                 label="Customer"
-                onCreate={(name) => setCustomerName(name)}
+                onCreate={(name) => {
+                  setCustomerId("");
+                  setCustomerName(name);
+                  setQuickCustomer(name);
+                }}
                 onQueryChange={(query) => {
                   setCustomerName(query);
                   const exact = availableCustomers.find(
@@ -476,8 +480,9 @@ export function QuickPosForm({
           initialName={quickCustomer}
           onClose={() => setQuickCustomer(null)}
           onCreated={(party) => {
-            setAvailableCustomers((current) => [party, ...current]);
+            setAvailableCustomers((current) => [party, ...current.filter((customer) => customer.id !== party.id)]);
             setCustomerId(party.id);
+            setCustomerName(party.name);
             setQuickCustomer(null);
           }}
           role="customer"
@@ -630,7 +635,7 @@ function QuickPartyDialog({
   return (
     <div aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center" role="dialog">
       <div className="w-full max-w-md rounded-md border border-border bg-card p-4 shadow-xl">
-        <h2 className="text-lg font-semibold">Create customer</h2>
+        <h2 className="text-lg font-semibold">Create {role === "supplier" ? "supplier" : "customer"}</h2>
         <div className="mt-4 space-y-3">
           <label className="grid gap-2 text-sm font-medium">Name<Input autoFocus value={name} onChange={(event) => setName(event.target.value)} /></label>
           <label className="grid gap-2 text-sm font-medium">Mobile<Input inputMode="tel" value={mobile} onChange={(event) => setMobile(event.target.value)} /></label>
