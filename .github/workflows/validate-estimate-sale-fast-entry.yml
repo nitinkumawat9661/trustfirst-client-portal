@@ -8,7 +8,9 @@ on:
       - ".github/workflows/validate-estimate-sale-fast-entry.yml"
       - "scripts/.estimate-sale-fast-entry*/**"
       - "scripts/run_estimate_sale_fast_entry*.py"
+      - "scripts/fix_estimate_sale_types.py"
       - "package.json"
+      - "packages/ui/**"
       - "apps/web/**"
 
 permissions:
@@ -28,6 +30,9 @@ jobs:
         with:
           ref: feature/estimate-sale-edit-fast-entry
 
+      - name: Apply strict Estimate type fixes
+        run: python3 scripts/fix_estimate_sale_types.py
+
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -43,11 +48,11 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/web/src
+          git add apps/web/src packages/ui/src
           if git diff --cached --quiet; then
-            echo "Materialized source already committed."
+            echo "Readable source already committed."
           else
-            git commit -m "feat: materialize Estimate sale fast-entry source"
+            git commit -m "fix: satisfy strict Estimate sale typing"
             git push origin HEAD:feature/estimate-sale-edit-fast-entry
           fi
 
