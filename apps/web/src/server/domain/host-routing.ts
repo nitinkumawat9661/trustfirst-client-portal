@@ -25,6 +25,14 @@ export type AppSurface =
   | "TRUSTFIRST_PORTAL"
   | "UNKNOWN";
 
+type HostRoutingEnv = {
+  NODE_ENV?: string;
+  TRUSTFIRST_ALLOW_LOOPBACK_STAGING?: string;
+  TRUSTFIRST_DEMO_MODE?: string;
+};
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+
 const surfaceByHost: Readonly<Record<string, AppSurface>> = {
   "mangalamsanitary.in": "MANGALAM_PUBLIC",
   "www.mangalamsanitary.in": "MANGALAM_PUBLIC",
@@ -53,17 +61,43 @@ export function normalizeRequestHost(value: string | null | undefined) {
   return firstHost.split(":")[0] ?? "";
 }
 
+export function isExplicitStagingLoopbackHost(
+  value: string | null | undefined,
+  env: HostRoutingEnv = process.env,
+) {
+  const host = normalizeRequestHost(value);
+
+  return (
+    env.NODE_ENV === "production" &&
+    env.TRUSTFIRST_DEMO_MODE === "staging" &&
+    env.TRUSTFIRST_ALLOW_LOOPBACK_STAGING === "true" &&
+    LOOPBACK_HOSTS.has(host)
+  );
+}
+
 export function resolveAppSurfaceFromHost(
   value: string | null | undefined,
+  env: HostRoutingEnv = process.env,
 ): AppSurface {
   const host = normalizeRequestHost(value);
+
+  if (isExplicitStagingLoopbackHost(host, env)) {
+    return "MANGALAM_ERP";
+  }
+
   return surfaceByHost[host] ?? "UNKNOWN";
 }
 
 export function tenantSlugForHost(
   value: string | null | undefined,
+  env: HostRoutingEnv = process.env,
 ): string | null {
   const host = normalizeRequestHost(value);
+
+  if (isExplicitStagingLoopbackHost(host, env)) {
+    return MANGALAM_TENANT_SLUG;
+  }
+
   return tenantByHost[host] ?? null;
 }
 
