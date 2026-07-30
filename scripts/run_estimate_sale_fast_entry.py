@@ -10,7 +10,16 @@ PARTS_DIR = ROOT / "scripts" / ".estimate-sale-fast-entry"
 EXPECTED_B64_LENGTH = 96_748
 EXPECTED_B64_SHA256 = "34b69dd8b88d420d18a984002641447f3430adf299d3b056a813829d55199cd0"
 EXPECTED_SCRIPT_SHA256 = "9cbcf4e5ea0076cd489b48a01cf7888d27d196bba684887093ae277073601a26"
-EXPECTED_PARTS = [PARTS_DIR / f"part-{index:02d}.b64" for index in range(7)]
+EXPECTED_PARTS = [
+    PARTS_DIR / "part-00.b64",
+    PARTS_DIR / "part-01.b64",
+    PARTS_DIR / "part-02.b64",
+    PARTS_DIR / "bridge-02-03.b64",
+    PARTS_DIR / "part-03.b64",
+    PARTS_DIR / "part-04.b64",
+    PARTS_DIR / "part-05.b64",
+    PARTS_DIR / "part-06.b64",
+]
 
 missing = [str(path.relative_to(ROOT)) for path in EXPECTED_PARTS if not path.is_file()]
 if missing:
