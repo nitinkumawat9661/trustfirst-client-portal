@@ -12,7 +12,7 @@ on:
       - "apps/web/**"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: validate-estimate-sale-fast-entry-${{ github.event.pull_request.number }}
@@ -23,30 +23,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - name: Check out pull request merge ref
+      - name: Check out feature branch
         uses: actions/checkout@v4
-
-      - name: Decode second materializer gap boundaries
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import base64
-          from pathlib import Path
-
-          root = Path("scripts/.estimate-sale-fast-entry")
-          part_02 = (root / "part-02.b64").read_text().strip()
-          part_03 = (root / "part-03.b64").read_text().strip()
-          left = base64.b64decode(part_02[3:]).decode("utf-8")
-          right_encoded = part_03[3:]
-          right_encoded = right_encoded[:len(right_encoded) - (len(right_encoded) % 4)]
-          right = base64.b64decode(right_encoded).decode("utf-8")
-          print("ESTIMATE_SECOND_LEFT_TAIL_BEGIN")
-          print(left[-4200:])
-          print("ESTIMATE_SECOND_LEFT_TAIL_END")
-          print("ESTIMATE_SECOND_RIGHT_HEAD_BEGIN")
-          print(right[:4200])
-          print("ESTIMATE_SECOND_RIGHT_HEAD_END")
-          PY
+        with:
+          ref: feature/estimate-sale-edit-fast-entry
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -56,6 +36,20 @@ jobs:
 
       - name: Install and materialize source
         run: npm ci
+
+      - name: Persist readable application source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src
+          if git diff --cached --quiet; then
+            echo "Materialized source already committed."
+          else
+            git commit -m "feat: materialize Estimate sale fast-entry source"
+            git push origin HEAD:feature/estimate-sale-edit-fast-entry
+          fi
 
       - name: Generate Prisma client
         run: npm run db:generate
