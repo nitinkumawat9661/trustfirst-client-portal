@@ -2,11 +2,10 @@ import { expect, test } from "@playwright/test";
 
 const adminEmail = process.env.MANGLAM_DEMO_ADMIN_EMAIL ?? "mangalam-staging-admin@trustfirst.example.com";
 const adminPassword = process.env.MANGLAM_DEMO_ADMIN_PASSWORD ?? "MangalamStaging!2026";
+const runSuffix = process.env.E2E_RUN_SUFFIX ?? "local";
+const partyName = `E2E Dual Role Traders ${runSuffix}`;
 
-test("customer, supplier, sale, purchase and Estimate Bill work end to end", async ({ page }, testInfo) => {
-  const runSuffix = `${testInfo.retry}-${Date.now()}`;
-  const partyName = `E2E Dual Role Traders ${runSuffix}`;
-
+test("customer, supplier, sale, purchase and Estimate Bill work end to end", async ({ page }) => {
   await page.goto("/sign-in?callbackUrl=/admin/hardware/sales/new");
   await page.getByLabel("Email", { exact: true }).fill(adminEmail);
   await page.getByLabel("Password", { exact: true }).fill(adminPassword);
