@@ -11,7 +11,7 @@
     "dev": "npm run dev --workspace @trustfirst/web",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "postinstall": "python3 scripts/apply-recommendation-hardening.py && python3 scripts/apply-recommendation-test-updates.py && python3 scripts/apply-trade-party-role-hardening.py",
+    "postinstall": "python3 scripts/apply-recommendation-hardening.py && python3 scripts/apply-recommendation-test-updates.py && python3 scripts/apply-trade-party-role-hardening.py && python3 scripts/apply-pos-trailing-row-fix.py",
     "pretest": "node scripts/ensure-rolldown-binding.mjs",
     "test": "npm run test --workspaces --if-present",
     "test:binding": "node scripts/ensure-rolldown-binding.mjs",
