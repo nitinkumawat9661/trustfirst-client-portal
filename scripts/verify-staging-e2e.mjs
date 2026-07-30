@@ -4,10 +4,15 @@ if (!process.env.DATABASE_URL?.toLowerCase().includes("staging")) {
   throw new Error("Refusing E2E verification against a database that is not staging-named.");
 }
 
+const runSuffix = process.env.E2E_RUN_SUFFIX?.trim();
+if (!runSuffix) throw new Error("E2E_RUN_SUFFIX is required for isolated verification.");
+
 const requireFromDatabase = createRequire(new URL("../packages/database/package.json", import.meta.url));
 const { PrismaClient } = requireFromDatabase("@prisma/client");
 const prisma = new PrismaClient();
-const partyName = "E2E Dual Role Traders";
+const partyName = `E2E Dual Role Traders ${runSuffix}`;
+const purchaseReference = `E2E-PURCHASE-${runSuffix}`;
+const estimateReference = `E2E-ESTIMATE-${runSuffix}`;
 
 try {
   const parties = await prisma.clientOrganization.findMany({
@@ -39,7 +44,7 @@ try {
       where: {
         archivedAt: null,
         customerId: party.id,
-        metadata: { equals: "E2E-ESTIMATE-001", path: ["referenceNumber"] },
+        metadata: { equals: estimateReference, path: ["referenceNumber"] },
         status: "CONFIRMED",
         type: "SALES_QUOTATION",
       },
@@ -48,7 +53,7 @@ try {
   ]);
 
   if (invoices < 1) throw new Error("Quick POS did not persist a customer invoice.");
-  if (!purchases.some((document) => document.metadata && typeof document.metadata === "object" && !Array.isArray(document.metadata) && document.metadata.referenceNumber === "E2E-PURCHASE-001")) {
+  if (!purchases.some((document) => document.metadata && typeof document.metadata === "object" && !Array.isArray(document.metadata) && document.metadata.referenceNumber === purchaseReference)) {
     throw new Error("Purchase flow did not persist the expected supplier document.");
   }
   if (estimates.length !== 1) throw new Error(`Expected one confirmed E2E Estimate Bill, found ${estimates.length}.`);
