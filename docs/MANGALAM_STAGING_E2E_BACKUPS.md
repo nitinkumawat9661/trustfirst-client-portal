@@ -52,6 +52,10 @@ Safety properties:
 
 Encryption uses the public key derived from the existing `VPS_SSH_PRIVATE_KEY` GitHub secret. Keep the previous private key in a secure offline password manager when rotating VPS SSH credentials, otherwise backups encrypted for that previous key cannot be decrypted.
 
+## Clean-source release rule
+
+Production must be deployed from the final readable Git commit. Temporary materialization hooks or one-time patch scripts are not retained in `main`, and the VPS deployed-commit marker must match the clean repository SHA.
+
 ## Restore procedure
 
 1. Download the required encrypted Actions artifact.
