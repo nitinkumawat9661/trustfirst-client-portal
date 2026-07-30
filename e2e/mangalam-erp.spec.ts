@@ -28,7 +28,7 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   await saleQuantity.fill("1");
   await saleQuantity.focus();
   await saleQuantity.press("Enter");
-  await expect(page.getByRole("textbox", { name: "Product name / SKU", exact: true })).toHaveCount(2);
+  await expect(page.getByText("Item 2", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Remove item 2" }).click();
   await page.getByRole("button", { name: "Post bill", exact: true }).click();
