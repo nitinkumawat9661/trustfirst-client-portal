@@ -45,19 +45,20 @@ jobs:
         if: steps.detect.outputs.needed == 'true'
         run: npm ci
 
-      - name: Remove temporary hook and finalizer
+      - name: Remove temporary hooks and finalizer
         if: steps.detect.outputs.needed == 'true'
         shell: bash
         run: |
           node <<'NODE'
           const fs = require('node:fs');
           const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          if (packageJson.scripts?.postinstall === 'python3 scripts/apply-recommendation-hardening.py') {
+          if (packageJson.scripts?.postinstall?.includes('apply-recommendation-hardening.py')) {
             delete packageJson.scripts.postinstall;
           }
           fs.writeFileSync('package.json', `${JSON.stringify(packageJson, null, 2)}\n`);
           NODE
           rm scripts/apply-recommendation-hardening.py
+          rm scripts/apply-recommendation-test-updates.py
           rm .github/workflows/finalize-recommendation-hardening.yml
 
       - name: Validate clean readable source
@@ -72,7 +73,8 @@ jobs:
           npm run build --workspace @trustfirst/web
           bash -n scripts/vps-mangalam-daily-backup.sh
           test ! -e scripts/apply-recommendation-hardening.py
-          ! grep -q 'apply-recommendation-hardening.py' package.json
+          test ! -e scripts/apply-recommendation-test-updates.py
+          ! grep -q 'apply-recommendation-' package.json
           git diff --check
 
       - name: Commit clean source
