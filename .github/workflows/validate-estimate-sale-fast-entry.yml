@@ -37,8 +37,8 @@ jobs:
           prefix = "".join((root / name).read_text().strip() for name in ["part-00.b64", "part-01.b64", "part-02.b64", "part-02b.b64"])
           suffix = (root / "part-03.b64").read_text().strip()
           prefix_decoded = base64.b64decode(prefix + "=" * ((4 - len(prefix) % 4) % 4))
-          aligned_suffix = suffix[3:]
-          suffix_decoded = base64.b64decode(aligned_suffix + "=" * ((4 - len(aligned_suffix) % 4) % 4))
+          aligned_suffix = suffix[3:-1]
+          suffix_decoded = base64.b64decode(aligned_suffix)
           print("ESTIMATE_PREFIX_DECODED_TAIL_BEGIN")
           print(prefix_decoded[-1400:].decode("utf-8", errors="replace"))
           print("ESTIMATE_PREFIX_DECODED_TAIL_END")
