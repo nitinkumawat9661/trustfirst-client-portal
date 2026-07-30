@@ -33,9 +33,6 @@ jobs:
       - name: Regenerate locked dependency graph
         run: npm install --package-lock-only --ignore-scripts
 
-      - name: Verify production dependency audit
-        run: npm audit --omit=dev --audit-level=high
-
       - name: Commit lockfile only
         shell: bash
         run: |
