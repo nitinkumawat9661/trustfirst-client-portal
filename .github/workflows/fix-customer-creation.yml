@@ -1,0 +1,157 @@
+name: Repair and verify customer creation
+
+on:
+  push:
+    branches:
+      - fix/customer-creation-full-verification
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/customer-creation-full-verification
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Repair customer creation wiring
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/web/src/components/hardware/quick-pos-form.tsx')
+          source = path.read_text()
+          replacements = [
+              (
+                  '                onCreate={(name) => setCustomerName(name)}',
+                  '''                onCreate={(name) => {
+                  setCustomerId("");
+                  setCustomerName(name);
+                  setQuickCustomer(name);
+                }}''',
+              ),
+              (
+                  '''          onCreated={(party) => {
+            setAvailableCustomers((current) => [party, ...current]);
+            setCustomerId(party.id);
+            setQuickCustomer(null);
+          }}''',
+                  '''          onCreated={(party) => {
+            setAvailableCustomers((current) => [party, ...current.filter((customer) => customer.id !== party.id)]);
+            setCustomerId(party.id);
+            setCustomerName(party.name);
+            setQuickCustomer(null);
+          }}''',
+              ),
+              (
+                  '<h2 className="text-lg font-semibold">Create customer</h2>',
+                  '<h2 className="text-lg font-semibold">Create {role === "supplier" ? "supplier" : "customer"}</h2>',
+              ),
+          ]
+          for old, new in replacements:
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected one match, found {count}: {old[:80]!r}')
+              source = source.replace(old, new, 1)
+          path.write_text(source)
+          PY
+
+          cat > apps/web/src/server/hardware/customer-creation-flow.test.ts <<'TEST'
+          import { readFileSync } from "node:fs";
+          import { fileURLToPath } from "node:url";
+          import type { PrismaClient } from "@trustfirst/database";
+          import { describe, expect, it } from "vitest";
+          import { HardwareService } from "./hardware-service";
+          import { quickHardwarePartySchema } from "./schemas";
+
+          const context = { tenantId: "tenant_1", userId: "user_1" };
+
+          function membership(permission: string) {
+            return {
+              role: { key: "hardware-manager", permissions: [{ permission: { key: permission } }] },
+              status: "ACTIVE",
+            };
+          }
+
+          describe("customer creation flow", () => {
+            it("accepts a name-only customer payload", () => {
+              expect(quickHardwarePartySchema.parse({ name: "Walk In Retail Customer", role: "customer" })).toEqual({
+                name: "Walk In Retail Customer",
+                role: "customer",
+              });
+            });
+
+            it("persists and returns a name-only customer without requiring mobile or GSTIN", async () => {
+              const createdRows: Array<Record<string, unknown>> = [];
+              let contactCreates = 0;
+              const service = new HardwareService({
+                clientContact: {
+                  create: async () => {
+                    contactCreates += 1;
+                    return {};
+                  },
+                },
+                clientOrganization: {
+                  create: async ({ data }: { data: Record<string, unknown> }) => {
+                    createdRows.push(data);
+                    return { id: "customer_1", name: data.name as string };
+                  },
+                  findMany: async () => [],
+                  findUnique: async () => null,
+                },
+                tenantMembership: { findUnique: async () => membership("hardware.sales.manage") },
+              } as unknown as PrismaClient);
+
+              const result = await service.quickCreateParty(context, { name: "Walk In Retail Customer", role: "customer" });
+
+              expect(result).toMatchObject({ id: "customer_1", name: "Walk In Retail Customer", role: "customer" });
+              expect(createdRows).toHaveLength(1);
+              expect(createdRows[0]).toMatchObject({
+                customFields: { hardwarePartyRole: "customer", openingBalanceCents: 0 },
+                name: "Walk In Retail Customer",
+                tenantId: "tenant_1",
+              });
+              expect(contactCreates).toBe(0);
+            });
+
+            it("wires the Fast Bill create action to the customer dialog and selected customer state", () => {
+              const sourcePath = fileURLToPath(new URL("../../components/hardware/quick-pos-form.tsx", import.meta.url));
+              const source = readFileSync(sourcePath, "utf8");
+              expect(source).toContain('setQuickCustomer(name);');
+              expect(source).toContain('setCustomerName(party.name);');
+              expect(source).toContain('current.filter((customer) => customer.id !== party.id)');
+            });
+          });
+          TEST
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npm run db:generate
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Full test suite
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Verify no temporary data mutation hooks
+        run: |
+          test ! -e scripts/run_estimate_sale_fast_entry_v2.py
+          git diff --check
+      - name: Commit verified source and remove one-shot workflow
+        shell: bash
+        run: |
+          rm .github/workflows/fix-customer-creation.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/components/hardware/quick-pos-form.tsx apps/web/src/server/hardware/customer-creation-flow.test.ts .github/workflows/fix-customer-creation.yml
+          git commit -m "fix: restore reliable customer creation in Fast Bill"
+          git push origin HEAD:fix/customer-creation-full-verification
