@@ -1,5 +1,6 @@
 import { AppError } from "../domain/errors";
 import {
+  isExplicitStagingLoopbackHost,
   normalizeRequestHost,
   readEffectiveHost,
   resolveAppSurfaceFromHost,
@@ -42,8 +43,13 @@ export function assertCsrfSafeRequest(request: Request) {
   }
 
   if (isProduction) {
+    const isLoopbackStaging = isExplicitStagingLoopbackHost(effectiveHost);
+    const protocolIsAllowed =
+      origin.protocol === "https:" ||
+      (isLoopbackStaging && origin.protocol === "http:");
+
     if (
-      origin.protocol !== "https:" ||
+      !protocolIsAllowed ||
       resolveAppSurfaceFromHost(effectiveHost) === "UNKNOWN"
     ) {
       throwCsrfError();
