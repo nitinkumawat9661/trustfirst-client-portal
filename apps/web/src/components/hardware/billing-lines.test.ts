@@ -21,6 +21,12 @@ describe("billing line completion", () => {
     expect(completedBillingLines([completeLine, blankLine])).toEqual([completeLine]);
   });
 
+  it("allows multiple untouched trailing rows while posting only completed items", () => {
+    const lines = [completeLine, { ...blankLine }, { ...blankLine }];
+    expect(canPostBillingLines(lines)).toBe(true);
+    expect(completedBillingLines(lines)).toEqual([completeLine]);
+  });
+
   it("blocks a partially typed unresolved row", () => {
     expect(canPostBillingLines([
       completeLine,
