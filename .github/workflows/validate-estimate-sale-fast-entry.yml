@@ -26,27 +26,26 @@ jobs:
       - name: Check out pull request merge ref
         uses: actions/checkout@v4
 
-      - name: Verify standalone payload candidate
+      - name: Decode materializer gap boundaries
         shell: bash
         run: |
           python3 - <<'PY'
           import base64
-          import hashlib
           from pathlib import Path
 
-          path = Path("scripts/.estimate-sale-fast-entry-v2/part-00.b64")
-          encoded = path.read_text(encoding="utf-8").strip()
-          print("STANDALONE_LENGTH", len(encoded))
-          print("STANDALONE_SHA256", hashlib.sha256(encoded.encode("ascii")).hexdigest())
-          try:
-              decoded = base64.b64decode(encoded, validate=True)
-              print("STANDALONE_DECODED_LENGTH", len(decoded))
-              print("STANDALONE_DECODED_SHA256", hashlib.sha256(decoded).hexdigest())
-              decoded.decode("utf-8")
-              compile(decoded, str(path), "exec")
-              print("STANDALONE_SOURCE_VALID")
-          except Exception as error:
-              print("STANDALONE_SOURCE_INVALID", type(error).__name__, str(error))
+          root = Path("scripts/.estimate-sale-fast-entry")
+          prefix_encoded = "".join((root / name).read_text().strip() for name in ["part-00.b64", "part-01.b64"])
+          prefix = base64.b64decode(prefix_encoded).decode("utf-8")
+          shifted = (root / "part-02.b64").read_text().strip()
+          suffix_encoded = shifted[3:]
+          suffix_encoded = suffix_encoded[:len(suffix_encoded) - (len(suffix_encoded) % 4)]
+          suffix = base64.b64decode(suffix_encoded).decode("utf-8")
+          print("ESTIMATE_PREFIX_TAIL_BEGIN")
+          print(prefix[-3500:])
+          print("ESTIMATE_PREFIX_TAIL_END")
+          print("ESTIMATE_SUFFIX_HEAD_BEGIN")
+          print(suffix[:3500])
+          print("ESTIMATE_SUFFIX_HEAD_END")
           PY
 
       - name: Use Node.js 22
