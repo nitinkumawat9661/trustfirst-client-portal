@@ -73,7 +73,7 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   const documentId = new URL(page.url()).pathname.split("/").filter(Boolean).at(-1);
   expect(documentId).toBeTruthy();
   await page.goto(`/admin/hardware/quotations/${documentId}/edit`);
-  await expect(page.getByText(/Edit HSQ-/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Edit HSQ-/, level: 1 })).toBeVisible();
   await page.getByLabel("Qty", { exact: true }).first().fill("2");
   await page.getByRole("button", { name: "Update and print Estimate Bill" }).click();
   await page.waitForURL(new RegExp(`/admin/hardware/print/${documentId}`));
