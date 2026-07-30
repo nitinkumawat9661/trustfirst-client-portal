@@ -27,6 +27,18 @@ describe("billing line completion", () => {
     expect(completedBillingLines(lines)).toEqual([completeLine]);
   });
 
+  it("ignores an untouched blank row between completed products", () => {
+    const secondLine = {
+      ...completeLine,
+      productId: "product_2",
+      productName: "Bib Tap",
+      rate: "1250",
+    };
+    const lines = [completeLine, { ...blankLine }, secondLine];
+    expect(canPostBillingLines(lines)).toBe(true);
+    expect(completedBillingLines(lines)).toEqual([completeLine, secondLine]);
+  });
+
   it("blocks a partially typed unresolved row", () => {
     expect(canPostBillingLines([
       completeLine,
