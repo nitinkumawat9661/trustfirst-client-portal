@@ -6,7 +6,10 @@ import {
 } from "@/server/domain/host-routing";
 import { enforceHostBoundary } from "@/server/domain/host-boundary";
 import { assertCsrfSafeRequest } from "@/server/security/csrf";
-import { applySecurityHeaders } from "@/server/security/headers";
+import {
+  applySecurityHeaders,
+  createSecurityHeaderContext,
+} from "@/server/security/headers";
 
 const protectedRoutes = [
   "/admin",
@@ -30,6 +33,7 @@ export default auth((request) => {
   const pathname = request.nextUrl.pathname;
   const host = readEffectiveHost(request.headers);
   const surface = resolveAppSurfaceFromHost(host);
+  const securityContext = createSecurityHeaderContext(request);
 
   if (process.env.NODE_ENV === "production" && surface === "UNKNOWN") {
     return applySecurityHeaders(
@@ -38,13 +42,14 @@ export default auth((request) => {
         { status: 421 },
       ),
       request,
+      securityContext,
     );
   }
 
   const boundaryResponse = enforceHostBoundary(request, surface);
 
   if (boundaryResponse) {
-    return applySecurityHeaders(boundaryResponse, request);
+    return applySecurityHeaders(boundaryResponse, request, securityContext);
   }
 
   const isProtected = protectedRoutes.some(
@@ -62,6 +67,7 @@ export default auth((request) => {
           { status: 401 },
         ),
         request,
+        securityContext,
       );
     }
 
@@ -76,6 +82,7 @@ export default auth((request) => {
     return applySecurityHeaders(
       NextResponse.redirect(signInUrl),
       request,
+      securityContext,
     );
   }
 
@@ -89,13 +96,19 @@ export default auth((request) => {
           { status: 403 },
         ),
         request,
+        securityContext,
       );
     }
   }
 
   return applySecurityHeaders(
-    NextResponse.next(),
+    NextResponse.next({
+      request: {
+        headers: securityContext.requestHeaders,
+      },
+    }),
     request,
+    securityContext,
   );
 });
 
