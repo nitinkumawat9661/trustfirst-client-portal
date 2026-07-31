@@ -40,6 +40,9 @@ jobs:
           rm -rf node_modules apps/*/node_modules packages/*/node_modules
           npm ci --include=dev
 
+      - name: Generate Prisma client
+        run: npm run db:generate
+
       - name: Verify patched dependency tree
         shell: bash
         run: |
