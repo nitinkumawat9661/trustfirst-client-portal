@@ -1,5 +1,6 @@
 import fs from "node:fs";
 
+// One-time materializer. It removes itself after creating the clean source commit.
 const deployPath = "scripts/deploy-production-ci.sh";
 const proxyPath = "apps/web/src/proxy.ts";
 const workflowPath = ".github/workflows/deploy-mangalam-production.yml";
