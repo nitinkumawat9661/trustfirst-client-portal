@@ -20,6 +20,9 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Align current source copy
+        run: python scripts/prepatch-product-sales-preferences.py
+
       - name: Materialize readable source
         run: python scripts/apply-product-sales-preferences.py
 
