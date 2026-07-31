@@ -26,6 +26,7 @@ console.log("ARCHITECTURE_BOUNDARIES_VERIFIED");
 
 async function validateFile(filePath) {
   const source = await readFile(filePath, "utf8");
+  const executableSource = stripComments(source);
   const relativePath = normalizePath(path.relative(repositoryRoot, filePath));
   const imports = extractImports(source);
 
@@ -60,7 +61,7 @@ async function validateFile(filePath) {
     ];
 
     for (const token of forbiddenRuntimeTokens) {
-      if (token.test(source)) {
+      if (token.test(executableSource)) {
         violations.push(`${relativePath}: pure feature core contains browser/UI dependency ${token}`);
       }
     }
@@ -96,6 +97,12 @@ function extractImports(source) {
   }
 
   return [...modules];
+}
+
+function stripComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//gu, "")
+    .replace(/(^|[^:])\/\/.*$/gmu, "$1");
 }
 
 function rejectImports(relativePath, imports, forbiddenModules, reason) {
