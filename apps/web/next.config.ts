@@ -3,7 +3,6 @@ import type { NextConfig } from "next";
 const isProduction = process.env.NODE_ENV === "production";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
   transpilePackages: ["@trustfirst/ui", "@trustfirst/config", "@trustfirst/database"],
   poweredByHeader: false,
   images: {
