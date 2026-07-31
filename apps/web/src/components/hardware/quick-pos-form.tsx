@@ -105,6 +105,8 @@ export function QuickPosForm({
   const [whatsAppMobile, setWhatsAppMobile] = useState("");
   const productInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const quantityInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const discountInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const gstInputRefs = useRef<Array<HTMLSelectElement | null>>([]);
   const completedLines = useMemo(() => completedBillingLines(lines), [lines]);
   const canPost = canPostBillingLines(lines);
   const totals = useMemo(() => calculateTotals(completedLines, paid, invoiceDiscount), [completedLines, invoiceDiscount, paid]);
@@ -152,13 +154,27 @@ export function QuickPosForm({
   }
 
   function advanceFromQuantity(index: number, event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!isPlainEnter(event)) return;
     event.preventDefault();
     const line = lines[index];
     if (!line?.productId) {
       productInputRefs.current[index]?.focus();
       return;
     }
+    const discountInput = discountInputRefs.current[index];
+    discountInput?.focus();
+    discountInput?.select();
+  }
+
+  function advanceFromDiscount(index: number, event: KeyboardEvent<HTMLInputElement>) {
+    if (!isPlainEnter(event)) return;
+    event.preventDefault();
+    gstInputRefs.current[index]?.focus();
+  }
+
+  function advanceFromGst(index: number, event: KeyboardEvent<HTMLSelectElement>) {
+    if (!isPlainEnter(event)) return;
+    event.preventDefault();
     const action = nextBillingLineAction(index, lines.length);
     if (action.append) {
       setLines((current) => [...current, { ...emptyLine }]);
@@ -333,7 +349,7 @@ export function QuickPosForm({
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div>
               <CardTitle>Items</CardTitle>
-              <p className="mt-1 text-xs text-muted-foreground">Type a product and press Enter, enter quantity, then press Enter again for the next line. Spelling mistakes, partial names, and words in any order are supported.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Product → Enter → quantity → Enter → discount → Enter → GST → Enter → next product. Untouched blank rows do not block posting.</p>
             </div>
             <Button onClick={() => setLines((current) => [...current, { ...emptyLine }])} type="button" variant="outline">Add line</Button>
           </CardHeader>
@@ -362,10 +378,23 @@ export function QuickPosForm({
                   value={line.quantity}
                 />
                 <NumberField label="Rate" value={line.rate} onChange={(value) => updateLine(index, { rate: value })} className="md:col-span-2" />
-                <NumberField label="Disc. %" value={line.discountPercent} onChange={(value) => updateLine(index, { discountPercent: value })} className="md:col-span-1" />
+                <NumberField
+                  className="md:col-span-1"
+                  inputRef={(node) => { discountInputRefs.current[index] = node; }}
+                  label="Disc. %"
+                  onChange={(value) => updateLine(index, { discountPercent: value })}
+                  onKeyDown={(event) => advanceFromDiscount(index, event)}
+                  value={line.discountPercent}
+                />
                 <label className="grid gap-2 text-sm font-medium md:col-span-1">
                   GST %
-                  <select className={selectClassName} value={line.gstRate} onChange={(event) => updateLine(index, { gstRate: event.target.value })}>
+                  <select
+                    ref={(node) => { gstInputRefs.current[index] = node; }}
+                    className={selectClassName}
+                    value={line.gstRate}
+                    onChange={(event) => updateLine(index, { gstRate: event.target.value })}
+                    onKeyDown={(event) => advanceFromGst(index, event)}
+                  >
                     {["0", "5", "12", "18", "28"].map((rate) => <option key={rate} value={rate}>{rate}%</option>)}
                   </select>
                 </label>
@@ -758,6 +787,10 @@ function InvoiceMarkup({ bill }: { bill: BillPreview }) {
 
 function PreviewRow({ label, value }: { label: string; value: number }) {
   return <div className="flex justify-between gap-3"><dt>{label}</dt><dd>{money(value)}</dd></div>;
+}
+
+function isPlainEnter(event: KeyboardEvent<HTMLElement>) {
+  return event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
 }
 
 function NumberField({

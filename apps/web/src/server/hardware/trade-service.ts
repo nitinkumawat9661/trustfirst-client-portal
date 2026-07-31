@@ -176,9 +176,11 @@ export class HardwareTradeService {
       await this.ensureLocation(context.tenantId, input.locationId);
       await this.ensureStockAvailable(context.tenantId, document, input.locationId);
     }
-    const stockItems = document.items.filter((item) => !isStockSetupPending(item.product?.metadata));
-    const purchasePaidAmountCents = purchasePaymentAmountFromMetadata(document.metadata, document.totalCents);
     const isEstimateSale = document.type === HardwareTradeDocumentType.SALES_QUOTATION;
+    const stockItems = isEstimateSale
+      ? document.items
+      : document.items.filter((item) => !isStockSetupPending(item.product?.metadata));
+    const purchasePaidAmountCents = purchasePaymentAmountFromMetadata(document.metadata, document.totalCents);
     const estimatePaidAmountCents = isEstimateSale
       ? estimatePaymentAmountFromMetadata(document.metadata, document.totalCents)
       : 0;
@@ -404,7 +406,6 @@ export class HardwareTradeService {
     }
     const requiredByProduct = new Map<string, number>();
     for (const item of normalizedItems) {
-      if (isStockSetupPending(products.get(item.productId)?.metadata)) continue;
       requiredByProduct.set(item.productId, (requiredByProduct.get(item.productId) ?? 0) + item.quantity);
     }
     for (const [productId, required] of requiredByProduct) {
@@ -531,7 +532,7 @@ export class HardwareTradeService {
         where: { id: document.id, tenantId: context.tenantId },
       });
 
-      for (const item of normalizedItems.filter((candidate) => !isStockSetupPending(products.get(candidate.productId)?.metadata))) {
+      for (const item of normalizedItems) {
         await tx.hardwareInventoryMovement.create({
           data: {
             customerId: input.customerId ?? null,
@@ -1828,16 +1829,18 @@ export class HardwareTradeService {
   private async ensureStockAvailable(tenantId: string, document: TradeFullRecord, locationId: string) {
     const stockOutTypes = new Set<HardwareTradeDocumentType>([
       HardwareTradeDocumentType.SALES_ORDER,
+      HardwareTradeDocumentType.SALES_QUOTATION,
       HardwareTradeDocumentType.PURCHASE_RETURN,
     ]);
     if (!stockOutTypes.has(document.type)) return;
+    const isEstimateSale = document.type === HardwareTradeDocumentType.SALES_QUOTATION;
     for (const item of document.items) {
-      if (isStockSetupPending(item.product?.metadata)) continue;
+      if (!isEstimateSale && isStockSetupPending(item.product?.metadata)) continue;
       const movements = await this.prisma.hardwareInventoryMovement.findMany({
         where: { locationId, productId: item.productId, tenantId },
       });
       if (item.quantity > stockForProduct(movements)) {
-        throw validation("Confirmed sale or return cannot deduct more stock than available.");
+        throw validation("Confirmed sale, Estimate Bill, or return cannot deduct more stock than available.");
       }
     }
   }
