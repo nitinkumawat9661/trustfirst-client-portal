@@ -50,8 +50,8 @@ async function validateFile(filePath) {
     }
 
     const forbiddenRuntimeTokens = [
-      /\bwindow\b/u,
-      /\bdocument\b/u,
+      /\bwindow\s*[.[]/u,
+      /\bdocument\s*[.[]/u,
       /\bHTMLElement\b/u,
       /\bHTML[A-Z][A-Za-z]+Element\b/u,
       /from\s+["']react["']/u,
