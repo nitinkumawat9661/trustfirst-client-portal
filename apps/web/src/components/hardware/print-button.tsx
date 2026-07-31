@@ -67,7 +67,8 @@ export function PrintButton({
     clone.querySelectorAll(".no-print").forEach((node) => node.remove());
     const stylesHtml = Array.from(document.head.querySelectorAll('style, link[rel="stylesheet"]'))
       .map((node) => node.outerHTML)
-      .join("\n");
+      .join("
+");
     const title = fileName ?? "Mangalam Sanitary Bill";
     const printWindow = window.open("", "_blank", "width=1050,height=850");
     if (!printWindow) {
