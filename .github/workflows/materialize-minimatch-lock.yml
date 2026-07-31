@@ -39,6 +39,7 @@ jobs:
           set -euo pipefail
           npm install minimatch@10.2.6 \
             --save-dev \
+            --save-exact \
             --include-workspace-root \
             --package-lock-only \
             --include=dev \
