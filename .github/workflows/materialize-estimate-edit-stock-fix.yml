@@ -1,0 +1,43 @@
+name: Materialize Estimate Edit Stock Fix
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-estimate-edit-stock-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  materialize:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'agent/fix-billing-print-estimate-stock'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply Estimate edit stock fix
+        run: python scripts/materialize-estimate-edit-stock-fix.py
+
+      - name: Commit readable source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/server/hardware/trade-service.ts apps/web/src/components/hardware/estimate-bill-form.tsx
+          if git diff --cached --quiet; then
+            echo "Source already materialized."
+            exit 0
+          fi
+          git commit -m "fix: enforce stock deduction on Estimate edits"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
