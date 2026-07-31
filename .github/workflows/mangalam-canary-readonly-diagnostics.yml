@@ -55,6 +55,14 @@ jobs:
           CANARY_PORT="$2"
           CANARY_NAME="${PM2_PROCESS}-canary"
 
+          CANARY_CWD="$(pm2 jlist | node -e '
+            const fs = require("fs");
+            const target = process.argv[1];
+            const list = JSON.parse(fs.readFileSync(0, "utf8"));
+            const item = list.find((entry) => String(entry.name || entry.pm2_env?.name || "") === target);
+            process.stdout.write(String(item?.pm2_env?.pm_cwd || ""));
+          ' "$CANARY_NAME")"
+
           echo "=== PM2 redacted snapshot ==="
           pm2 jlist | node -e '
             const fs = require("fs");
@@ -87,19 +95,76 @@ jobs:
             --header "Host: app.mangalamsanitary.in" \
             "http://127.0.0.1:${CANARY_PORT}/api/auth/session" || true
 
-          echo "=== Runtime env file metadata ==="
-          release_dir="$(find /var/www/trustfirst-client-portal-releases -maxdepth 1 -mindepth 1 -type d -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1 | cut -d' ' -f2- || true)"
-          if [ -n "$release_dir" ]; then
-            echo "release_dir=$release_dir"
-            stat -c 'mode=%a owner=%U group=%G path=%n' "$release_dir/apps/web/.env.production.local" 2>/dev/null || true
-            awk -F= '/^[A-Z0-9_]+=/{print "env_key=" $1}' "$release_dir/apps/web/.env.production.local" 2>/dev/null || true
+          echo "=== Active runtime metadata ==="
+          echo "canary_cwd=$CANARY_CWD"
+          if [ -n "$CANARY_CWD" ] && [ -d "$CANARY_CWD" ]; then
+            stat -c 'mode=%a owner=%U group=%G path=%n' "$CANARY_CWD/apps/web/.env.production.local" 2>/dev/null || true
+            awk -F= '/^[A-Z0-9_]+=/{print "env_key=" $1}' "$CANARY_CWD/apps/web/.env.production.local" 2>/dev/null || true
+
+            echo "node_version=$(node --version)"
+            echo "npm_version=$(npm --version)"
+            echo "npm_registry=$(cd "$CANARY_CWD" && npm config get registry)"
+
+            cd "$CANARY_CWD"
+            node -e '
+              const pkg = require("./node_modules/next/package.json");
+              console.log(JSON.stringify({
+                nextVersion: pkg.version,
+                nextResolvedPath: require.resolve("next/package.json"),
+                packageFilesField: pkg.files || null,
+              }));
+            '
+
+            echo "=== Required Next runtime files ==="
+            for file in \
+              node_modules/next/dist/server/lib/router-utils/instrumentation-globals.external.js \
+              node_modules/next/dist/server/lib/router-utils/instrumentation-globals.external.d.ts \
+              node_modules/next/dist/server/lib/router-utils/instrumentation-globals.external.js.map \
+              node_modules/next/dist/esm/server/lib/router-utils/instrumentation-globals.external.js \
+              node_modules/next/dist/esm/server/lib/router-utils/instrumentation-globals.external.js.map; do
+              if [ -f "$file" ]; then
+                stat -c 'present mode=%a size=%s path=%n' "$file"
+              else
+                echo "missing path=$file"
+              fi
+            done
+
+            echo "=== Instrumentation runtime inventory ==="
+            find node_modules/next/dist -type f -name 'instrumentation-globals*' -printf '%s %p\n' 2>/dev/null | sort || true
+
+            echo "=== Next router-utils inventory summary ==="
+            find node_modules/next/dist/server/lib/router-utils -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort | tail -n 80 || true
+
+            echo "=== Relevant dependency tree ==="
+            npm ls next postcss sharp --all --json 2>/dev/null \
+              | node -e '
+                  const fs = require("fs");
+                  const data = JSON.parse(fs.readFileSync(0, "utf8"));
+                  function clean(node) {
+                    if (!node || typeof node !== "object") return node;
+                    const result = {};
+                    for (const key of ["version", "resolved", "overridden", "invalid", "extraneous"]) {
+                      if (node[key] !== undefined) result[key] = node[key];
+                    }
+                    if (node.dependencies) {
+                      result.dependencies = {};
+                      for (const [name, child] of Object.entries(node.dependencies)) {
+                        if (name === "next" || name === "postcss" || name === "sharp") {
+                          result.dependencies[name] = clean(child);
+                        }
+                      }
+                    }
+                    return result;
+                  }
+                  console.log(JSON.stringify(clean(data), null, 2));
+                ' || true
           fi
 
           echo "=== Canary PM2 logs ==="
           for file in "$HOME/.pm2/logs/${CANARY_NAME}-error.log" "$HOME/.pm2/logs/${CANARY_NAME}-out.log"; do
             if [ -f "$file" ]; then
               echo "--- $file ---"
-              tail -n 160 "$file" \
+              tail -n 100 "$file" \
                 | sed -E 's#(postgresql://)[^[:space:]]+#\1[REDACTED]#g; s#(AUTH_SECRET|DATABASE_URL|PASSWORD|TOKEN)=([^[:space:]]+)#\1=[REDACTED]#g'
             fi
           done
