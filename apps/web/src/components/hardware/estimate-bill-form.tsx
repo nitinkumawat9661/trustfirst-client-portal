@@ -10,6 +10,7 @@ import type {
   HardwareProductSummary,
 } from "@/server/hardware";
 import { nextBillingLineAction } from "./billing-keyboard";
+import { canPostBillingLines, completedBillingLines } from "./billing-lines";
 import { CreatableCombobox } from "./creatable-combobox";
 import { patchHardwareJson, postHardwareJson } from "./hardware-api-client";
 import { HardwareProductCombobox } from "./hardware-product-combobox";
@@ -84,7 +85,14 @@ export function EstimateBillForm({
   const [serverError, setServerError] = useState<string | null>(null);
   const productInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const quantityInputRefs = useRef<Array<HTMLInputElement | null>>([]);
-  const totals = useMemo(() => calculateEstimateTotals(lines, roundOff), [lines, roundOff]);
+  const discountInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const gstInputRefs = useRef<Array<HTMLSelectElement | null>>([]);
+  const normalizedLines = useMemo(() => lines.map((line) => ({ ...line, rate: line.unitRate })), [lines]);
+  const completedLines = useMemo(() => completedBillingLines(normalizedLines), [normalizedLines]);
+  const canSaveEstimate = canPostBillingLines(normalizedLines) && completedLines.every(
+    (line) => Number.isInteger(Number(line.quantity)) && Number(line.unitRate) > 0,
+  );
+  const totals = useMemo(() => calculateEstimateTotals(completedLines, roundOff), [completedLines, roundOff]);
 
   function updateLine(index: number, patch: Partial<EstimateLine>) {
     setLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, ...patch } : line));
@@ -121,12 +129,26 @@ export function EstimateBillForm({
   }
 
   function advanceFromQuantity(index: number, event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!isPlainEnter(event)) return;
     event.preventDefault();
     if (!lines[index]?.productId) {
       productInputRefs.current[index]?.focus();
       return;
     }
+    const discountInput = discountInputRefs.current[index];
+    discountInput?.focus();
+    discountInput?.select();
+  }
+
+  function advanceFromDiscount(index: number, event: KeyboardEvent<HTMLInputElement>) {
+    if (!isPlainEnter(event)) return;
+    event.preventDefault();
+    gstInputRefs.current[index]?.focus();
+  }
+
+  function advanceFromGst(index: number, event: KeyboardEvent<HTMLSelectElement>) {
+    if (!isPlainEnter(event)) return;
+    event.preventDefault();
     const action = nextBillingLineAction(index, lines.length);
     if (action.append) setLines((current) => [...current, { ...emptyLine }]);
     focusProduct(action.nextIndex);
@@ -158,7 +180,7 @@ export function EstimateBillForm({
   async function saveAndPrint() {
     setServerError(null);
     if (!locationId) return setServerError("Select a stock location.");
-    if (!canSave(lines)) return setServerError("Select every product and enter valid quantity and rate.");
+    if (!canSaveEstimate) return setServerError("Select every product and enter valid quantity and rate. Untouched blank rows are allowed.");
     const enteredPaidCents = paidAmount.trim() ? Math.round(Number(paidAmount) * 100) : null;
     const paidAmountCents = enteredPaidCents ?? (paymentMode === "Credit" ? 0 : totals.totalCents);
     if (!Number.isFinite(paidAmountCents) || paidAmountCents < 0 || paidAmountCents > totals.totalCents) {
@@ -168,7 +190,7 @@ export function EstimateBillForm({
     setSaving(true);
     try {
       const resolvedCustomerId = await resolveCustomer();
-      const items = lines.map((line) => {
+      const items = completedLines.map((line) => {
         const grossCents = Math.round(Number(line.quantity) * Number(line.unitRate) * 100);
         const discountCents = Math.round(grossCents * Number(line.discountPercent) / 100);
         return {
@@ -188,7 +210,7 @@ export function EstimateBillForm({
         customerAddress: customerAddress.trim() || null,
         documentDate,
         estimateBill: true,
-        gstFilingEligible: lines.some((line) => Number(line.gstRate) > 0),
+        gstFilingEligible: completedLines.some((line) => Number(line.gstRate) > 0),
         paidAmountCents,
         paymentMode,
         referenceNumber: referenceNumber.trim() || null,
@@ -303,7 +325,7 @@ export function EstimateBillForm({
           <div>
             <CardTitle>Items</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              Type product → Enter → quantity → Enter → next product. GST starts at 0% and is changed only on required lines.
+              Product → Enter → quantity → Enter → discount → Enter → GST → Enter → next product. Untouched blank rows do not block saving.
             </p>
           </div>
           <Button onClick={() => { setLines((current) => [...current, { ...emptyLine }]); focusProduct(lines.length); }} type="button" variant="outline">
@@ -344,10 +366,26 @@ export function EstimateBillForm({
                 <Input inputMode="decimal" min="0" onChange={(event) => updateLine(index, { unitRate: event.target.value })} step="0.01" type="number" value={line.unitRate} />
               </Field>
               <Field className="lg:col-span-1" label="Disc. %">
-                <Input inputMode="decimal" max="100" min="0" onChange={(event) => updateLine(index, { discountPercent: event.target.value })} step="0.01" type="number" value={line.discountPercent} />
+                <Input
+                  ref={(node) => { discountInputRefs.current[index] = node; }}
+                  inputMode="decimal"
+                  max="100"
+                  min="0"
+                  onChange={(event) => updateLine(index, { discountPercent: event.target.value })}
+                  onKeyDown={(event) => advanceFromDiscount(index, event)}
+                  step="0.01"
+                  type="number"
+                  value={line.discountPercent}
+                />
               </Field>
               <Field className="lg:col-span-1" label="GST %">
-                <select className={selectClassName} onChange={(event) => updateLine(index, { gstRate: event.target.value })} value={line.gstRate}>
+                <select
+                  ref={(node) => { gstInputRefs.current[index] = node; }}
+                  className={selectClassName}
+                  onChange={(event) => updateLine(index, { gstRate: event.target.value })}
+                  onKeyDown={(event) => advanceFromGst(index, event)}
+                  value={line.gstRate}
+                >
                   {["0", "5", "12", "18", "28"].map((rate) => <option key={rate} value={rate}>{rate}%</option>)}
                 </select>
               </Field>
@@ -391,6 +429,10 @@ export function EstimateBillForm({
       </div>
     </div>
   );
+}
+
+function isPlainEnter(event: KeyboardEvent<HTMLElement>) {
+  return event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
 }
 
 function Field({ children, className, label }: { children: React.ReactNode; className?: string; label: string }) {

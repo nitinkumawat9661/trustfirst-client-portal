@@ -3,6 +3,42 @@
 import { Printer } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+export function buildIsolatedPrintDocument(input: {
+  baseHref: string;
+  billHtml: string;
+  stylesHtml: string;
+  title: string;
+}) {
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <base href="${escapeHtml(input.baseHref)}" />
+  <title>${escapeHtml(input.title)}</title>
+  ${input.stylesHtml}
+  <style>
+    @page { size: A4 portrait; margin: 5mm 6mm; }
+    html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+    body { width: auto !important; min-height: 0 !important; overflow: visible !important; }
+    .no-print { display: none !important; }
+    .print-sheet {
+      width: 100% !important;
+      max-width: none !important;
+      min-height: 0 !important;
+      height: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      background: #fff !important;
+      box-shadow: none !important;
+    }
+    .print-table { min-width: 0 !important; }
+  </style>
+</head>
+<body>${input.billHtml}</body>
+</html>`;
+}
+
 export function PrintButton({
   autoPrint = false,
   fileName,
@@ -20,15 +56,46 @@ export function PrintButton({
   }, [fileName]);
 
   const printWhenReady = useCallback(async () => {
-    setStatus(fileName ? "Preparing A4 document..." : "Preparing print...");
-    if (fileName) document.title = fileName;
-    const images = Array.from(document.images);
+    const printRoot = document.querySelector<HTMLElement>(".print-sheet");
+    if (!printRoot) {
+      setStatus("Printable bill was not found.");
+      return;
+    }
+
+    setStatus(fileName ? "Preparing bill-only A4 document..." : "Preparing bill-only print...");
+    const clone = printRoot.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll(".no-print").forEach((node) => node.remove());
+    const stylesHtml = Array.from(document.head.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((node) => node.outerHTML)
+      .join("
+");
+    const title = fileName ?? "Mangalam Sanitary Bill";
+    const printWindow = window.open("", "_blank", "width=1050,height=850");
+    if (!printWindow) {
+      setStatus("Popup blocked. Allow popups for this site and try again.");
+      return;
+    }
+    printWindow.opener = null;
+    printWindow.document.open();
+    printWindow.document.write(buildIsolatedPrintDocument({
+      baseHref: `${window.location.origin}/`,
+      billHtml: clone.outerHTML,
+      stylesHtml,
+      title,
+    }));
+    printWindow.document.close();
+
+    const images = Array.from(printWindow.document.images);
     await Promise.all(images.map((image) => image.complete ? Promise.resolve() : new Promise<void>((resolve) => {
       image.onload = () => resolve();
       image.onerror = () => resolve();
     })));
-    window.print();
-    setStatus(fileName ? "Print dialog opened. Save as PDF or print the A4 document." : "Print dialog opened. Confirm the printer dialog and check output.");
+    await printWindow.document.fonts?.ready;
+    window.setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 150);
+    setStatus("Bill-only print dialog opened. Save as PDF or print on A4.");
   }, [fileName]);
 
   useEffect(() => {
@@ -45,4 +112,14 @@ export function PrintButton({
       {status ? <p className="max-w-xs text-right text-xs text-zinc-600" role="status">{status}</p> : null}
     </div>
   );
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/gu, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character] ?? character);
 }

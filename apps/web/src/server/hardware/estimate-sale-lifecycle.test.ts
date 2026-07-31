@@ -43,7 +43,7 @@ function estimateDocument(status: HardwareTradeDocumentStatus) {
         id: "item_1",
         lineTotalCents: 10_000,
         metadata: { discountPercent: 0, unitCode: "PCS" },
-        product: { metadata: {}, unit: { code: "PCS" } },
+        product: { metadata: { stockSetupStatus: "PENDING" }, unit: { code: "PCS" } },
         productId: "product_1",
         quantity: 2,
         taxCents: 0,
@@ -75,7 +75,7 @@ function estimateDocument(status: HardwareTradeDocumentStatus) {
 }
 
 describe("Estimate Bill final-sale lifecycle", () => {
-  it("confirms an Estimate as stock-out plus customer receivable and allocated payment", async () => {
+  it("confirms an Estimate as stock-out even when stale metadata still says stock setup pending", async () => {
     let document = estimateDocument(HardwareTradeDocumentStatus.DRAFT);
     const movements: Array<Record<string, unknown>> = [];
     const financialTransactions: Array<Record<string, unknown>> = [];
