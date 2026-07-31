@@ -1,13 +1,11 @@
 import fs from "node:fs";
 
-// One-time materializer. It removes itself after creating the clean source commit.
+// One-time materializer. The pull-request workflow remains until the connector removes it.
 const deployPath = "scripts/deploy-production-ci.sh";
 const proxyPath = "apps/web/src/proxy.ts";
-const workflowPath = ".github/workflows/deploy-mangalam-production.yml";
 
 let deploy = fs.readFileSync(deployPath, "utf8");
 let proxy = fs.readFileSync(proxyPath, "utf8");
-let workflow = fs.readFileSync(workflowPath, "utf8");
 
 function replaceOnce(source, before, after, label) {
   const first = source.indexOf(before);
@@ -108,22 +106,7 @@ proxy = replaceOnce(
   "strict unknown-host boundary",
 );
 
-workflow = replaceOnce(
-  workflow,
-  `              curl --silent --show-error --fail --max-time 5 "http://127.0.0.1:\${PROD_PORT}/api/auth/session" >/dev/null || {
-                echo "PREFLIGHT_FAIL:existing_trustfirst_loopback_health" >&2`,
-  `              curl --silent --show-error --fail --max-time 5 \\
-                --header "Host: app.mangalamsanitary.in" \\
-                --header "X-Forwarded-Host: app.mangalamsanitary.in" \\
-                --header "X-Forwarded-Proto: https" \\
-                --header "X-Forwarded-Port: 443" \\
-                "http://127.0.0.1:\${PROD_PORT}/api/auth/session" >/dev/null || {
-                echo "PREFLIGHT_FAIL:existing_trustfirst_canonical_loopback_health" >&2`,
-  "workflow preflight health probe",
-);
-
 fs.writeFileSync(deployPath, deploy);
 fs.writeFileSync(proxyPath, proxy);
-fs.writeFileSync(workflowPath, workflow);
 fs.rmSync("apps/web/src/server/security/health-probe.ts");
 fs.rmSync("apps/web/src/server/security/health-probe.test.ts");
