@@ -75,6 +75,9 @@ jobs:
       - name: Seed disposable Mangalam staging tenant
         run: node scripts/seed-manglam-demo.mjs
 
+      - name: Verify architecture boundaries
+        run: npm run architecture:check
+
       - name: Lint
         run: npm run lint
 

@@ -48,6 +48,9 @@ jobs:
       - name: Generate Prisma client
         run: npm run db:generate
 
+      - name: Verify architecture boundaries
+        run: npm run architecture:check
+
       - name: Lint
         run: npm run lint
 
