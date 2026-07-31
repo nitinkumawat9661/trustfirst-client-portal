@@ -226,6 +226,10 @@ describe("HardwareTradeService", () => {
             hardwareInventoryMovement: {
               create: (input: { data: { type: HardwareInventoryMovementType } }) => Promise<{ type: HardwareInventoryMovementType }>;
             };
+            hardwareProduct: {
+              findFirst: () => Promise<{ gstTaxConfig: Record<string, unknown>; metadata: Record<string, unknown> }>;
+              update: (input: { data: unknown }) => Promise<unknown>;
+            };
             hardwareTradeDocument: { update: () => Promise<Record<string, unknown>> };
             hardwareTradeTimelineEvent: { create: () => Promise<unknown> };
           }) => Promise<unknown>,
@@ -301,6 +305,10 @@ describe("HardwareTradeService", () => {
           callback: (tx: {
             auditEvent: { create: () => Promise<unknown> };
             hardwareInventoryMovement: { create: (input: { data: { type: HardwareInventoryMovementType } }) => Promise<{ type: HardwareInventoryMovementType }> };
+            hardwareProduct: {
+              findFirst: () => Promise<{ gstTaxConfig: Record<string, unknown>; metadata: Record<string, unknown> }>;
+              update: (input: { data: unknown }) => Promise<unknown>;
+            };
             hardwareTradeDocument: { update: () => Promise<Record<string, unknown>> };
             hardwareTradeTimelineEvent: { create: () => Promise<unknown> };
           }) => Promise<unknown>,
