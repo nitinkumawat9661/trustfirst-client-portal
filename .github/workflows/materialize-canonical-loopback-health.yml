@@ -1,9 +1,9 @@
 name: Materialize Canonical Loopback Health
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/mangalam-canonical-loopback-health
+      - main
     paths:
       - ".github/workflows/materialize-canonical-loopback-health.yml"
       - "scripts/materialize-canonical-loopback-health.mjs"
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: materialize-canonical-loopback-health
+  group: materialize-canonical-loopback-health-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
