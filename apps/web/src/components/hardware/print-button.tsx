@@ -49,6 +49,7 @@ export function PrintButton({
     <div className="flex flex-col items-end gap-1">
       <button
         className="inline-flex h-9 items-center gap-2 rounded-md bg-zinc-900 px-4 text-sm font-medium text-white"
+        data-testid="isolated-print-button"
         onClick={printWhenReady}
         type="button"
       >
