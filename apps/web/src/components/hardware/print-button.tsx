@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export function buildIsolatedPrintDocument(input: {
   baseHref: string;
   billHtml: string;
-  nonce?: string;
+  nonce?: string | undefined;
   stylesHtml: string;
   title: string;
 }) {
@@ -70,7 +70,7 @@ export function PrintButton({
     const stylesHtml = Array.from(document.head.querySelectorAll('style, link[rel="stylesheet"]'))
       .map((node) => node.outerHTML)
       .join(String.fromCharCode(10));
-    const nonce = document.querySelector<HTMLElement>("style[nonce]")?.nonce;
+    const nonce = document.querySelector<HTMLStyleElement>("style[nonce]")?.nonce;
     const title = fileName ?? "Mangalam Sanitary Bill";
     const printWindow = window.open("", "_blank", "width=1050,height=850");
     if (!printWindow) {
