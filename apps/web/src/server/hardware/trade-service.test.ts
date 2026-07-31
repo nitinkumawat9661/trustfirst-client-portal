@@ -12,6 +12,10 @@ import { HardwareTradeService } from "./trade-service";
 
 function prismaMock(overrides: Partial<PrismaClient> = {}) {
   return {
+    hardwareProduct: {
+      findFirst: async () => ({ gstTaxConfig: {}, metadata: {} }),
+      update: async ({ data }: { data: unknown }) => data,
+    },
     tenantMembership: {
       findUnique: async () => ({
         role: {
