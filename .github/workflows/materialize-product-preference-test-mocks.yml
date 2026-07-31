@@ -1,0 +1,39 @@
+name: Materialize Product Preference Test Mocks
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.head_ref == 'agent/product-last-discount-gst-keyboard'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Materialize test mocks
+        run: python scripts/apply-product-preference-test-mocks.py
+
+      - name: Validate and commit
+        run: |
+          git diff --check
+          if git diff --quiet; then
+            echo "Test mocks are already materialized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/web/src/server/hardware/trade-service.test.ts \
+            apps/web/src/server/hardware/estimate-sale-lifecycle.test.ts
+          git commit -m "test: support product preference transactions"
+          git push origin HEAD:${{ github.head_ref }}
