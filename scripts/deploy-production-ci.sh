@@ -36,6 +36,16 @@ log() {
   printf '[trustfirst-deploy] %s\n' "$*"
 }
 
+canonical_loopback_health() {
+  local port="$1"
+  curl --silent --show-error --fail --max-time 3 \
+    --header "Host: app.mangalamsanitary.in" \
+    --header "X-Forwarded-Host: app.mangalamsanitary.in" \
+    --header "X-Forwarded-Proto: https" \
+    --header "X-Forwarded-Port: 443" \
+    "http://127.0.0.1:${port}/api/auth/session" >/dev/null
+}
+
 need_sudo() {
   if [ "$(id -u)" -eq 0 ]; then
     "$@"
@@ -205,8 +215,8 @@ resolve_existing_runtime() {
     mapping="$(resolve_unique_online_trustfirst_process)" \
       || fail "Socket PID is hidden and exactly one online TrustFirst PM2 process was not found."
     [ -n "$mapping" ] || fail "Socket PID is hidden and TrustFirst PM2 mapping was empty."
-    curl --silent --show-error --fail --max-time 5 "http://127.0.0.1:${PRODUCTION_PORT}/api/auth/session" >/dev/null \
-      || fail "Existing TrustFirst loopback health check failed."
+    canonical_loopback_health "$PRODUCTION_PORT" \
+      || fail "Existing TrustFirst canonical loopback health check failed."
     IFS=$'\t' read -r OLD_PM2_ID OLD_PM2_NAME OLD_PM2_CWD <<< "$mapping"
     validate_old_pm2_mapping
     log "Existing TrustFirst runtime identified without socket PID: pm2_id=$OLD_PM2_ID name=$OLD_PM2_NAME cwd=$OLD_PM2_CWD"
@@ -318,7 +328,7 @@ restore_previous_release() {
     if [ "$rollback_started" = "1" ]; then
       local restored=0
       for attempt in $(seq 1 45); do
-        if curl --silent --show-error --fail --max-time 3 "http://127.0.0.1:${PRODUCTION_PORT}/api/auth/session" >/dev/null 2>&1; then
+        if canonical_loopback_health "$PRODUCTION_PORT" >/dev/null 2>&1; then
           restored=1
           break
         fi
@@ -450,7 +460,7 @@ PORT="$CANARY_PORT" pm2 start npm \
 
 CANARY_READY=0
 for attempt in $(seq 1 45); do
-  if curl --silent --show-error --fail --max-time 3 "http://127.0.0.1:${CANARY_PORT}/api/auth/session" >/dev/null 2>&1; then
+  if canonical_loopback_health "$CANARY_PORT" >/dev/null 2>&1; then
     CANARY_READY=1
     break
   fi
@@ -480,7 +490,7 @@ start_production
 
 PRODUCTION_READY=0
 for attempt in $(seq 1 45); do
-  if curl --silent --show-error --fail --max-time 3 "http://127.0.0.1:${PRODUCTION_PORT}/api/auth/session" >/dev/null 2>&1; then
+  if canonical_loopback_health "$PRODUCTION_PORT" >/dev/null 2>&1; then
     PRODUCTION_READY=1
     break
   fi

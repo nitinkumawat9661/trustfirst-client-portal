@@ -10,7 +10,6 @@ import {
   applySecurityHeaders,
   createSecurityHeaderContext,
 } from "@/server/security/headers";
-import { isDirectLoopbackSessionHealthProbe } from "@/server/security/health-probe";
 
 const protectedRoutes = [
   "/admin",
@@ -35,17 +34,7 @@ export default auth((request) => {
   const host = readEffectiveHost(request.headers);
   const surface = resolveAppSurfaceFromHost(host);
   const securityContext = createSecurityHeaderContext(request);
-  const isLoopbackHealthProbe = isDirectLoopbackSessionHealthProbe({
-    headers: request.headers,
-    method: request.method,
-    pathname,
-  });
-
-  if (
-    process.env.NODE_ENV === "production" &&
-    surface === "UNKNOWN" &&
-    !isLoopbackHealthProbe
-  ) {
+  if (process.env.NODE_ENV === "production" && surface === "UNKNOWN") {
     return applySecurityHeaders(
       NextResponse.json(
         { error: "Not found." },
