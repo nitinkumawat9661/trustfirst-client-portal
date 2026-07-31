@@ -6,9 +6,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export function buildIsolatedPrintDocument(input: {
   baseHref: string;
   billHtml: string;
+  nonce?: string;
   stylesHtml: string;
   title: string;
 }) {
+  const nonceAttribute = input.nonce ? ` nonce="${escapeHtml(input.nonce)}"` : "";
   return `<!doctype html>
 <html>
 <head>
@@ -16,7 +18,7 @@ export function buildIsolatedPrintDocument(input: {
   <base href="${escapeHtml(input.baseHref)}" />
   <title>${escapeHtml(input.title)}</title>
   ${input.stylesHtml}
-  <style>
+  <style${nonceAttribute}>
     @page { size: A4 portrait; margin: 5mm 6mm; }
     html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
     body { width: auto !important; min-height: 0 !important; overflow: visible !important; }
@@ -68,6 +70,7 @@ export function PrintButton({
     const stylesHtml = Array.from(document.head.querySelectorAll('style, link[rel="stylesheet"]'))
       .map((node) => node.outerHTML)
       .join(String.fromCharCode(10));
+    const nonce = document.querySelector<HTMLElement>("style[nonce]")?.nonce;
     const title = fileName ?? "Mangalam Sanitary Bill";
     const printWindow = window.open("", "_blank", "width=1050,height=850");
     if (!printWindow) {
@@ -79,6 +82,7 @@ export function PrintButton({
     printWindow.document.write(buildIsolatedPrintDocument({
       baseHref: `${window.location.origin}/`,
       billHtml: clone.outerHTML,
+      nonce,
       stylesHtml,
       title,
     }));
