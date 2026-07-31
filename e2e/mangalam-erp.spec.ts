@@ -32,7 +32,8 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   await expect(saleDiscount).toBeFocused();
   await saleDiscount.fill("5");
   await saleDiscount.press("Enter");
-  const saleGst = page.getByLabel("GST %", { exact: true }).first();
+  const saleItem = page.locator("fieldset").filter({ hasText: "Item 1" }).first();
+  const saleGst = saleItem.locator("select").first();
   await expect(saleGst).toBeFocused();
   await saleGst.selectOption("18");
   await saleGst.press("Enter");
@@ -80,7 +81,8 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   await expect(estimateDiscount).toBeFocused();
   await estimateDiscount.fill("3");
   await estimateDiscount.press("Enter");
-  const estimateGst = page.getByLabel("GST %", { exact: true }).first();
+  const estimateItem = page.locator("fieldset").filter({ hasText: "Item 1" }).first();
+  const estimateGst = estimateItem.locator("select").first();
   await expect(estimateGst).toBeFocused();
   await estimateGst.selectOption("18");
   await estimateGst.press("Enter");
