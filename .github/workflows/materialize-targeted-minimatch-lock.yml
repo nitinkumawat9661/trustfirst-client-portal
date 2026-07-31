@@ -1,0 +1,102 @@
+name: Materialize Targeted Minimatch Lock Rewrite
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/materialize-targeted-minimatch-lock.yml"
+      - "package-lock.json"
+      - "package.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-targeted-minimatch-lock-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/patch-minimatch-audit
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.1
+          cache: npm
+
+      - name: Rewrite only advisory-related lock nodes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show origin/main:package-lock.json > /tmp/base-lock.json
+          cp package-lock.json /tmp/fresh-lock.json
+          node <<'NODE'
+          const fs = require('fs');
+          const base = JSON.parse(fs.readFileSync('/tmp/base-lock.json', 'utf8'));
+          const fresh = JSON.parse(fs.readFileSync('/tmp/fresh-lock.json', 'utf8'));
+          const target = structuredClone(base);
+          const copyKeys = [
+            'node_modules/minimatch',
+            'node_modules/brace-expansion',
+            'node_modules/balanced-match',
+          ];
+          const deleteKeys = [
+            'node_modules/@typescript-eslint/typescript-estree/node_modules/minimatch',
+            'node_modules/@typescript-eslint/typescript-estree/node_modules/brace-expansion',
+            'node_modules/@typescript-eslint/typescript-estree/node_modules/balanced-match',
+            'node_modules/concat-map',
+          ];
+          target.packages[''].devDependencies = {
+            ...(target.packages[''].devDependencies || {}),
+            minimatch: '10.2.6',
+          };
+          for (const key of copyKeys) {
+            if (!fresh.packages[key]) throw new Error(`Fresh lock is missing ${key}`);
+            target.packages[key] = fresh.packages[key];
+          }
+          for (const key of deleteKeys) delete target.packages[key];
+          fs.writeFileSync('package-lock.json', `${JSON.stringify(target, null, 2)}\n`);
+
+          const allowed = new Set(['', ...copyKeys, ...deleteKeys]);
+          const changed = [];
+          const keys = [...new Set([...Object.keys(base.packages), ...Object.keys(target.packages)])].sort();
+          for (const key of keys) {
+            if (JSON.stringify(base.packages[key]) !== JSON.stringify(target.packages[key])) changed.push(key);
+          }
+          console.log(JSON.stringify({ changed }, null, 2));
+          const unexpected = changed.filter((key) => !allowed.has(key));
+          if (unexpected.length) throw new Error(`Unexpected lock nodes changed: ${unexpected.join(', ')}`);
+          NODE
+          git diff --check
+          git diff --exit-code -- package.json
+
+      - name: Verify clean cold install and audits
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf node_modules apps/*/node_modules packages/*/node_modules
+          npm ci --include=dev
+          npm ls minimatch brace-expansion balanced-match --all
+          npm audit --audit-level=high
+          npm audit --omit=dev --audit-level=high
+
+      - name: Commit targeted lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git diff --cached --check
+          git commit -m "security: target patched minimatch lock nodes"
+          git push origin HEAD:agent/patch-minimatch-audit
