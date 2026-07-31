@@ -13,7 +13,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -24,71 +24,38 @@ jobs:
           node-version: 22.23.1
           cache: npm
 
-      - name: Install locked dependencies
-        run: npm ci --include=dev
-
-      - name: Report full audit findings
+      - name: Materialize experimental patched lint tree
         shell: bash
         run: |
           set -euo pipefail
-          set +e
-          npm audit --json > /tmp/audit.json
-          audit_status=$?
-          set -e
           node <<'NODE'
           const fs = require('fs');
-          const audit = JSON.parse(fs.readFileSync('/tmp/audit.json', 'utf8'));
-          const vulnerabilities = audit.vulnerabilities || {};
-          const rows = Object.entries(vulnerabilities)
-            .map(([name, finding]) => ({
-              name,
-              severity: finding.severity,
-              direct: Boolean(finding.isDirect),
-              range: finding.range,
-              fixAvailable: finding.fixAvailable,
-              via: (finding.via || []).map((entry) =>
-                typeof entry === 'string'
-                  ? entry
-                  : {
-                      source: entry.source,
-                      name: entry.name,
-                      severity: entry.severity,
-                      title: entry.title,
-                      range: entry.range,
-                    },
-              ),
-              effects: finding.effects || [],
-              nodes: finding.nodes || [],
-            }))
-            .sort((a, b) => a.name.localeCompare(b.name));
-          console.log(JSON.stringify({ metadata: audit.metadata, vulnerabilities: rows }, null, 2));
+          const path = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          pkg.overrides = pkg.overrides || {};
+          pkg.overrides.minimatch = '10.2.6';
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
           NODE
-          echo "FULL_AUDIT_EXIT=$audit_status"
+          npm install --package-lock-only --include=dev --ignore-scripts
+          rm -rf node_modules apps/*/node_modules packages/*/node_modules
+          npm ci --include=dev
 
-      - name: Inspect compatible lint package upgrades
+      - name: Verify patched dependency tree
         shell: bash
         run: |
           set -euo pipefail
-          npm ls eslint eslint-config-next minimatch brace-expansion --all --json || true
-          for package in \
-            eslint \
-            eslint-config-next \
-            eslint-plugin-import \
-            eslint-plugin-jsx-a11y \
-            eslint-plugin-react \
-            @eslint/config-array \
-            @eslint/eslintrc \
-            minimatch \
-            brace-expansion; do
-            echo "=== $package ==="
-            npm view "$package" version
-            npm view "$package" dependencies --json || true
-            npm view "$package" peerDependencies --json || true
-          done
-          echo "ESLINT_9_LATEST=$(npm view eslint@9 version --json | node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(0,"utf8"));console.log(Array.isArray(v)?v.at(-1):v)')"
-          echo "MINIMATCH_3_LATEST=$(npm view minimatch@3 version --json | node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(0,"utf8"));console.log(Array.isArray(v)?v.at(-1):v)')"
-          echo "MINIMATCH_9_LATEST=$(npm view minimatch@9 version --json | node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(0,"utf8"));console.log(Array.isArray(v)?v.at(-1):v)')"
-          echo "MINIMATCH_10_LATEST=$(npm view minimatch@10 version --json | node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(0,"utf8"));console.log(Array.isArray(v)?v.at(-1):v)')"
+          npm ls minimatch brace-expansion --all
+          npm audit --audit-level=high
+          npm audit --omit=dev --audit-level=high
 
-      - name: Confirm production-only audit remains green
-        run: npm audit --omit=dev --audit-level=high
+      - name: Validate lint compatibility
+        run: npm run lint
+
+      - name: Validate types
+        run: npm run typecheck
+
+      - name: Run full tests
+        run: npm test
+
+      - name: Build production application
+        run: npm run build --workspace @trustfirst/web
