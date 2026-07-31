@@ -65,5 +65,15 @@ jobs:
           NODE
           echo "FULL_AUDIT_EXIT=$audit_status"
 
+      - name: Inspect lint dependency tree and patched releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ls eslint eslint-config-next minimatch brace-expansion --all --json || true
+          echo "LATEST_MINIMATCH=$(npm view minimatch version)"
+          echo "LATEST_BRACE_EXPANSION=$(npm view brace-expansion version)"
+          echo "MINIMATCH_VERSIONS=$(npm view minimatch versions --json | node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(0,"utf8"));console.log(v.slice(-8).join(","))')"
+          echo "BRACE_EXPANSION_VERSIONS=$(npm view brace-expansion versions --json | node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(0,"utf8"));console.log(v.slice(-8).join(","))')"
+
       - name: Confirm production-only audit remains green
         run: npm audit --omit=dev --audit-level=high
