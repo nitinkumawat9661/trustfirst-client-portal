@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   A4_PRINT_PAGE_RULE,
   buildIsolatedPrintDocument,
-} from "@/features/hardware/printing";
+} from "../../features/hardware/printing";
 
 describe("bill-only print document", () => {
   it("contains only the supplied bill root and the A4 print contract", () => {
