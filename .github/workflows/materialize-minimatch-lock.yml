@@ -37,11 +37,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm install --package-lock-only --include=dev --ignore-scripts
+          npm install minimatch@10.2.6 \
+            --save-dev \
+            --include-workspace-root \
+            --package-lock-only \
+            --include=dev \
+            --ignore-scripts
           git diff --check
           git diff --exit-code -- package.json
           git diff --quiet -- package-lock.json && {
-            echo "Expected package-lock.json to change after adding the root dev dependency." >&2
+            echo "Expected package-lock.json to change after explicitly pinning the root dependency." >&2
             exit 1
           }
 
@@ -51,7 +56,7 @@ jobs:
           set -euo pipefail
           rm -rf node_modules apps/*/node_modules packages/*/node_modules
           npm ci --include=dev
-          npm ls minimatch brace-expansion --all
+          npm ls minimatch brace-expansion balanced-match --all
           npm audit --audit-level=high
           npm audit --omit=dev --audit-level=high
 
