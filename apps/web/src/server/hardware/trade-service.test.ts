@@ -238,6 +238,10 @@ describe("HardwareTradeService", () => {
                 return input.data;
               },
             },
+            hardwareProduct: {
+              findFirst: async () => ({ gstTaxConfig: {}, metadata: {} }),
+              update: async ({ data }: { data: unknown }) => data,
+            },
             hardwareTradeDocument: {
               update: async () => ({ ...document, status: HardwareTradeDocumentStatus.CONFIRMED }),
             },
@@ -304,6 +308,10 @@ describe("HardwareTradeService", () => {
           callback({
             auditEvent: { create: async () => ({}) },
             hardwareInventoryMovement: { create: async (input) => { movements.push(input); return input.data; } },
+            hardwareProduct: {
+              findFirst: async () => ({ gstTaxConfig: {}, metadata: {} }),
+              update: async ({ data }: { data: unknown }) => data,
+            },
             hardwareTradeDocument: { update: async () => ({ ...document, status: HardwareTradeDocumentStatus.CONFIRMED }) },
             hardwareTradeTimelineEvent: { create: async () => ({}) },
           }),
@@ -585,6 +593,10 @@ describe("HardwareTradeService", () => {
               findUnique: async () => null,
             },
             hardwareInventoryMovement: { create: async () => created.push("movement") },
+            hardwareProduct: {
+              findFirst: async () => ({ gstTaxConfig: { rateBps: 1800 }, metadata: { hsnCode: "8481" } }),
+              update: async ({ data }: { data: unknown }) => { created.push("productPreference"); return data; },
+            },
             hardwareTradeDocument: {
               create: async ({ data }: { data: Record<string, unknown> }) => {
                 created.push("document");
