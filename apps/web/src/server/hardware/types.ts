@@ -7,6 +7,7 @@ export type HardwareProductSummary = {
   currentStock: number;
   gstRateBps: number | null;
   hsnCode: string | null;
+  salesDiscountBps: number;
   id: string;
   lowStock: boolean;
   lowStockThreshold: number;

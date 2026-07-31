@@ -100,6 +100,8 @@ export function EstimateBillForm({
 
   function clearProduct(index: number, query: string) {
     updateLine(index, {
+      discountPercent: "0",
+      gstRate: "0",
       hsnCode: "",
       productId: "",
       productName: query,
@@ -110,7 +112,8 @@ export function EstimateBillForm({
 
   function applyProduct(index: number, product: HardwareProductSummary) {
     updateLine(index, {
-      gstRate: "0",
+      discountPercent: formatRateBps(product.salesDiscountBps),
+      gstRate: formatRateBps(product.gstRateBps ?? 0),
       hsnCode: product.hsnCode ?? "",
       productId: product.id,
       productName: product.name,
@@ -324,7 +327,7 @@ export function EstimateBillForm({
           <div>
             <CardTitle>Items</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              Product → Enter → quantity → Enter → discount → Enter → GST → Enter → next product. Untouched blank rows do not block saving.
+              Product → Enter selects the first match without a mouse and restores its last discount/GST. Then Enter moves through quantity → discount → GST → next product.
             </p>
           </div>
           <Button onClick={() => { setLines((current) => [...current, { ...emptyLine }]); focusProduct(lines.length); }} type="button" variant="outline">
@@ -432,6 +435,10 @@ export function EstimateBillForm({
 
 function isPlainEnter(event: KeyboardEvent<HTMLElement>) {
   return event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+}
+
+function formatRateBps(value: number) {
+  return String(value / 100);
 }
 
 function Field({ children, className, label }: { children: React.ReactNode; className?: string; label: string }) {
