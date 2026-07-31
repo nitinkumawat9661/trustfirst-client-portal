@@ -1,34 +1,42 @@
-# TrustFirst Client Portal
+# TrustFirst Client Portal / Mangalam Sanitary ERP
 
-Production-grade SaaS foundation for a client portal built with Next.js 16, TypeScript, Tailwind CSS, PostgreSQL, Prisma ORM, Auth.js, React Hook Form, and Zod.
+Production-grade multi-tenant client portal and hardware ERP built with Next.js 16, TypeScript, PostgreSQL, Prisma ORM, Auth.js, Tailwind CSS and Zod.
 
-This repository intentionally contains foundation only. Business modules should be added later inside the existing bounded-context structure.
+The repository includes the TrustFirst platform foundation and the Mangalam Sanitary ERP workflows for product catalogue, inventory, purchases, sales, estimates, billing, printing, customers, suppliers, outstanding balances, financial transactions and reports.
+
+## Engineering guide
+
+Read [`docs/DEVELOPER_ARCHITECTURE_GUIDE.md`](docs/DEVELOPER_ARCHITECTURE_GUIDE.md) before changing billing, inventory, printing, authentication, financial or deployment code. It defines module boundaries, key files, transaction rules, testing requirements and the VPS-only release process.
 
 ## Stack
 
 - Next.js 16 App Router
-- TypeScript
+- React 19 and TypeScript
 - Tailwind CSS 4
-- PostgreSQL
-- Prisma ORM
+- PostgreSQL and Prisma ORM
 - Auth.js
 - React Hook Form and Zod
+- Vitest and Playwright
 - Docker Compose
 - npm workspaces monorepo
+- PM2 and guarded VPS canary deployment
 
 ## Structure
 
-```txt
+```text
 apps/
-  web/                  Next.js application
+  web/                  Next.js application, server use cases and feature UI
 packages/
   config/               Shared runtime configuration helpers
   database/             Prisma schema and database client
   ui/                   Shared UI primitives and theme utilities
-docs/                   Architecture and operations documentation
+docs/                   Architecture, operations and handover documentation
+scripts/                Validation, staging, backup and VPS deployment scripts
+e2e/                    Real Chromium end-to-end journeys
+.github/workflows/       CI, staging E2E and VPS production gates
 ```
 
-## Getting Started
+## Local setup
 
 ```bash
 npm install
@@ -39,46 +47,41 @@ npm run db:migrate
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open `http://localhost:3000`.
 
-## Useful Commands
+## Required validation
 
 ```bash
-npm run dev
-npm run build
+npm ci
+npm audit --audit-level=high
+npm audit --omit=dev --audit-level=high
+npm run db:generate
+npm run architecture:check
 npm run lint
 npm run typecheck
-npm run db:generate
-npm run db:migrate
-npm run db:studio
+npm test
+npm run build --workspace @trustfirst/web
 ```
 
-## Docker
+## Architecture rule
 
-Run the app and database:
+Changes must follow this dependency direction:
 
-```bash
-cp .env.example .env
-docker compose up --build
+```text
+route → UI → feature adapter → server use case → domain validation → Prisma transaction
 ```
 
-## Scope
+UI components must not access Prisma directly. Server modules must not import React components. Pure feature-core modules must remain independent from browser, React, Next.js and database APIs.
 
-Included:
+## Production deployment
 
-- Workspace and enterprise folder structure
-- Theme tokens and shared UI primitives
-- Landing page
-- Admin and client shells
-- Auth.js foundation with Prisma adapter
-- Prisma schema for authentication entities and roles
-- Form validation foundation
-- Docker and documentation
+Mangalam production is deployed only through the guarded VPS workflow:
 
-Not included yet:
+- production port `3010`,
+- canary port `3012`,
+- exact deployed SHA verification,
+- rollback protection,
+- CafeLuxe port `3000` isolation,
+- explicit migration and seed/data-mutation reporting.
 
-- Client onboarding workflows
-- Document management
-- Billing
-- Case/task modules
-- Notification workflows
+Vercel is not the Mangalam production runtime and must not be treated as production deployment evidence.
