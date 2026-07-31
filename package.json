@@ -49,6 +49,9 @@
     "db:migrate": "npm run db:migrate --workspace @trustfirst/database",
     "db:studio": "npm run db:studio --workspace @trustfirst/database"
   },
+  "devDependencies": {
+    "minimatch": "10.2.6"
+  },
   "engines": {
     "node": ">=20.9.0",
     "npm": ">=10.0.0"
