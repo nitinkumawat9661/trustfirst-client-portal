@@ -49,6 +49,9 @@
     "db:migrate": "npm run db:migrate --workspace @trustfirst/database",
     "db:studio": "npm run db:studio --workspace @trustfirst/database"
   },
+  "devDependencies": {
+    "minimatch": "10.2.6"
+  },
   "engines": {
     "node": ">=20.9.0",
     "npm": ">=10.0.0"
@@ -60,7 +63,8 @@
     },
     "@tailwindcss/postcss": {
       "postcss": "8.5.23"
-    }
+    },
+    "minimatch": "10.2.6"
   },
   "optionalDependencies": {
     "@tailwindcss/oxide-linux-x64-gnu": "4.3.2",
