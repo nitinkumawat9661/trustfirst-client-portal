@@ -1,11 +1,11 @@
 import type { Prisma } from "@trustfirst/database";
 
 type SalesPreferenceItem = {
-  discountCents?: number | null;
+  discountCents?: number | null | undefined;
   metadata?: unknown;
   productId: string;
   quantity: number;
-  taxRateBps?: number | null;
+  taxRateBps?: number | null | undefined;
   unitAmountCents: number;
 };
 
