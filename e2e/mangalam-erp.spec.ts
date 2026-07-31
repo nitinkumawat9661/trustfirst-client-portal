@@ -102,10 +102,10 @@ test("customer, supplier, sale, purchase, Estimate Bill and isolated printing wo
   await page.waitForURL(/\/admin\/hardware\/print\//);
   await expect(page.getByText(/Estimate Bill/i).first()).toBeVisible();
 
-  const popupPromise = page.waitForEvent("popup");
-  await page.getByRole("button", { name: "Print A4 document", exact: true }).click();
-  const printPopup = await popupPromise;
-  await printPopup.waitForLoadState("domcontentloaded");
+  const [printPopup] = await Promise.all([
+    page.waitForEvent("popup"),
+    page.getByTestId("isolated-print-button").click(),
+  ]);
   await expect(printPopup.locator("body > .print-sheet")).toHaveCount(1);
   await expect(printPopup.locator(NON_PRINT_SELECTOR)).toHaveCount(0);
   expect(await printPopup.locator("body").evaluate((body) => body.children.length)).toBe(1);
