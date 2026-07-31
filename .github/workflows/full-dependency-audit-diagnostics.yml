@@ -36,7 +36,7 @@ jobs:
           pkg.overrides.minimatch = '10.2.6';
           fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
           NODE
-          npm install --package-lock-only --include=dev --ignore-scripts
+          npm update minimatch --package-lock-only --include=dev --ignore-scripts
           rm -rf node_modules apps/*/node_modules packages/*/node_modules
           npm ci --include=dev
 
