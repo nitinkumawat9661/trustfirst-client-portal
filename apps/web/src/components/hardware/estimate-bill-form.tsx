@@ -244,7 +244,6 @@ export function EstimateBillForm({
       }
 
       router.push(`/admin/hardware/print/${result.data.id}`);
-      router.refresh();
     } catch (error) {
       setServerError(error instanceof Error ? error.message : "Estimate Bill could not be saved.");
     } finally {
