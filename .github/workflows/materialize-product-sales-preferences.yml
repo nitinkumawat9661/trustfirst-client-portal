@@ -1,0 +1,49 @@
+name: Materialize Product Sales Preferences
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.head_ref == 'agent/product-last-discount-gst-keyboard'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Materialize readable source
+        run: python scripts/apply-product-sales-preferences.py
+
+      - name: Validate generated diff
+        run: |
+          git diff --check
+          git status --short
+
+      - name: Commit materialized source
+        run: |
+          if git diff --quiet; then
+            echo "Source is already materialized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/web/src/server/hardware/types.ts \
+            apps/web/src/server/hardware/hardware-service.ts \
+            apps/web/src/server/hardware/trade-service.ts \
+            apps/web/src/components/hardware/quick-pos-form.tsx \
+            apps/web/src/components/hardware/estimate-bill-form.tsx \
+            apps/web/src/components/hardware/hardware-product-combobox.tsx \
+            e2e/mangalam-erp.spec.ts \
+            scripts/verify-staging-e2e.mjs
+          git commit -m "feat: remember product discount and GST"
+          git push origin HEAD:${{ github.head_ref }}
