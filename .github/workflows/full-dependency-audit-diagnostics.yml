@@ -65,15 +65,30 @@ jobs:
           NODE
           echo "FULL_AUDIT_EXIT=$audit_status"
 
-      - name: Inspect lint dependency tree and patched releases
+      - name: Inspect compatible lint package upgrades
         shell: bash
         run: |
           set -euo pipefail
           npm ls eslint eslint-config-next minimatch brace-expansion --all --json || true
-          echo "LATEST_MINIMATCH=$(npm view minimatch version)"
-          echo "LATEST_BRACE_EXPANSION=$(npm view brace-expansion version)"
-          echo "MINIMATCH_VERSIONS=$(npm view minimatch versions --json | node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(0,"utf8"));console.log(v.slice(-8).join(","))')"
-          echo "BRACE_EXPANSION_VERSIONS=$(npm view brace-expansion versions --json | node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(0,"utf8"));console.log(v.slice(-8).join(","))')"
+          for package in \
+            eslint \
+            eslint-config-next \
+            eslint-plugin-import \
+            eslint-plugin-jsx-a11y \
+            eslint-plugin-react \
+            @eslint/config-array \
+            @eslint/eslintrc \
+            minimatch \
+            brace-expansion; do
+            echo "=== $package ==="
+            npm view "$package" version
+            npm view "$package" dependencies --json || true
+            npm view "$package" peerDependencies --json || true
+          done
+          echo "ESLINT_9_LATEST=$(npm view eslint@9 version --json | node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(0,"utf8"));console.log(Array.isArray(v)?v.at(-1):v)')"
+          echo "MINIMATCH_3_LATEST=$(npm view minimatch@3 version --json | node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(0,"utf8"));console.log(Array.isArray(v)?v.at(-1):v)')"
+          echo "MINIMATCH_9_LATEST=$(npm view minimatch@9 version --json | node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(0,"utf8"));console.log(Array.isArray(v)?v.at(-1):v)')"
+          echo "MINIMATCH_10_LATEST=$(npm view minimatch@10 version --json | node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(0,"utf8"));console.log(Array.isArray(v)?v.at(-1):v)')"
 
       - name: Confirm production-only audit remains green
         run: npm audit --omit=dev --audit-level=high
