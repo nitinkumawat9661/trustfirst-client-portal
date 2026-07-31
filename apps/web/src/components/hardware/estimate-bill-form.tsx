@@ -468,12 +468,6 @@ function calculateEstimateTotals(lines: EstimateLine[], roundOff: string) {
   return { ...result, roundOffCents, totalCents: result.taxableCents + result.taxCents + roundOffCents };
 }
 
-function canSave(lines: EstimateLine[]) {
-  return lines.length > 0 && lines.every(
-    (line) => line.productId && Number.isInteger(Number(line.quantity)) && Number(line.quantity) > 0 && Number(line.unitRate) >= 0,
-  );
-}
-
 function money(amountCents: number) {
   return new Intl.NumberFormat("en-IN", { currency: "INR", style: "currency" }).format(amountCents / 100);
 }

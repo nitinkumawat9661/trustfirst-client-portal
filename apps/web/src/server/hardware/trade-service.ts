@@ -406,7 +406,6 @@ export class HardwareTradeService {
     }
     const requiredByProduct = new Map<string, number>();
     for (const item of normalizedItems) {
-      if (isStockSetupPending(products.get(item.productId)?.metadata)) continue;
       requiredByProduct.set(item.productId, (requiredByProduct.get(item.productId) ?? 0) + item.quantity);
     }
     for (const [productId, required] of requiredByProduct) {
@@ -533,7 +532,7 @@ export class HardwareTradeService {
         where: { id: document.id, tenantId: context.tenantId },
       });
 
-      for (const item of normalizedItems.filter((candidate) => !isStockSetupPending(products.get(candidate.productId)?.metadata))) {
+      for (const item of normalizedItems) {
         await tx.hardwareInventoryMovement.create({
           data: {
             customerId: input.customerId ?? null,
