@@ -67,12 +67,33 @@ try {
     throw new Error("Estimate create/edit did not create the expected stock-out and reversal movements.");
   }
 
+  const rememberedProductId = estimates[0].items[0]?.productId;
+  if (!rememberedProductId) throw new Error("Estimate item did not retain its product link.");
+  const rememberedProduct = await prisma.hardwareProduct.findFirst({
+    where: { id: rememberedProductId, tenantId: estimates[0].tenantId },
+  });
+  if (!rememberedProduct) throw new Error("Remembered product was not found.");
+  const rememberedMetadata = rememberedProduct.metadata && typeof rememberedProduct.metadata === "object" && !Array.isArray(rememberedProduct.metadata)
+    ? rememberedProduct.metadata
+    : {};
+  const rememberedGstConfig = rememberedProduct.gstTaxConfig && typeof rememberedProduct.gstTaxConfig === "object" && !Array.isArray(rememberedProduct.gstTaxConfig)
+    ? rememberedProduct.gstTaxConfig
+    : {};
+  if (rememberedMetadata.lastSalesDiscountBps !== 300) {
+    throw new Error(`Expected remembered discount 300 bps, found ${String(rememberedMetadata.lastSalesDiscountBps)}.`);
+  }
+  if (rememberedMetadata.lastSalesGstRateBps !== 1200 || rememberedGstConfig.rateBps !== 1200) {
+    throw new Error("Expected remembered GST to be 1200 bps in metadata and GST config.");
+  }
+
   console.log("MANGALAM_STAGING_E2E_DATABASE_VERIFIED");
   console.log(`party_id=${party.id}`);
   console.log(`invoices=${invoices}`);
   console.log(`purchases=${purchases.length}`);
   console.log(`estimate_movements=${estimateMovements}`);
   console.log(`financial_transactions=${financials}`);
+  console.log(`remembered_discount_bps=${rememberedMetadata.lastSalesDiscountBps}`);
+  console.log(`remembered_gst_bps=${rememberedMetadata.lastSalesGstRateBps}`);
 } finally {
   await prisma.$disconnect();
 }

@@ -192,8 +192,15 @@ export function HardwareProductCombobox({
             setOpen(false);
             return;
           }
-          if (event.key !== "Enter") return;
+          if (
+            event.key !== "Enter" ||
+            event.shiftKey ||
+            event.altKey ||
+            event.ctrlKey ||
+            event.metaKey
+          ) return;
           event.preventDefault();
+          event.stopPropagation();
           const product = results[activeIndex] ?? results[0];
           if (product) select(product);
           else if (showCreateAction) onCreate?.(query.trim());

@@ -12,6 +12,10 @@ import { HardwareTradeService } from "./trade-service";
 
 function prismaMock(overrides: Partial<PrismaClient> = {}) {
   return {
+    hardwareProduct: {
+      findFirst: async () => ({ gstTaxConfig: {}, metadata: {} }),
+      update: async ({ data }: { data: unknown }) => data,
+    },
     tenantMembership: {
       findUnique: async () => ({
         role: {
@@ -222,6 +226,10 @@ describe("HardwareTradeService", () => {
             hardwareInventoryMovement: {
               create: (input: { data: { type: HardwareInventoryMovementType } }) => Promise<{ type: HardwareInventoryMovementType }>;
             };
+            hardwareProduct: {
+              findFirst: () => Promise<{ gstTaxConfig: Record<string, unknown>; metadata: Record<string, unknown> }>;
+              update: (input: { data: unknown }) => Promise<unknown>;
+            };
             hardwareTradeDocument: { update: () => Promise<Record<string, unknown>> };
             hardwareTradeTimelineEvent: { create: () => Promise<unknown> };
           }) => Promise<unknown>,
@@ -233,6 +241,10 @@ describe("HardwareTradeService", () => {
                 movements.push(input);
                 return input.data;
               },
+            },
+            hardwareProduct: {
+              findFirst: async () => ({ gstTaxConfig: {}, metadata: {} }),
+              update: async ({ data }: { data: unknown }) => data,
             },
             hardwareTradeDocument: {
               update: async () => ({ ...document, status: HardwareTradeDocumentStatus.CONFIRMED }),
@@ -293,6 +305,10 @@ describe("HardwareTradeService", () => {
           callback: (tx: {
             auditEvent: { create: () => Promise<unknown> };
             hardwareInventoryMovement: { create: (input: { data: { type: HardwareInventoryMovementType } }) => Promise<{ type: HardwareInventoryMovementType }> };
+            hardwareProduct: {
+              findFirst: () => Promise<{ gstTaxConfig: Record<string, unknown>; metadata: Record<string, unknown> }>;
+              update: (input: { data: unknown }) => Promise<unknown>;
+            };
             hardwareTradeDocument: { update: () => Promise<Record<string, unknown>> };
             hardwareTradeTimelineEvent: { create: () => Promise<unknown> };
           }) => Promise<unknown>,
@@ -300,6 +316,10 @@ describe("HardwareTradeService", () => {
           callback({
             auditEvent: { create: async () => ({}) },
             hardwareInventoryMovement: { create: async (input) => { movements.push(input); return input.data; } },
+            hardwareProduct: {
+              findFirst: async () => ({ gstTaxConfig: {}, metadata: {} }),
+              update: async ({ data }: { data: unknown }) => data,
+            },
             hardwareTradeDocument: { update: async () => ({ ...document, status: HardwareTradeDocumentStatus.CONFIRMED }) },
             hardwareTradeTimelineEvent: { create: async () => ({}) },
           }),
@@ -581,6 +601,10 @@ describe("HardwareTradeService", () => {
               findUnique: async () => null,
             },
             hardwareInventoryMovement: { create: async () => created.push("movement") },
+            hardwareProduct: {
+              findFirst: async () => ({ gstTaxConfig: { rateBps: 1800 }, metadata: { hsnCode: "8481" } }),
+              update: async ({ data }: { data: unknown }) => { created.push("productPreference"); return data; },
+            },
             hardwareTradeDocument: {
               create: async ({ data }: { data: Record<string, unknown> }) => {
                 created.push("document");

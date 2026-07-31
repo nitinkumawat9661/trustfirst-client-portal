@@ -105,6 +105,10 @@ describe("Estimate Bill final-sale lifecycle", () => {
               return data;
             },
           },
+          hardwareProduct: {
+            findFirst: async () => ({ gstTaxConfig: {}, metadata: {} }),
+            update: async ({ data }: { data: unknown }) => data,
+          },
           hardwareTradeDocument: {
             update: async ({ data }: { data: Record<string, unknown> }) => {
               document = {

@@ -31,6 +31,7 @@ import { currentIndiaBusinessDay } from "./business-time";
 import { stockForProduct } from "./hardware-service";
 import { calculateTradeTotals } from "./trade-calculations";
 import { movementTypeForDocument, PrismaHardwareTradeRepository } from "./trade-repository";
+import { persistLastSalesPreferences } from "./sales-preferences";
 import type {
   HardwareEstimateUpdateInput,
   HardwareSaleReturnInput,
@@ -191,6 +192,9 @@ export class HardwareTradeService {
       actorId: context.userId,
       afterConfirm: async (tx, confirmedDocument) => {
         const now = new Date();
+        if (salesTypes.has(confirmedDocument.type)) {
+          await persistLastSalesPreferences(tx, context.tenantId, confirmedDocument.items);
+        }
         if (confirmedDocument.type === HardwareTradeDocumentType.SALES_QUOTATION) {
           const version = estimateVersion ?? "initial";
           await tx.hardwareTradeDocument.update({
@@ -552,6 +556,7 @@ export class HardwareTradeService {
           },
         });
       }
+      await persistLastSalesPreferences(tx, context.tenantId, normalizedItems);
 
       const receivable = await postSaleReceivable(tx, {
         amountCents: totals.totalCents,
@@ -805,6 +810,7 @@ export class HardwareTradeService {
           }) as Prisma.HardwareInventoryMovementUncheckedCreateInput,
         });
       }
+      await persistLastSalesPreferences(tx, context.tenantId, normalizedItems);
       let payment = null;
       if (input.paidAmountCents > 0) {
         payment = await tx.paymentRecord.create({

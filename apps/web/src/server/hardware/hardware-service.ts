@@ -1609,13 +1609,17 @@ function toProductSummary(product: ProductRecord, movements: MovementRecord[]): 
     brandName: product.brand?.name ?? null,
     categoryName: product.category?.name ?? null,
     currentStock,
-    gstRateBps: readInteger(gstTaxConfig.rateBps) ?? null,
+    gstRateBps:
+      readRateBps(metadata.lastSalesGstRateBps) ??
+      readRateBps(gstTaxConfig.rateBps) ??
+      null,
     hsnCode: readText(metadata.hsnCode) ?? null,
     id: product.id,
     lowStock: currentStock <= product.lowStockThreshold,
     lowStockThreshold: product.lowStockThreshold,
     name: product.name,
     purchaseCostCents: product.purchaseCostCents,
+    salesDiscountBps: readRateBps(metadata.lastSalesDiscountBps) ?? 0,
     salesPriceCents: product.salesPriceCents,
     sku: product.sku,
     stockSetupStatus: metadata.stockSetupStatus === "PENDING" ? "PENDING" : "TRACKED",
@@ -1678,6 +1682,11 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function readInteger(value: unknown) {
   return typeof value === "number" && Number.isInteger(value) ? value : undefined;
+}
+
+function readRateBps(value: unknown) {
+  const rate = readInteger(value);
+  return rate !== undefined && rate >= 0 && rate <= 10_000 ? rate : undefined;
 }
 
 function validation(message: string) {

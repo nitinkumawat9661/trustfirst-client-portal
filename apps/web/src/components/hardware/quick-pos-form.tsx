@@ -121,6 +121,7 @@ export function QuickPosForm({
   function clearProductSelection(index: number, productName: string) {
     updateLine(index, {
       barcode: null,
+      discountPercent: "0",
       gstRate: "0",
       hsnCode: null,
       productId: "",
@@ -134,7 +135,8 @@ export function QuickPosForm({
   function applyProduct(index: number, product: HardwareProductSummary) {
     updateLine(index, {
       barcode: product.barcode,
-      gstRate: "0",
+      discountPercent: formatRateBps(product.salesDiscountBps),
+      gstRate: formatRateBps(product.gstRateBps ?? 0),
       hsnCode: product.hsnCode,
       productId: product.id,
       productName: product.name,
@@ -349,7 +351,7 @@ export function QuickPosForm({
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div>
               <CardTitle>Items</CardTitle>
-              <p className="mt-1 text-xs text-muted-foreground">Product → Enter → quantity → Enter → discount → Enter → GST → Enter → next product. Untouched blank rows do not block posting.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Type a product and press Enter. The first match is selected without a mouse, the last saved discount and GST are filled, then Enter moves through quantity, discount, GST, and the next product.</p>
             </div>
             <Button onClick={() => setLines((current) => [...current, { ...emptyLine }])} type="button" variant="outline">Add line</Button>
           </CardHeader>
@@ -791,6 +793,10 @@ function PreviewRow({ label, value }: { label: string; value: number }) {
 
 function isPlainEnter(event: KeyboardEvent<HTMLElement>) {
   return event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+}
+
+function formatRateBps(value: number) {
+  return String(value / 100);
 }
 
 function NumberField({
