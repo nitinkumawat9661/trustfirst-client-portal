@@ -5,7 +5,16 @@ const adminPassword = process.env.MANGLAM_DEMO_ADMIN_PASSWORD ?? "MangalamStagin
 const runSuffix = process.env.E2E_RUN_SUFFIX ?? "local";
 const partyName = `E2E Dual Role Traders ${runSuffix}`;
 
-test("customer, supplier, sale, purchase and Estimate Bill work end to end", async ({ page }) => {
+test("customer, supplier, sale, purchase, Estimate Bill and isolated printing work end to end", async ({ page }) => {
+  await page.context().addInitScript(() => {
+    Object.defineProperty(window, "print", {
+      configurable: true,
+      value: () => {
+        document.documentElement.dataset.nativePrintCalled = "true";
+      },
+    });
+  });
+
   await page.goto("/sign-in?callbackUrl=/admin/hardware/sales/new");
   await page.getByLabel("Email", { exact: true }).fill(adminEmail);
   await page.getByLabel("Password", { exact: true }).fill(adminPassword);
@@ -93,6 +102,20 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   await page.waitForURL(/\/admin\/hardware\/print\//);
   await expect(page.getByText(/Estimate Bill/i).first()).toBeVisible();
 
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Print A4 document", exact: true }).click();
+  const printPopup = await popupPromise;
+  await printPopup.waitForLoadState("domcontentloaded");
+  await expect(printPopup.locator("body > .print-sheet")).toHaveCount(1);
+  await expect(printPopup.locator(NON_PRINT_SELECTOR)).toHaveCount(0);
+  expect(await printPopup.locator("body").evaluate((body) => body.children.length)).toBe(1);
+  const printStyles = (await printPopup.locator("style").allTextContents()).join("\n");
+  expect(printStyles).toContain("@page { size: A4 portrait; margin: 5mm 6mm; }");
+  await expect.poll(() => printPopup.locator("html").getAttribute("data-print-ready")).toBe("true");
+  await expect.poll(() => printPopup.locator("html").getAttribute("data-print-invoked")).toBe("true");
+  await expect.poll(() => printPopup.locator("html").getAttribute("data-native-print-called")).toBe("true");
+  await printPopup.close();
+
   const documentId = new URL(page.url()).pathname.split("/").filter(Boolean).at(-1);
   expect(documentId).toBeTruthy();
   await page.goto(`/admin/hardware/quotations/${documentId}/edit`);
@@ -118,3 +141,5 @@ test("customer, supplier, sale, purchase and Estimate Bill work end to end", asy
   await expect(rememberedGst).toBeFocused();
   await expect(rememberedGst).toHaveValue("12");
 });
+
+const NON_PRINT_SELECTOR = ".no-print";
