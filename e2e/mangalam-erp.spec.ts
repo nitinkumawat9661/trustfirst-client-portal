@@ -111,6 +111,12 @@ test("customer, supplier, sale, purchase, Estimate Bill and isolated printing wo
   expect(await printPopup.locator("body").evaluate((body) => body.children.length)).toBe(1);
   const printStyles = (await printPopup.locator("style").allTextContents()).join("\n");
   expect(printStyles).toContain("@page { size: A4 portrait; margin: 5mm 6mm; }");
+  expect(printStyles).toContain(".bill-items-table");
+  await expect(printPopup.locator(".bill-page")).toHaveCount(1);
+  await expect(printPopup.locator(".bill-page")).toHaveCSS("display", "flex");
+  await expect(printPopup.locator(".bill-page")).toHaveCSS("border-top-style", "solid");
+  await expect(printPopup.locator(".bill-header-top")).toHaveCSS("display", "grid");
+  await expect(printPopup.locator(".bill-items-table")).toHaveCSS("table-layout", "fixed");
   await expect.poll(() => printPopup.locator("html").getAttribute("data-print-ready")).toBe("true");
   await expect.poll(() => printPopup.locator("html").getAttribute("data-print-invoked")).toBe("true");
   await expect.poll(() => printPopup.locator("html").getAttribute("data-native-print-called")).toBe("true");
