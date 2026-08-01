@@ -10,8 +10,10 @@ describe("reference-style A4 bill CSS", () => {
     expect(REFERENCE_BILL_PRINT_CSS).not.toContain("min-width: 780px");
   });
 
-  it("keeps dense product rows on one line and uses explicit A4 pagination", () => {
+  it("keeps numeric cells compact, wraps descriptions, and uses explicit A4 pagination", () => {
     expect(REFERENCE_BILL_PRINT_CSS).toContain("white-space: nowrap");
+    expect(REFERENCE_BILL_PRINT_CSS).toContain("white-space: normal");
+    expect(REFERENCE_BILL_PRINT_CSS).toContain("overflow-wrap: anywhere");
     expect(REFERENCE_BILL_PRINT_CSS).toContain("table-layout: fixed");
     expect(REFERENCE_BILL_PRINT_CSS).toContain("@page { size: A4 portrait; margin: 5mm 6mm; }");
     expect(REFERENCE_BILL_PRINT_CSS).toContain("page-break-after: always");
