@@ -98,6 +98,7 @@ test("customer, supplier, sale, purchase, Estimate Bill and isolated printing wo
   await estimateGst.selectOption("12");
   await estimateGst.press("Enter");
   await expect(page.getByText("Item 2", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Automatic round-off", { exact: true })).toHaveAttribute("readonly", "");
   await page.getByRole("button", { name: "Save and print Estimate Bill" }).click();
   await page.waitForURL(/\/admin\/hardware\/print\//);
   await expect(page.getByText(/Estimate Bill/i).first()).toBeVisible();
@@ -117,6 +118,12 @@ test("customer, supplier, sale, purchase, Estimate Bill and isolated printing wo
   await expect(printPopup.locator(".bill-page")).toHaveCSS("border-top-style", "solid");
   await expect(printPopup.locator(".bill-header-top")).toHaveCSS("display", "grid");
   await expect(printPopup.locator(".bill-items-table")).toHaveCSS("table-layout", "fixed");
+  await expect(printPopup.locator(".bill-description").first()).toHaveCSS("white-space", "normal");
+  await expect(printPopup.getByText("Pending", { exact: true })).toHaveCount(0);
+  await expect(printPopup.getByText("Status", { exact: true })).toHaveCount(0);
+  await expect(printPopup.getByText(/Confirmed - deducted/i)).toHaveCount(0);
+  await expect(printPopup.locator(".bill-tax-summary-line")).toContainText("Taxable Value @12%");
+  await expect(printPopup.locator(".bill-words")).toContainText(/^Rupees .+ Only$/);
   await expect.poll(() => printPopup.locator("html").getAttribute("data-print-ready")).toBe("true");
   await expect.poll(() => printPopup.locator("html").getAttribute("data-print-invoked")).toBe("true");
   await expect.poll(() => printPopup.locator("html").getAttribute("data-native-print-called")).toBe("true");
