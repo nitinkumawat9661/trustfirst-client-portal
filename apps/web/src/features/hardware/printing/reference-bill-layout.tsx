@@ -1,4 +1,6 @@
 import Image from "next/image";
+import { calculateEstimateMoneyTotals } from "@/lib/hardware/estimate-money";
+import { formatIndianCurrencyWords } from "@/lib/money/indian-currency-words";
 import type { HardwarePrintProjection } from "@/server/hardware";
 
 export type ReferenceTaxMode = "inter-state" | "intra-state";
@@ -15,11 +17,18 @@ type BillPage = {
   startIndex: number;
 };
 
-const DEFAULT_TERMS = [
+const INVOICE_DEFAULT_TERMS = [
   "E. & O.E.",
   "Goods once sold will not be taken back.",
   "Interest @ 18% p.a. will be charged if payment is not made within the stipulated time.",
   "Subject to Sikar jurisdiction only.",
+] as const;
+
+const ESTIMATE_DEFAULT_TERMS = [
+  "This estimate is valid for 7 days from the date of issue.",
+  "Prices and product availability are subject to confirmation at the time of order.",
+  "Taxes will be charged at the applicable rate on the final invoice.",
+  "This estimate is not a tax invoice.",
 ] as const;
 
 export function ReferenceBillDocument({
@@ -37,7 +46,7 @@ export function ReferenceBillDocument({
 }) {
   const isEstimate = projection.document.type === "SALES_QUOTATION";
   const pages = buildReferenceBillPages(projection.items);
-  const terms = resolveReferenceTerms(projection.firm.termsFooter);
+  const terms = resolveReferenceTerms(projection.firm.termsFooter, isEstimate);
 
   return pages.map((page) => {
     const isLastPage = page.pageIndex === pages.length - 1;
@@ -53,7 +62,6 @@ export function ReferenceBillDocument({
           documentAddress={documentAddress}
           documentDate={documentDate}
           documentNumber={projection.document.documentNumber}
-          documentStatus={projection.document.status}
           isEstimate={isEstimate}
           isPurchase={isPurchaseDocument(projection.document.type)}
           metadata={projection.document.metadata}
@@ -129,7 +137,6 @@ function PartyDocumentSection({
   documentAddress,
   documentDate,
   documentNumber,
-  documentStatus,
   isEstimate,
   isPurchase,
   metadata,
@@ -140,7 +147,6 @@ function PartyDocumentSection({
   documentAddress: string | null;
   documentDate: Date | string;
   documentNumber: string;
-  documentStatus: string;
   isEstimate: boolean;
   isPurchase: boolean;
   metadata: HardwarePrintProjection["document"]["metadata"];
@@ -151,11 +157,10 @@ function PartyDocumentSection({
     <section className="bill-party-document">
       <div className="bill-party-box">
         <p className="bill-box-title">{isPurchase ? "Supplier Details:" : "Party Details:"}</p>
-        <p className="bill-party-name">{customerName}</p>
+        <p className="bill-party-name">{formatPartyName(customerName)}</p>
         {documentAddress ? <p className="bill-party-line">{documentAddress}</p> : null}
-        <div className="bill-party-spacer" />
-        <p className="bill-party-line">PARTY MOB&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;{customer?.phone ?? ""}</p>
-        <p className="bill-party-line">Party GSTIN&nbsp;&nbsp;:&nbsp;&nbsp;{customer?.gstin ?? ""}</p>
+        {customer?.phone ? <p className="bill-party-line">PARTY MOB&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;{customer.phone}</p> : null}
+        {customer?.gstin ? <p className="bill-party-line">Party GSTIN&nbsp;&nbsp;:&nbsp;&nbsp;{customer.gstin}</p> : null}
       </div>
       <div className="bill-document-box">
         <dl className="bill-detail-grid">
@@ -163,8 +168,6 @@ function PartyDocumentSection({
           <dt>Dated</dt><dd>:</dd><dd>{formatDate(documentDate)}</dd>
           <dt>Reference</dt><dd>:</dd><dd>{referenceNumber}</dd>
           <dt>Tax Treatment</dt><dd>:</dd><dd>{taxMode === "inter-state" ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)"}</dd>
-          <dt>Status</dt><dd>:</dd><dd>{humanize(documentStatus)}</dd>
-          {isEstimate ? <><dt>Stock</dt><dd>:</dd><dd>Confirmed - deducted</dd></> : null}
         </dl>
       </div>
     </section>
@@ -177,10 +180,10 @@ function BillItemsTable({ page, showCarryForward }: { page: BillPage; showCarryF
       <table className="bill-items-table">
         <colgroup>
           <col style={{ width: "5%" }} />
-          <col style={{ width: "40%" }} />
-          <col style={{ width: "10%" }} />
+          <col style={{ width: "45%" }} />
           <col style={{ width: "8%" }} />
-          <col style={{ width: "8%" }} />
+          <col style={{ width: "6%" }} />
+          <col style={{ width: "7%" }} />
           <col style={{ width: "10%" }} />
           <col style={{ width: "7%" }} />
           <col style={{ width: "12%" }} />
@@ -213,8 +216,8 @@ function BillItemsTable({ page, showCarryForward }: { page: BillPage; showCarryF
           {page.items.map((item, index) => (
             <tr key={`${item.description}-${page.startIndex + index}`}>
               <td className="bill-number">{page.startIndex + index + 1}.</td>
-              <td className={`bill-description ${item.description.length > 48 ? "bill-description-long" : ""}`}>{item.description}</td>
-              <td className="bill-center">{item.hsnCode ?? "Pending"}</td>
+              <td className="bill-description">{item.description}</td>
+              <td className="bill-center">{item.hsnCode?.trim() || "—"}</td>
               <td className="bill-number">{formatQuantity(item.quantity)}</td>
               <td className="bill-center">{item.unitCode ?? "-"}</td>
               <td className="bill-number">{moneyPlain(item.unitAmountCents)}</td>
@@ -259,14 +262,15 @@ function BillTotals({
     const sgst = taxMode === "intra-state" ? row.taxCents - cgst : 0;
     return { ...row, cgst, sgst };
   });
+  const displayTotals = resolveReferenceBillTotals(projection);
   const calculationRows: Array<{ label: string; rate?: string; valueCents: number }> = [
-    { label: "Total", valueCents: projection.document.subtotalCents },
+    { label: "Total", valueCents: displayTotals.subtotalCents },
   ];
 
-  if (projection.document.discountCents !== 0) {
+  if (displayTotals.discountCents !== 0) {
     calculationRows.push({
       label: "Less  :  Discount",
-      valueCents: Math.abs(projection.document.discountCents),
+      valueCents: Math.abs(displayTotals.discountCents),
     });
   }
 
@@ -293,10 +297,10 @@ function BillTotals({
     }
   }
 
-  if (projection.document.roundOffCents !== 0) {
+  if (displayTotals.roundOffCents !== 0) {
     calculationRows.push({
-      label: `${projection.document.roundOffCents < 0 ? "Less" : "Add"}  :  Rounded Off`,
-      valueCents: Math.abs(projection.document.roundOffCents),
+      label: `${displayTotals.roundOffCents < 0 ? "Less" : "Add"}  :  Rounded Off`,
+      valueCents: Math.abs(displayTotals.roundOffCents),
     });
   }
 
@@ -323,10 +327,10 @@ function BillTotals({
           <span>Grand Total</span>
           <span>{formatQuantity(totalQuantity)} Units</span>
         </div>
-        <div className="bill-grand-total-value">{moneyPlain(projection.document.totalCents)}</div>
+        <div className="bill-grand-total-value">{moneyPlain(displayTotals.totalCents)}</div>
       </div>
       <div className="bill-tax-summary-line">{formatTaxSummary(taxLines, taxMode)}</div>
-      <div className="bill-words">Rupees {stripRupeesPrefix(projection.document.totalsInWords)}</div>
+      <div className="bill-words">{formatIndianCurrencyWords(displayTotals.totalCents)}</div>
     </section>
   );
 }
@@ -349,7 +353,7 @@ function BillFooter({
         <ol>
           {terms.map((term) => <li key={term}>{term}</li>)}
         </ol>
-        {legalName ? <p className="bill-legal-name">Legal proprietor: {legalName}</p> : null}
+        {legalName ? <p className="bill-legal-name">Proprietor: {legalName}</p> : null}
       </div>
       <div className="bill-signature">
         <div className="bill-receiver">Receiver&apos;s Signature :</div>
@@ -416,16 +420,17 @@ export function splitReferenceBillItems<T>(items: T[]) {
   return pages;
 }
 
-export function resolveReferenceTerms(termsFooter: string | null) {
+export function resolveReferenceTerms(termsFooter: string | null, isEstimate = false) {
+  const fallback = isEstimate ? ESTIMATE_DEFAULT_TERMS : INVOICE_DEFAULT_TERMS;
   const normalized = termsFooter?.trim();
   if (!normalized || normalized.toUpperCase() === "WAITING FOR CLIENT CONFIRMATION") {
-    return [...DEFAULT_TERMS];
+    return [...fallback];
   }
   const customTerms = normalized
     .split(/\r?\n|\s*\|\s*/u)
     .map((term) => term.replace(/^\d+[.)]\s*/u, "").trim())
     .filter(Boolean);
-  return customTerms.length ? customTerms : [...DEFAULT_TERMS];
+  return customTerms.length ? customTerms : [...fallback];
 }
 
 function formatDiscount(item: PrintItem) {
@@ -437,15 +442,43 @@ function formatTaxSummary(
   rows: Array<HardwarePrintProjection["gstSummary"][number] & { cgst: number; sgst: number }>,
   taxMode: ReferenceTaxMode,
 ) {
-  if (!rows.length) return "No tax lines.";
+  if (!rows.length) return "No GST applicable.";
   return rows.map((row) => taxMode === "inter-state"
-    ? `Sale @${row.taxRateBps / 100}% = ${moneyPlain(row.taxableCents)}  IGST = ${moneyPlain(row.taxCents)}`
-    : `Sale @${row.taxRateBps / 100}% = ${moneyPlain(row.taxableCents)}  CGST = ${moneyPlain(row.cgst)}  SGST = ${moneyPlain(row.sgst)}`
+    ? `Taxable Value @${row.taxRateBps / 100}% = ${moneyPlain(row.taxableCents)}  IGST = ${moneyPlain(row.taxCents)}`
+    : `Taxable Value @${row.taxRateBps / 100}% = ${moneyPlain(row.taxableCents)}  CGST = ${moneyPlain(row.cgst)}  SGST = ${moneyPlain(row.sgst)}`
   ).join("   |   ");
 }
 
-function stripRupeesPrefix(value: string) {
-  return value.replace(/^Rupees\s+/iu, "");
+export function formatPartyName(value: string) {
+  const normalized = value.trim().replace(/\s+/gu, " ");
+  if (!normalized || normalized !== normalized.toLowerCase()) return normalized;
+  return normalized.replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
+}
+
+export function resolveReferenceBillTotals(projection: HardwarePrintProjection) {
+  if (projection.document.type !== "SALES_QUOTATION") {
+    return {
+      discountCents: projection.document.discountCents,
+      roundOffCents: projection.document.roundOffCents,
+      subtotalCents: projection.document.subtotalCents,
+      taxCents: projection.document.taxCents,
+      totalCents: projection.document.totalCents,
+    };
+  }
+  const totals = calculateEstimateMoneyTotals(projection.items.map((item) => ({
+    discountCents: item.discountCents,
+    quantity: item.quantity,
+    taxCents: item.taxCents,
+    taxRateBps: item.taxRateBps,
+    unitAmountCents: item.unitAmountCents,
+  })));
+  return {
+    discountCents: totals.discountCents,
+    roundOffCents: totals.roundOffCents,
+    subtotalCents: totals.grossCents,
+    taxCents: totals.taxCents,
+    totalCents: totals.totalCents,
+  };
 }
 
 function formatQuantity(value: number) {
