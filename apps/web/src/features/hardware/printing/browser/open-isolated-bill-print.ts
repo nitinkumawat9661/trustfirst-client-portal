@@ -50,7 +50,7 @@ export async function openIsolatedBillPrint(
   }
 
   try {
-    const nonce = sourceDocument.querySelector<HTMLStyleElement>("style[nonce]")?.nonce;
+    const nonce = findDocumentNonce(sourceDocument);
     const documentAssets = collectPrintAssets(sourceDocument.head);
     const { billClone, embeddedAssets } = clonePrintableBill(printRoot);
     const title = input.fileName?.trim() || "Mangalam Sanitary Bill";
@@ -91,6 +91,17 @@ export async function openIsolatedBillPrint(
       message: "Print document could not be prepared. Try again.",
     };
   }
+}
+
+function findDocumentNonce(sourceDocument: Document) {
+  // Browsers intentionally hide CSP nonce values when serializing outerHTML,
+  // but expose the real value through the DOM `nonce` property. Next.js may
+  // place that nonce on a script or stylesheet link rather than an inline style.
+  const nonceElement = sourceDocument.querySelector<HTMLElement & { nonce?: string }>(
+    "script[nonce], style[nonce], link[nonce]",
+  );
+  const nonce = nonceElement?.nonce?.trim();
+  return nonce || undefined;
 }
 
 function clonePrintableBill(printRoot: HTMLElement) {
