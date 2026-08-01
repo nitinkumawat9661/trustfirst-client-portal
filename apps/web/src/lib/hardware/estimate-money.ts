@@ -1,8 +1,8 @@
 export type EstimateMoneyLine = {
-  discountCents?: number | null;
+  discountCents?: number | null | undefined;
   quantity: number;
-  taxCents?: number | null;
-  taxRateBps?: number | null;
+  taxCents?: number | null | undefined;
+  taxRateBps?: number | null | undefined;
   unitAmountCents: number;
 };
 
@@ -21,7 +21,7 @@ export function calculateNearestRupeeRoundOffCents(amountCents: number) {
   return Math.round(amountCents / 100) * 100 - amountCents;
 }
 
-export function calculateEstimateMoneyTotals(lines: EstimateMoneyLine[]): EstimateMoneyTotals {
+export function calculateEstimateMoneyTotals(lines: readonly EstimateMoneyLine[]): EstimateMoneyTotals {
   const result = lines.reduce(
     (totals, line) => {
       assertFinite(line.quantity, "Quantity");
@@ -55,7 +55,9 @@ export function calculateEstimateMoneyTotals(lines: EstimateMoneyLine[]): Estima
   };
 }
 
-export function applyAutomaticEstimateRoundOff<T extends { items: EstimateMoneyLine[] }>(input: T) {
+export function applyAutomaticEstimateRoundOff<T extends { items: readonly EstimateMoneyLine[] }>(
+  input: T,
+): T & { roundOffCents: number } {
   return {
     ...input,
     roundOffCents: calculateEstimateMoneyTotals(input.items).roundOffCents,
