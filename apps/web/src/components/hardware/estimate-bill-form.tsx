@@ -4,6 +4,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@trustf
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
+import { calculateEstimateMoneyTotals } from "@/lib/hardware/estimate-money";
 import type {
   HardwareEstimateEditData,
   HardwarePartySummary,
@@ -77,9 +78,6 @@ export function EstimateBillForm({
   );
   const [paymentMode, setPaymentMode] = useState(initialDocument?.paymentMode ?? "Cash");
   const [referenceNumber, setReferenceNumber] = useState(initialDocument?.referenceNumber ?? "");
-  const [roundOff, setRoundOff] = useState(
-    initialDocument?.roundOffCents ? String(initialDocument.roundOffCents / 100) : "0",
-  );
   const [taxMode, setTaxMode] = useState<"intra-state" | "inter-state">(initialDocument?.taxMode ?? "intra-state");
   const [saving, setSaving] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -92,7 +90,7 @@ export function EstimateBillForm({
   const canSaveEstimate = canPostBillingLines(normalizedLines) && completedLines.every(
     (line) => Number.isInteger(Number(line.quantity)) && Number(line.unitRate) > 0,
   );
-  const totals = useMemo(() => calculateEstimateTotals(completedLines, roundOff), [completedLines, roundOff]);
+  const totals = useMemo(() => calculateEstimateTotals(completedLines), [completedLines]);
 
   function updateLine(index: number, patch: Partial<EstimateLine>) {
     setLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, ...patch } : line));
@@ -409,8 +407,8 @@ export function EstimateBillForm({
 
       <Card>
         <CardContent className="grid gap-4 pt-5 md:grid-cols-[minmax(0,1fr)_300px]">
-          <Field label="Round-off">
-            <Input className="max-w-48" inputMode="decimal" onChange={(event) => setRoundOff(event.target.value)} step="0.01" type="number" value={roundOff} />
+          <Field label="Automatic round-off">
+            <Input className="max-w-48" readOnly value={(totals.roundOffCents / 100).toFixed(2)} />
           </Field>
           <dl className="space-y-2 text-sm">
             <TotalRow label="Gross value" value={totals.grossCents} />
@@ -457,21 +455,16 @@ function calculateLineTotal(line: EstimateLine) {
   return taxable + tax;
 }
 
-function calculateEstimateTotals(lines: EstimateLine[], roundOff: string) {
-  const result = lines.reduce((totals, line) => {
-    const gross = Math.round((Number(line.quantity) || 0) * (Number(line.unitRate) || 0) * 100);
-    const discount = Math.round(gross * (Number(line.discountPercent) || 0) / 100);
-    const taxable = Math.max(gross - discount, 0);
-    const tax = Math.round(taxable * (Number(line.gstRate) || 0) / 100);
+function calculateEstimateTotals(lines: EstimateLine[]) {
+  return calculateEstimateMoneyTotals(lines.map((line) => {
+    const grossCents = Math.round((Number(line.quantity) || 0) * (Number(line.unitRate) || 0) * 100);
     return {
-      discountCents: totals.discountCents + discount,
-      grossCents: totals.grossCents + gross,
-      taxCents: totals.taxCents + tax,
-      taxableCents: totals.taxableCents + taxable,
+      discountCents: Math.round(grossCents * (Number(line.discountPercent) || 0) / 100),
+      quantity: Number(line.quantity) || 0,
+      taxRateBps: Math.round((Number(line.gstRate) || 0) * 100),
+      unitAmountCents: Math.round((Number(line.unitRate) || 0) * 100),
     };
-  }, { discountCents: 0, grossCents: 0, taxCents: 0, taxableCents: 0 });
-  const roundOffCents = Math.round((Number(roundOff) || 0) * 100);
-  return { ...result, roundOffCents, totalCents: result.taxableCents + result.taxCents + roundOffCents };
+  }));
 }
 
 function money(amountCents: number) {
