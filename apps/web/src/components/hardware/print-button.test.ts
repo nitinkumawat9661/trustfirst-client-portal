@@ -9,7 +9,7 @@ describe("bill-only print document", () => {
     const html = buildIsolatedPrintDocument({
       baseHref: "https://app.mangalamsanitary.in/",
       billHtml: '<section class="print-sheet"><h1>Tax Invoice</h1></section>',
-      stylesHtml: "<style>.print-sheet{color:#000}</style>",
+      stylesHtml: '<link rel="stylesheet" href="/_next/static/app.css" />',
       title: "MS-INV-1",
     });
 
@@ -19,6 +19,20 @@ describe("bill-only print document", () => {
     expect(html).not.toContain("ERP top header");
     expect(html).not.toContain("Sync widget");
     expect(html).not.toContain("sidebar");
+  });
+
+  it("places transferred bill CSS inside the nonce-authorized style block", () => {
+    const html = buildIsolatedPrintDocument({
+      baseHref: "https://app.mangalamsanitary.in/",
+      billHtml: '<section class="print-sheet"><article class="bill-page" /></section>',
+      nonce: "secure-print-nonce",
+      printCss: ".bill-page { display: flex; border: 1px solid #000; }",
+      stylesHtml: "",
+      title: "Estimate Bill",
+    });
+
+    expect(html).toContain('style nonce="secure-print-nonce"');
+    expect(html).toContain(".bill-page { display: flex; border: 1px solid #000; }");
   });
 
   it("escapes document metadata without changing trusted bill markup", () => {
