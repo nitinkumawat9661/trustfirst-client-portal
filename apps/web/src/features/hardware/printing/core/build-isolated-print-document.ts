@@ -19,6 +19,7 @@ export function buildIsolatedPrintDocument(input: IsolatedPrintDocumentInput) {
   <title>${escapeHtml(input.title)}</title>
   ${input.stylesHtml}
   <style${nonceAttribute(input.nonce)}>
+    ${input.printCss ?? ""}
     ${A4_PRINT_PAGE_RULE}
     html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
     body { width: auto !important; min-height: 0 !important; overflow: visible !important; }
