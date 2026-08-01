@@ -48,12 +48,11 @@ export const REFERENCE_BILL_PRINT_CSS = `
     border-bottom: 1px solid #18181b;
   }
   .bill-party-box,
-  .bill-document-box { min-height: 31mm; padding: 2mm 2.5mm; }
+  .bill-document-box { min-height: 27mm; padding: 2mm 2.5mm; }
   .bill-document-box { border-left: 1px solid #18181b; }
   .bill-box-title { font-size: 9px; font-style: italic; font-weight: 700; }
   .bill-party-name { margin-top: 0.7mm; font-size: 9px; font-weight: 700; }
   .bill-party-line { margin-top: 0.5mm; font-size: 8px; }
-  .bill-party-spacer { height: 3mm; }
   .bill-detail-grid {
     display: grid;
     grid-template-columns: 27mm 3mm minmax(0, 1fr);
@@ -101,18 +100,19 @@ export const REFERENCE_BILL_PRINT_CSS = `
     text-align: center;
     white-space: nowrap;
   }
+  .bill-items-table tbody { height: 100%; }
   .bill-items-table tbody td { white-space: nowrap; }
   .bill-items-table .bill-description {
-    overflow: hidden;
-    text-overflow: clip;
-    white-space: nowrap;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    line-height: 1.15;
   }
-  .bill-items-table .bill-description-long { font-size: 6.65px; letter-spacing: -0.08px; }
   .bill-number { text-align: right; font-variant-numeric: tabular-nums; }
   .bill-center { text-align: center; }
   .bill-carry-row td { padding-top: 0.8mm; padding-bottom: 0.8mm; font-weight: 800; }
   .bill-table-spacer { height: 100%; }
-  .bill-table-spacer td { padding: 0; }
+  .bill-table-spacer td { height: 100%; padding: 0; }
   .bill-items-table tfoot td {
     border-top: 1px solid #18181b;
     padding-top: 1.1mm;
