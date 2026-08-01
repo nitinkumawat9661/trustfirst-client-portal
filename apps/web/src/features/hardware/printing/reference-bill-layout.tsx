@@ -1,6 +1,6 @@
 import Image from "next/image";
-import { calculateEstimateMoneyTotals } from "@/lib/hardware/estimate-money";
-import { formatIndianCurrencyWords } from "@/lib/money/indian-currency-words";
+import { calculateEstimateMoneyTotals } from "../../../lib/hardware/estimate-money";
+import { formatIndianCurrencyWords } from "../../../lib/money/indian-currency-words";
 import type { HardwarePrintProjection } from "@/server/hardware";
 
 export type ReferenceTaxMode = "inter-state" | "intra-state";
