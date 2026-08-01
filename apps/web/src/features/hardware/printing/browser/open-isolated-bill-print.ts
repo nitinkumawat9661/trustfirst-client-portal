@@ -45,7 +45,8 @@ export async function openIsolatedBillPrint(
   }
 
   try {
-    const billClone = clonePrintableBill(printRoot);
+    const nonce = sourceDocument.querySelector<HTMLStyleElement>("style[nonce]")?.nonce;
+    const { billClone, embeddedStylesHtml } = clonePrintableBill(printRoot, nonce);
     const title = input.fileName?.trim() || "Mangalam Sanitary Bill";
 
     printWindow.opener = null;
@@ -53,8 +54,11 @@ export async function openIsolatedBillPrint(
     printWindow.document.write(buildIsolatedPrintDocument({
       baseHref: `${input.sourceWindow.location.origin}/`,
       billHtml: billClone.outerHTML,
-      nonce: sourceDocument.querySelector<HTMLStyleElement>("style[nonce]")?.nonce,
-      stylesHtml: collectDocumentStyles(sourceDocument),
+      nonce,
+      stylesHtml: joinHtmlFragments(
+        collectDocumentStyles(sourceDocument),
+        embeddedStylesHtml,
+      ),
       title,
     }));
     printWindow.document.close();
@@ -82,16 +86,32 @@ export async function openIsolatedBillPrint(
   }
 }
 
-function clonePrintableBill(printRoot: HTMLElement) {
+function clonePrintableBill(printRoot: HTMLElement, nonce: string | undefined) {
   const clone = printRoot.cloneNode(true) as HTMLElement;
   clone.querySelectorAll(NON_PRINT_SELECTOR).forEach((node) => node.remove());
-  return clone;
+
+  const embeddedStylesHtml = Array.from(
+    clone.querySelectorAll<HTMLStyleElement | HTMLLinkElement>('style, link[rel="stylesheet"]'),
+  )
+    .map((node) => {
+      if (node instanceof HTMLStyleElement && nonce) node.nonce = nonce;
+      const html = node.outerHTML;
+      node.remove();
+      return html;
+    })
+    .join(String.fromCharCode(10));
+
+  return { billClone: clone, embeddedStylesHtml };
 }
 
 function collectDocumentStyles(sourceDocument: Document) {
   return Array.from(sourceDocument.head.querySelectorAll('style, link[rel="stylesheet"]'))
     .map((node) => node.outerHTML)
     .join(String.fromCharCode(10));
+}
+
+function joinHtmlFragments(...fragments: string[]) {
+  return fragments.filter((fragment) => fragment.trim()).join(String.fromCharCode(10));
 }
 
 async function waitForPrintAssets(printWindow: Window) {
