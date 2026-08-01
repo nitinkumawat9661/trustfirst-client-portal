@@ -13,6 +13,11 @@ export interface OpenIsolatedBillPrintInput {
   sourceWindow: Window;
 }
 
+type PrintAssets = {
+  css: string;
+  linksHtml: string;
+};
+
 /**
  * Browser adapter for the bill-only print flow.
  *
@@ -45,7 +50,9 @@ export async function openIsolatedBillPrint(
   }
 
   try {
-    const billClone = clonePrintableBill(printRoot);
+    const nonce = findDocumentNonce(sourceDocument);
+    const documentAssets = collectPrintAssets(sourceDocument.head);
+    const { billClone, embeddedAssets } = clonePrintableBill(printRoot);
     const title = input.fileName?.trim() || "Mangalam Sanitary Bill";
 
     printWindow.opener = null;
@@ -53,8 +60,12 @@ export async function openIsolatedBillPrint(
     printWindow.document.write(buildIsolatedPrintDocument({
       baseHref: `${input.sourceWindow.location.origin}/`,
       billHtml: billClone.outerHTML,
-      nonce: sourceDocument.querySelector<HTMLStyleElement>("style[nonce]")?.nonce,
-      stylesHtml: collectDocumentStyles(sourceDocument),
+      nonce,
+      printCss: joinTextFragments(documentAssets.css, embeddedAssets.css),
+      stylesHtml: joinTextFragments(
+        documentAssets.linksHtml,
+        embeddedAssets.linksHtml,
+      ),
       title,
     }));
     printWindow.document.close();
@@ -82,16 +93,37 @@ export async function openIsolatedBillPrint(
   }
 }
 
+function findDocumentNonce(sourceDocument: Document) {
+  // Browsers intentionally hide CSP nonce values when serializing outerHTML,
+  // but expose the real value through the DOM `nonce` property. Next.js may
+  // place that nonce on a script or stylesheet link rather than an inline style.
+  const nonceElement = sourceDocument.querySelector<HTMLElement & { nonce?: string }>(
+    "script[nonce], style[nonce], link[nonce]",
+  );
+  const nonce = nonceElement?.nonce?.trim();
+  return nonce || undefined;
+}
+
 function clonePrintableBill(printRoot: HTMLElement) {
   const clone = printRoot.cloneNode(true) as HTMLElement;
   clone.querySelectorAll(NON_PRINT_SELECTOR).forEach((node) => node.remove());
-  return clone;
+  const embeddedAssets = collectPrintAssets(clone);
+  clone.querySelectorAll('style, link[rel="stylesheet"]').forEach((node) => node.remove());
+  return { billClone: clone, embeddedAssets };
 }
 
-function collectDocumentStyles(sourceDocument: Document) {
-  return Array.from(sourceDocument.head.querySelectorAll('style, link[rel="stylesheet"]'))
-    .map((node) => node.outerHTML)
+function collectPrintAssets(root: ParentNode): PrintAssets {
+  const css = Array.from(root.querySelectorAll<HTMLStyleElement>("style"))
+    .map((style) => style.textContent ?? "")
     .join(String.fromCharCode(10));
+  const linksHtml = Array.from(root.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))
+    .map((link) => link.outerHTML)
+    .join(String.fromCharCode(10));
+  return { css, linksHtml };
+}
+
+function joinTextFragments(...fragments: string[]) {
+  return fragments.filter((fragment) => fragment.trim()).join(String.fromCharCode(10));
 }
 
 async function waitForPrintAssets(printWindow: Window) {

@@ -7,6 +7,7 @@ export interface IsolatedPrintDocumentInput {
   baseHref: string;
   billHtml: string;
   nonce?: string | undefined;
+  printCss?: string | undefined;
   stylesHtml: string;
   title: string;
 }
