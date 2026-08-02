@@ -152,21 +152,21 @@ function PartyDocumentSection({
   metadata: HardwarePrintProjection["document"]["metadata"];
   taxMode: ReferenceTaxMode;
 }) {
-  const referenceNumber = typeof metadata.referenceNumber === "string" ? metadata.referenceNumber : "";
+  const referenceNumber = typeof metadata.referenceNumber === "string" ? metadata.referenceNumber.trim() : "";
   return (
     <section className="bill-party-document">
       <div className="bill-party-box">
         <p className="bill-box-title">{isPurchase ? "Supplier Details:" : "Party Details:"}</p>
         <p className="bill-party-name">{formatPartyName(customerName)}</p>
         {documentAddress ? <p className="bill-party-line">{documentAddress}</p> : null}
-        {customer?.phone ? <p className="bill-party-line">PARTY MOB&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;{customer.phone}</p> : null}
-        {customer?.gstin ? <p className="bill-party-line">Party GSTIN&nbsp;&nbsp;:&nbsp;&nbsp;{customer.gstin}</p> : null}
+        {customer?.phone ? <p className="bill-party-line">Mobile&nbsp;&nbsp;:&nbsp;&nbsp;{customer.phone}</p> : null}
+        {customer?.gstin ? <p className="bill-party-line">GSTIN&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;{customer.gstin}</p> : null}
       </div>
       <div className="bill-document-box">
         <dl className="bill-detail-grid">
           <dt>{isEstimate ? "Estimate No." : "Invoice No."}</dt><dd>:</dd><dd>{documentNumber}</dd>
           <dt>Dated</dt><dd>:</dd><dd>{formatDate(documentDate)}</dd>
-          <dt>Reference</dt><dd>:</dd><dd>{referenceNumber}</dd>
+          {referenceNumber ? <><dt>Reference</dt><dd>:</dd><dd>{referenceNumber}</dd></> : null}
           <dt>Tax Treatment</dt><dd>:</dd><dd>{taxMode === "inter-state" ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)"}</dd>
         </dl>
       </div>
@@ -177,21 +177,30 @@ function PartyDocumentSection({
 function BillItemsTable({ page, showCarryForward }: { page: BillPage; showCarryForward: boolean }) {
   return (
     <div className="bill-table-wrap">
+      <div aria-hidden="true" className="bill-table-grid-lines">
+        <span className="bill-grid-line bill-grid-line-1" />
+        <span className="bill-grid-line bill-grid-line-2" />
+        <span className="bill-grid-line bill-grid-line-3" />
+        <span className="bill-grid-line bill-grid-line-4" />
+        <span className="bill-grid-line bill-grid-line-5" />
+        <span className="bill-grid-line bill-grid-line-6" />
+        <span className="bill-grid-line bill-grid-line-7" />
+      </div>
       <table className="bill-items-table">
         <colgroup>
-          <col style={{ width: "5%" }} />
-          <col style={{ width: "45%" }} />
-          <col style={{ width: "8%" }} />
-          <col style={{ width: "6%" }} />
-          <col style={{ width: "7%" }} />
-          <col style={{ width: "10%" }} />
-          <col style={{ width: "7%" }} />
-          <col style={{ width: "12%" }} />
+          <col className="bill-col-serial" />
+          <col className="bill-col-description" />
+          <col className="bill-col-hsn" />
+          <col className="bill-col-quantity" />
+          <col className="bill-col-unit" />
+          <col className="bill-col-rate" />
+          <col className="bill-col-discount" />
+          <col className="bill-col-amount" />
         </colgroup>
         <thead>
           <tr>
             <th>S.N.</th>
-            <th className="!text-left">Description of Goods</th>
+            <th className="bill-description-heading">Description of Goods</th>
             <th>HSN</th>
             <th>Qty.</th>
             <th>Unit</th>
@@ -217,7 +226,7 @@ function BillItemsTable({ page, showCarryForward }: { page: BillPage; showCarryF
             <tr key={`${item.description}-${page.startIndex + index}`}>
               <td className="bill-number">{page.startIndex + index + 1}.</td>
               <td className="bill-description">{item.description}</td>
-              <td className="bill-center">{item.hsnCode?.trim() || "—"}</td>
+              <td className="bill-center">{item.hsnCode?.trim() || "-"}</td>
               <td className="bill-number">{formatQuantity(item.quantity)}</td>
               <td className="bill-center">{item.unitCode ?? "-"}</td>
               <td className="bill-number">{moneyPlain(item.unitAmountCents)}</td>
@@ -325,7 +334,7 @@ function BillTotals({
       <div className="bill-grand-total">
         <div className="bill-grand-total-main">
           <span>Grand Total</span>
-          <span>{formatQuantity(totalQuantity)} Units</span>
+          <span>Total Qty: {formatQuantity(totalQuantity)}</span>
         </div>
         <div className="bill-grand-total-value">{moneyPlain(displayTotals.totalCents)}</div>
       </div>
@@ -434,7 +443,10 @@ export function resolveReferenceTerms(termsFooter: string | null, isEstimate = f
 }
 
 function formatDiscount(item: PrintItem) {
-  if (item.discountPercent !== null) return `${item.discountPercent}%`;
+  if (item.discountPercent !== null) {
+    const value = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(item.discountPercent);
+    return `${value}%`;
+  }
   return item.discountCents ? moneyPlain(item.discountCents) : "-";
 }
 
@@ -505,9 +517,28 @@ function isPurchaseDocument(type: string) {
   return ["PURCHASE_ENTRY", "PURCHASE_ORDER", "PURCHASE_RETURN", "SUPPLIER_BILL"].includes(type);
 }
 
-function formatAddress(address: Record<string, unknown>) {
-  const values = Object.values(address).filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
-  return values.length ? values.join(", ") : "Address not provided";
+export function formatAddress(address: Record<string, unknown>) {
+  const values = Object.values(address)
+    .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim().replace(/\s+/gu, " "))
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const uniqueParts: string[] = [];
+
+  for (const value of values) {
+    const key = value.toLocaleLowerCase("en-IN").replace(/[.\s]+$/gu, "");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueParts.push(formatAddressPart(value));
+  }
+
+  return uniqueParts.length ? uniqueParts.join(", ") : "Address not provided";
+}
+
+function formatAddressPart(value: string) {
+  if (!/[A-Z]/u.test(value) || value !== value.toUpperCase()) return value;
+  return value.toLocaleLowerCase("en-IN").replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase("en-IN"));
 }
 
 function formatDate(value: Date | string) {
