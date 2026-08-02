@@ -92,11 +92,10 @@ export const REFERENCE_BILL_PRINT_CSS = `
   }
   .bill-grid-line-1 { left: 5%; }
   .bill-grid-line-2 { left: 50%; }
-  .bill-grid-line-3 { left: 58%; }
-  .bill-grid-line-4 { left: 64%; }
-  .bill-grid-line-5 { left: 71%; }
-  .bill-grid-line-6 { left: 81%; }
-  .bill-grid-line-7 { left: 88%; }
+  .bill-grid-line-3 { left: 59%; }
+  .bill-grid-line-4 { left: 66%; }
+  .bill-grid-line-5 { left: 78%; }
+  .bill-grid-line-6 { left: 87%; }
   .bill-items-table {
     position: relative;
     z-index: 1;
@@ -111,12 +110,11 @@ export const REFERENCE_BILL_PRINT_CSS = `
   }
   .bill-items-table .bill-col-serial { width: 5%; }
   .bill-items-table .bill-col-description { width: 45%; }
-  .bill-items-table .bill-col-hsn { width: 8%; }
-  .bill-items-table .bill-col-quantity { width: 6%; }
-  .bill-items-table .bill-col-unit { width: 7%; }
-  .bill-items-table .bill-col-rate { width: 10%; }
-  .bill-items-table .bill-col-discount { width: 7%; }
-  .bill-items-table .bill-col-amount { width: 12%; }
+  .bill-items-table .bill-col-hsn { width: 9%; }
+  .bill-items-table .bill-col-quantity { width: 7%; }
+  .bill-items-table .bill-col-rate { width: 12%; }
+  .bill-items-table .bill-col-discount { width: 9%; }
+  .bill-items-table .bill-col-amount { width: 13%; }
   .bill-items-table th,
   .bill-items-table td {
     box-sizing: border-box;
