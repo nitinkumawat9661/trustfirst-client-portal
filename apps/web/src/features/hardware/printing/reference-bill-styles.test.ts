@@ -18,4 +18,11 @@ describe("reference-style A4 bill CSS", () => {
     expect(REFERENCE_BILL_PRINT_CSS).toContain("@page { size: A4 portrait; margin: 5mm 6mm; }");
     expect(REFERENCE_BILL_PRINT_CSS).toContain("page-break-after: always");
   });
+
+  it("uses stylesheet-owned column widths and continuous item grid lines", () => {
+    expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-col-description { width: 45%; }");
+    expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-col-amount { width: 12%; }");
+    expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-table-grid-lines");
+    expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-grid-line-7 { left: 88%; }");
+  });
 });
