@@ -103,7 +103,7 @@ test("customer, supplier, sale, purchase, Estimate Bill and isolated printing wo
   await page.waitForURL(/\/admin\/hardware\/print\//);
   await expect(page.getByText(/Estimate Bill/i).first()).toBeVisible();
 
-  const previewStyle = page.locator(".print-sheet > style");
+  const previewStyle = page.locator("head > #reference-bill-preview-styles");
   await expect(previewStyle).toHaveCount(1);
   await expect.poll(() => previewStyle.evaluate((style) => (style as HTMLStyleElement).nonce)).not.toBe("");
   await expect(page.locator(".bill-page")).toHaveCSS("display", "flex");
