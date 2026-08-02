@@ -1,7 +1,12 @@
 export const REFERENCE_BILL_PDF_OVERRIDES = `
   /* Final pages should use only the height needed by their content. */
   .bill-page-final { min-height: 0; }
-  .bill-page-final .bill-table-wrap { flex: 0 0 auto; }
+  .bill-page-final .bill-table-wrap {
+    display: block;
+    min-height: 0;
+    height: auto;
+    flex: none;
+  }
   .bill-page-final .bill-items-table,
   .bill-page-final .bill-items-table tbody { height: auto; }
   .bill-page-final .bill-table-spacer { display: none; }
@@ -69,14 +74,47 @@ export const REFERENCE_BILL_PDF_OVERRIDES = `
   .bill-grand-total-main,
   .bill-grand-total-value { padding-top: 1.8mm; padding-bottom: 1.8mm; }
   .bill-words { font-size: 8.7px; padding-top: 1.8mm; padding-bottom: 1.8mm; }
-  .bill-footer { font-size: 8px; }
-  .bill-terms { padding-top: 1.8mm; padding-bottom: 1.8mm; }
-  .bill-receiver { min-height: 9mm; }
-  .bill-authorisation { min-height: 25mm; }
+
+  /* Short bills should remain readable without an oversized signature block. */
+  .bill-footer {
+    font-size: 8.3px;
+    line-height: 1.25;
+  }
+  .bill-terms { padding: 1.6mm 2mm; }
+  .bill-terms li + li { margin-top: 0.55mm; }
+  .bill-receiver {
+    min-height: 6mm;
+    padding-top: 1.2mm;
+    padding-bottom: 1.2mm;
+  }
+  .bill-authorisation {
+    min-height: 16mm;
+    padding: 1.5mm 2mm;
+  }
 
   @media print {
+    /* The platform shell is dark; force the whole printable canvas white so
+       unused A4 space never renders as a solid black block. */
+    html,
+    body,
+    body > div,
+    main,
+    .print-sheet {
+      background: #fff !important;
+      color: #000 !important;
+    }
+    html,
+    body {
+      min-height: 100% !important;
+    }
+
     .bill-page-final { min-height: 0 !important; }
-    .bill-page-final .bill-table-wrap { flex: 0 0 auto !important; }
+    .bill-page-final .bill-table-wrap {
+      display: block !important;
+      min-height: 0 !important;
+      height: auto !important;
+      flex: none !important;
+    }
     .bill-page-final .bill-items-table,
     .bill-page-final .bill-items-table tbody { height: auto !important; }
     .bill-page-final .bill-table-spacer { display: none !important; }
