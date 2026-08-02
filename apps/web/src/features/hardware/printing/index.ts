@@ -1,4 +1,5 @@
 export { openIsolatedBillPrint } from "./browser/open-isolated-bill-print";
+export { printCurrentBillPage } from "./browser/print-current-bill-page";
 export { buildIsolatedPrintDocument } from "./core/build-isolated-print-document";
 export {
   A4_PRINT_PAGE_RULE,

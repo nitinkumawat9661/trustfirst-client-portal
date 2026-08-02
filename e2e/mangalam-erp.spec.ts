@@ -5,7 +5,7 @@ const adminPassword = process.env.MANGLAM_DEMO_ADMIN_PASSWORD ?? "MangalamStagin
 const runSuffix = process.env.E2E_RUN_SUFFIX ?? "local";
 const partyName = `E2E Dual Role Traders ${runSuffix}`;
 
-test("customer, supplier, sale, purchase, Estimate Bill and isolated printing work end to end", async ({ page }) => {
+test("customer, supplier, sale, purchase, Estimate Bill and same-page printing work end to end", async ({ page }) => {
   await page.context().addInitScript(() => {
     Object.defineProperty(window, "print", {
       configurable: true,
@@ -110,31 +110,38 @@ test("customer, supplier, sale, purchase, Estimate Bill and isolated printing wo
   await expect(page.locator(".bill-page")).toHaveCSS("border-top-style", "solid");
   await expect(page.locator(".bill-items-table")).toHaveCSS("table-layout", "fixed");
 
-  const [printPopup] = await Promise.all([
-    page.waitForEvent("popup"),
-    page.getByTestId("isolated-print-button").click(),
-  ]);
-  await expect(printPopup.locator("body > .print-sheet")).toHaveCount(1);
-  await expect(printPopup.locator(NON_PRINT_SELECTOR)).toHaveCount(0);
-  expect(await printPopup.locator("body").evaluate((body) => body.children.length)).toBe(1);
-  const printStyles = (await printPopup.locator("style").allTextContents()).join("\n");
+  const printPageUrl = page.url();
+  const openPageCount = page.context().pages().length;
+  await page.getByTestId("same-page-print-button").click();
+
+  await expect.poll(() => page.locator("html").getAttribute("data-print-ready")).toBe("true");
+  await expect.poll(() => page.locator("html").getAttribute("data-print-invoked")).toBe("true");
+  await expect.poll(() => page.locator("html").getAttribute("data-print-mode")).toBe("same-page");
+  await expect.poll(() => page.locator("html").getAttribute("data-native-print-called")).toBe("true");
+  await expect(page.getByRole("status")).toContainText("opened on this page");
+  expect(page.url()).toBe(printPageUrl);
+  expect(page.context().pages()).toHaveLength(openPageCount);
+
+  const printStyles = await previewStyle.textContent();
   expect(printStyles).toContain("@page { size: A4 portrait; margin: 5mm 6mm; }");
   expect(printStyles).toContain(".bill-items-table");
-  await expect(printPopup.locator(".bill-page")).toHaveCount(1);
-  await expect(printPopup.locator(".bill-page")).toHaveCSS("display", "flex");
-  await expect(printPopup.locator(".bill-page")).toHaveCSS("border-top-style", "solid");
-  await expect(printPopup.locator(".bill-header-top")).toHaveCSS("display", "grid");
-  await expect(printPopup.locator(".bill-items-table")).toHaveCSS("table-layout", "fixed");
-  await expect(printPopup.locator(".bill-description").first()).toHaveCSS("white-space", "normal");
-  await expect(printPopup.getByText("Pending", { exact: true })).toHaveCount(0);
-  await expect(printPopup.getByText("Status", { exact: true })).toHaveCount(0);
-  await expect(printPopup.getByText(/Confirmed - deducted/i)).toHaveCount(0);
-  await expect(printPopup.locator(".bill-tax-summary-line")).toContainText("Taxable Value @12%");
-  await expect(printPopup.locator(".bill-words")).toContainText(/^Rupees .+ Only$/);
-  await expect.poll(() => printPopup.locator("html").getAttribute("data-print-ready")).toBe("true");
-  await expect.poll(() => printPopup.locator("html").getAttribute("data-print-invoked")).toBe("true");
-  await expect.poll(() => printPopup.locator("html").getAttribute("data-native-print-called")).toBe("true");
-  await printPopup.close();
+  await expect(page.locator(".bill-page")).toHaveCount(1);
+  await expect(page.locator(".bill-header-top")).toHaveCSS("display", "grid");
+  await expect(page.locator(".bill-description").first()).toHaveCSS("white-space", "normal");
+  await expect(page.getByText("Pending", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Status", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Confirmed - deducted/i)).toHaveCount(0);
+  await expect(page.locator(".bill-tax-summary-line")).toContainText("Taxable Value @12%");
+  await expect(page.locator(".bill-words")).toContainText(/^Rupees .+ Only$/);
+
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator(".no-print")).toHaveCSS("display", "none");
+  await expect(page.locator(".bill-page")).toHaveCSS("display", "flex");
+  const stickyHeader = page.locator("header.sticky");
+  if (await stickyHeader.count()) await expect(stickyHeader.first()).toHaveCSS("display", "none");
+  const fixedSidebar = page.locator("aside.fixed");
+  if (await fixedSidebar.count()) await expect(fixedSidebar.first()).toHaveCSS("display", "none");
+  await page.emulateMedia({ media: "screen" });
 
   const documentId = new URL(page.url()).pathname.split("/").filter(Boolean).at(-1);
   expect(documentId).toBeTruthy();
@@ -161,5 +168,3 @@ test("customer, supplier, sale, purchase, Estimate Bill and isolated printing wo
   await expect(rememberedGst).toBeFocused();
   await expect(rememberedGst).toHaveValue("12");
 });
-
-const NON_PRINT_SELECTOR = ".no-print";
