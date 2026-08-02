@@ -5,7 +5,7 @@ import {
   ReferenceBillDocument,
   type ReferenceTaxMode,
 } from "@/features/hardware/printing/reference-bill-layout";
-import { ReferenceBillStyles } from "@/features/hardware/printing/reference-bill-styles";
+import { ReferenceBillPreviewStyles } from "@/features/hardware/printing/reference-bill-preview-styles";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareTradeService, type HardwarePrintProjection } from "@/server/hardware";
 
@@ -43,7 +43,7 @@ export default async function HardwarePrintPreviewPage({
   return (
     <main className="min-h-screen bg-zinc-200 p-3 text-black sm:p-6 print:min-h-0 print:bg-white print:p-0">
       <section className="print-sheet mx-auto w-full max-w-[210mm]">
-        <ReferenceBillStyles />
+        <ReferenceBillPreviewStyles />
         <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm">
           <div>
             <p className="font-medium">A4 {isEstimate ? "Estimate Bill" : "invoice"} preview</p>
