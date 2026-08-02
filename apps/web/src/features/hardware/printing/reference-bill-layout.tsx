@@ -51,7 +51,10 @@ export function ReferenceBillDocument({
   return pages.map((page) => {
     const isLastPage = page.pageIndex === pages.length - 1;
     return (
-      <article className="bill-page" key={page.pageIndex}>
+      <article
+        className={`bill-page ${isLastPage ? "bill-page-final" : "bill-page-continuation"}`}
+        key={page.pageIndex}
+      >
         <BillHeader
           documentLabel={referenceDocumentLabel(projection.document.type)}
           firm={projection.firm}
@@ -266,65 +269,39 @@ function BillTotals({
     return { ...row, cgst, sgst };
   });
   const displayTotals = resolveReferenceBillTotals(projection);
-  const calculationRows: Array<{ label: string; rate?: string; valueCents: number }> = [
-    { label: "Total", valueCents: displayTotals.subtotalCents },
+  const taxableValueCents = projection.items.reduce((sum, item) => sum + item.taxableCents, 0);
+  const summaryRows: Array<{ label: string; valueCents: number }> = [
+    { label: "Gross Amount", valueCents: displayTotals.subtotalCents },
   ];
 
   if (displayTotals.discountCents !== 0) {
-    calculationRows.push({
-      label: "Less  :  Discount",
+    summaryRows.push({
+      label: "Less: Discount",
       valueCents: Math.abs(displayTotals.discountCents),
     });
   }
 
-  for (const row of taxLines) {
-    if (taxMode === "inter-state") {
-      calculationRows.push({
-        label: "Add  :  IGST",
-        rate: `${row.taxRateBps / 100}%`,
-        valueCents: row.taxCents,
-      });
-    } else {
-      calculationRows.push(
-        {
-          label: "Add  :  CGST",
-          rate: `${row.taxRateBps / 200}%`,
-          valueCents: row.cgst,
-        },
-        {
-          label: "Add  :  SGST",
-          rate: `${row.taxRateBps / 200}%`,
-          valueCents: row.sgst,
-        },
-      );
-    }
-  }
-
-  if (displayTotals.roundOffCents !== 0) {
-    calculationRows.push({
-      label: `${displayTotals.roundOffCents < 0 ? "Less" : "Add"}  :  Rounded Off`,
-      valueCents: Math.abs(displayTotals.roundOffCents),
-    });
-  }
+  summaryRows.push({ label: "Taxable Amount", valueCents: taxableValueCents });
 
   return (
     <section className="bill-calculation">
-      <div className="bill-calculation-row">
-        <div className="bill-calculation-labels">
-          {calculationRows.map((row) => (
-            <div className="contents" key={`${row.label}-${row.rate ?? "none"}`}>
-              <div>{row.label}</div>
-              <div>{row.rate ? "@" : ""}</div>
-              <div>{row.rate ?? ""}</div>
-            </div>
-          ))}
-        </div>
-        <div className="bill-calculation-values">
-          {calculationRows.map((row) => (
-            <div key={`${row.label}-${row.rate ?? "none"}`}>{moneyPlain(row.valueCents)}</div>
-          ))}
-        </div>
+      <div className="bill-calculation-summary">
+        {summaryRows.map((row) => (
+          <div className="bill-calculation-summary-row" key={row.label}>
+            <span className="bill-calculation-summary-label">{row.label}</span>
+            <strong className="bill-calculation-summary-value">{moneyPlain(row.valueCents)}</strong>
+          </div>
+        ))}
       </div>
+      <div className="bill-tax-summary-line">{formatTaxSummary(taxLines, taxMode)}</div>
+      {displayTotals.roundOffCents !== 0 ? (
+        <div className="bill-roundoff-row">
+          <span className="bill-roundoff-label">
+            {displayTotals.roundOffCents < 0 ? "Less: Round Off" : "Add: Round Off"}
+          </span>
+          <strong className="bill-roundoff-value">{moneyPlain(Math.abs(displayTotals.roundOffCents))}</strong>
+        </div>
+      ) : null}
       <div className="bill-grand-total">
         <div className="bill-grand-total-main">
           <span>Grand Total</span>
@@ -332,7 +309,6 @@ function BillTotals({
         </div>
         <div className="bill-grand-total-value">{moneyPlain(displayTotals.totalCents)}</div>
       </div>
-      <div className="bill-tax-summary-line">{formatTaxSummary(taxLines, taxMode)}</div>
       <div className="bill-words">{formatIndianCurrencyWords(displayTotals.totalCents)}</div>
     </section>
   );
@@ -448,11 +424,11 @@ function formatTaxSummary(
   rows: Array<HardwarePrintProjection["gstSummary"][number] & { cgst: number; sgst: number }>,
   taxMode: ReferenceTaxMode,
 ) {
-  if (!rows.length) return "No GST applicable.";
+  if (!rows.length) return "GST Details: No GST applicable.";
   return rows.map((row) => taxMode === "inter-state"
-    ? `Taxable Value @${row.taxRateBps / 100}% = ${moneyPlain(row.taxableCents)}  IGST = ${moneyPlain(row.taxCents)}`
-    : `Taxable Value @${row.taxRateBps / 100}% = ${moneyPlain(row.taxableCents)}  CGST = ${moneyPlain(row.cgst)}  SGST = ${moneyPlain(row.sgst)}`
-  ).join("   |   ");
+    ? `GST Details: Taxable Value @${row.taxRateBps / 100}% = ${moneyPlain(row.taxableCents)} | IGST ${row.taxRateBps / 100}% = ${moneyPlain(row.taxCents)}`
+    : `GST Details: Taxable Value @${row.taxRateBps / 100}% = ${moneyPlain(row.taxableCents)} | CGST ${row.taxRateBps / 200}% = ${moneyPlain(row.cgst)} | SGST ${row.taxRateBps / 200}% = ${moneyPlain(row.sgst)}`
+  ).join("   ");
 }
 
 export function formatPartyName(value: string) {
