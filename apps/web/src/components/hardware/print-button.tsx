@@ -2,7 +2,7 @@
 
 import {
   buildIsolatedPrintDocument,
-  openIsolatedBillPrint,
+  printCurrentBillPage,
 } from "@/features/hardware/printing";
 import { Printer } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -29,13 +29,10 @@ export function PrintButton({
 
   const printWhenReady = useCallback(async () => {
     setStatus(fileName
-      ? "Preparing bill-only A4 document..."
-      : "Preparing bill-only print...");
+      ? "Preparing this A4 bill for printing..."
+      : "Preparing this page for printing...");
 
-    const result = await openIsolatedBillPrint({
-      fileName,
-      sourceWindow: window,
-    });
+    const result = await printCurrentBillPage({ sourceWindow: window });
     setStatus(result.message);
   }, [fileName]);
 
@@ -49,7 +46,7 @@ export function PrintButton({
     <div className="flex flex-col items-end gap-1">
       <button
         className="inline-flex h-9 items-center gap-2 rounded-md bg-zinc-900 px-4 text-sm font-medium text-white"
-        data-testid="isolated-print-button"
+        data-testid="same-page-print-button"
         onClick={printWhenReady}
         type="button"
       >
