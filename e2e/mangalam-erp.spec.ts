@@ -103,6 +103,13 @@ test("customer, supplier, sale, purchase, Estimate Bill and isolated printing wo
   await page.waitForURL(/\/admin\/hardware\/print\//);
   await expect(page.getByText(/Estimate Bill/i).first()).toBeVisible();
 
+  const previewStyle = page.locator(".print-sheet > style");
+  await expect(previewStyle).toHaveCount(1);
+  await expect.poll(() => previewStyle.evaluate((style) => (style as HTMLStyleElement).nonce)).not.toBe("");
+  await expect(page.locator(".bill-page")).toHaveCSS("display", "flex");
+  await expect(page.locator(".bill-page")).toHaveCSS("border-top-style", "solid");
+  await expect(page.locator(".bill-items-table")).toHaveCSS("table-layout", "fixed");
+
   const [printPopup] = await Promise.all([
     page.waitForEvent("popup"),
     page.getByTestId("isolated-print-button").click(),
