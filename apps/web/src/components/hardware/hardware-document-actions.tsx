@@ -139,7 +139,12 @@ export function HardwareDocumentActions({
           </Button>
         ) : null}
         <Button asChild size="sm" variant="ghost">
-          <Link href={`/admin/hardware/print/${document.id}`} target="_blank"><Printer className="size-4" />{isEstimate ? "Print Estimate Bill" : "Print preview"}</Link>
+          <Link
+            data-testid="same-tab-print-preview-link"
+            href={`/admin/hardware/print/${document.id}`}
+          >
+            <Printer className="size-4" />{isEstimate ? "Print Estimate Bill" : "Print preview"}
+          </Link>
         </Button>
       </div>
       {error ? <p className="text-xs text-red-700" role="alert">{error}</p> : null}
