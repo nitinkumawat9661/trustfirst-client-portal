@@ -19,10 +19,16 @@ describe("reference-style A4 bill CSS", () => {
     expect(REFERENCE_BILL_PRINT_CSS).toContain("page-break-after: always");
   });
 
-  it("uses stylesheet-owned column widths and continuous item grid lines", () => {
+  it("uses seven customer-facing columns with continuous item grid lines", () => {
     expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-col-description { width: 45%; }");
-    expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-col-amount { width: 12%; }");
+    expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-col-hsn { width: 9%; }");
+    expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-col-quantity { width: 7%; }");
+    expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-col-rate { width: 12%; }");
+    expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-col-discount { width: 9%; }");
+    expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-col-amount { width: 13%; }");
+    expect(REFERENCE_BILL_PRINT_CSS).not.toContain(".bill-col-unit");
     expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-table-grid-lines");
-    expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-grid-line-7 { left: 88%; }");
+    expect(REFERENCE_BILL_PRINT_CSS).toContain(".bill-grid-line-6 { left: 87%; }");
+    expect(REFERENCE_BILL_PRINT_CSS).not.toContain(".bill-grid-line-7");
   });
 });

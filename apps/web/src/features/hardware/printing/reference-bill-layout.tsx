@@ -184,7 +184,6 @@ function BillItemsTable({ page, showCarryForward }: { page: BillPage; showCarryF
         <span className="bill-grid-line bill-grid-line-4" />
         <span className="bill-grid-line bill-grid-line-5" />
         <span className="bill-grid-line bill-grid-line-6" />
-        <span className="bill-grid-line bill-grid-line-7" />
       </div>
       <table className="bill-items-table">
         <colgroup>
@@ -192,7 +191,6 @@ function BillItemsTable({ page, showCarryForward }: { page: BillPage; showCarryF
           <col className="bill-col-description" />
           <col className="bill-col-hsn" />
           <col className="bill-col-quantity" />
-          <col className="bill-col-unit" />
           <col className="bill-col-rate" />
           <col className="bill-col-discount" />
           <col className="bill-col-amount" />
@@ -203,10 +201,9 @@ function BillItemsTable({ page, showCarryForward }: { page: BillPage; showCarryF
             <th className="bill-description-heading">Description of Goods</th>
             <th>HSN</th>
             <th>Qty.</th>
-            <th>Unit</th>
             <th>Rate</th>
-            <th>Disc.</th>
-            <th>Amount</th>
+            <th>Discount</th>
+            <th>Total Amount</th>
           </tr>
         </thead>
         <tbody>
@@ -218,7 +215,6 @@ function BillItemsTable({ page, showCarryForward }: { page: BillPage; showCarryF
               <td className="bill-number">{formatQuantity(page.carriedQuantity)}</td>
               <td />
               <td />
-              <td />
               <td className="bill-number">{moneyPlain(page.carriedAmountCents)}</td>
             </tr>
           ) : null}
@@ -228,14 +224,13 @@ function BillItemsTable({ page, showCarryForward }: { page: BillPage; showCarryF
               <td className="bill-description">{item.description}</td>
               <td className="bill-center">{item.hsnCode?.trim() || "-"}</td>
               <td className="bill-number">{formatQuantity(item.quantity)}</td>
-              <td className="bill-center">{item.unitCode ?? "-"}</td>
               <td className="bill-number">{moneyPlain(item.unitAmountCents)}</td>
               <td className="bill-number">{formatDiscount(item)}</td>
               <td className="bill-number">{moneyPlain(item.taxableCents)}</td>
             </tr>
           ))}
           <tr aria-hidden="true" className="bill-table-spacer">
-            <td /><td /><td /><td /><td /><td /><td /><td />
+            <td /><td /><td /><td /><td /><td /><td />
           </tr>
         </tbody>
         {showCarryForward ? (
@@ -245,7 +240,6 @@ function BillItemsTable({ page, showCarryForward }: { page: BillPage; showCarryF
               <td className="bill-number">Totals c/o</td>
               <td />
               <td className="bill-number">{formatQuantity(page.endingQuantity)}</td>
-              <td className="bill-center">Units</td>
               <td />
               <td />
               <td className="bill-number">{moneyPlain(page.endingAmountCents)}</td>
