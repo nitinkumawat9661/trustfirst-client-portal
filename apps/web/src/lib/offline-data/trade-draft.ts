@@ -33,13 +33,21 @@ export async function queueReservedTradeDraft(
     scope,
     storage: new LocalStorageOfflineQueueStorage(window.localStorage),
   });
-  const queueItem = await queueHardwareTradeDraft(queue, {
-    confirm: input.confirm ?? true,
-    documentNumber: reserved.formattedNumber,
-    input: input.input,
-    leaseId: reserved.leaseId,
-    leaseValue: reserved.value,
-    locationId: input.locationId ?? null,
-  });
-  return { documentNumber: reserved.formattedNumber, queueItem };
+  try {
+    const queueItem = await queueHardwareTradeDraft(queue, {
+      confirm: input.confirm ?? true,
+      documentNumber: reserved.formattedNumber,
+      input: input.input,
+      leaseId: reserved.leaseId,
+      leaseValue: reserved.value,
+      locationId: input.locationId ?? null,
+    });
+    return { documentNumber: reserved.formattedNumber, queueItem };
+  } catch (error) {
+    await dataStorage.restoreNumber(scope, reserved).catch(() => {
+      // Preserve the original queue error. A failed rollback is surfaced by the
+      // next lease/order validation instead of disguising the persistence fault.
+    });
+    throw error;
+  }
 }
