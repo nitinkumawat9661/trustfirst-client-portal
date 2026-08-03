@@ -31,6 +31,7 @@ export function PwaRegistration() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreenAvailable, setFullscreenAvailable] = useState(false);
   const [offlinePrepared, setOfflinePrepared] = useState(false);
   const isAdmin = pathname.startsWith("/admin");
 
@@ -45,6 +46,7 @@ export function PwaRegistration() {
     const standalone = window.matchMedia("(display-mode: standalone)").matches
       || Boolean((navigator as NavigatorWithStandalone).standalone);
     setInstalled(standalone);
+    setFullscreenAvailable(Boolean(document.fullscreenEnabled));
 
     function handleInstallPrompt(event: Event) {
       event.preventDefault();
@@ -110,12 +112,15 @@ export function PwaRegistration() {
         // PWA installation should not block the ERP if the browser refuses registration.
       });
 
-    window.addEventListener("online", warmOfflineRoutes);
+    const handleOnline = () => {
+      void warmOfflineRoutes();
+    };
+    window.addEventListener("online", handleOnline);
 
     return () => {
       cancelled = true;
       navigator.serviceWorker.removeEventListener("message", handleWorkerMessage);
-      window.removeEventListener("online", warmOfflineRoutes);
+      window.removeEventListener("online", handleOnline);
     };
   }, [warmOfflineRoutes]);
 
@@ -153,7 +158,7 @@ export function PwaRegistration() {
           Install ERP
         </button>
       ) : null}
-      {document.fullscreenEnabled ? (
+      {fullscreenAvailable ? (
         <button
           aria-label={fullscreen ? "Exit full screen" : "Enter full screen"}
           className="pointer-events-auto hidden h-10 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium shadow-lg sm:inline-flex"
