@@ -31,8 +31,8 @@ type OfflineDeviceRow = {
 
 type EnrollInput = {
   deviceKey: string;
-  label?: string | null;
-  metadata?: Record<string, unknown>;
+  label?: string | null | undefined;
+  metadata?: Record<string, unknown> | undefined;
 };
 
 const maxDeviceKeyLength = 160;
@@ -75,7 +75,7 @@ export class OfflineService {
     `;
     const device = rows[0];
     if (!device) {
-      throw new AppError({ code: "OFFLINE_DEVICE_ENROLLMENT_FAILED", message: "Offline device enrollment failed.", status: 500 });
+      throw new AppError({ code: "INTERNAL_ERROR", message: "Offline device enrollment failed.", status: 500 });
     }
 
     return {
@@ -138,7 +138,7 @@ export class OfflineService {
     ]);
 
     if (!tenant) {
-      throw new AppError({ code: "TENANT_NOT_FOUND", message: "Active tenant was not found.", status: 404 });
+      throw new AppError({ code: "NOT_FOUND", message: "Active tenant was not found.", status: 404 });
     }
 
     const generatedAt = new Date().toISOString();
@@ -208,7 +208,7 @@ export class OfflineService {
         AND "revokedAt" IS NULL
     `;
     if (updated !== 1) {
-      throw new AppError({ code: "OFFLINE_DEVICE_NOT_FOUND", message: "Enrolled offline device was not found.", status: 404 });
+      throw new AppError({ code: "NOT_FOUND", message: "Enrolled offline device was not found.", status: 404 });
     }
   }
 }
