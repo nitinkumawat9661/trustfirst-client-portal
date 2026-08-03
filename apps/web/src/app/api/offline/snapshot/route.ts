@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     const user = await requireCurrentUser();
     if (!user.activeTenantId) {
-      throw new AppError({ code: "TENANT_REQUIRED", message: "Select an active tenant before offline setup.", status: 400 });
+      throw new AppError({ code: "BAD_REQUEST", message: "Select an active tenant before offline setup.", status: 400 });
     }
     const deviceId = request.nextUrl.searchParams.get("deviceId");
     const service = new OfflineService(getPrisma());
