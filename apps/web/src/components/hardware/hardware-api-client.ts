@@ -1,7 +1,8 @@
 import {
+  offlinePurchaseLabel,
+  offlinePurchaseSeries,
   queueReservedTradeDraft,
   readActiveOfflineScope,
-  type OfflineNumberSeries,
 } from "@/lib/offline-data";
 
 type ApiEnvelope<T> = {
@@ -93,7 +94,7 @@ async function queueOfflinePurchase<T>(
   }
 
   const input = asRecord(body);
-  const series = purchaseSeries(input.type);
+  const series = offlinePurchaseSeries(input.type);
   if (!series) {
     return {
       message: "This purchase document type is not available offline.",
@@ -117,7 +118,7 @@ async function queueOfflinePurchase<T>(
     window.dispatchEvent(new CustomEvent("trustfirst:offline-queue-changed", {
       detail: {
         documentNumber: queued.documentNumber,
-        label: purchaseLabel(input.type),
+        label: offlinePurchaseLabel(input.type),
       },
     }));
     return {
@@ -134,20 +135,6 @@ async function queueOfflinePurchase<T>(
       ok: false,
     };
   }
-}
-
-function purchaseSeries(value: unknown): Exclude<OfflineNumberSeries, "HPR" | "HSR" | "MS/INV"> | null {
-  if (value === "PURCHASE_ENTRY") return "HPE";
-  if (value === "PURCHASE_ORDER") return "HPO";
-  if (value === "SUPPLIER_BILL") return "HSB";
-  return null;
-}
-
-function purchaseLabel(value: unknown) {
-  if (value === "PURCHASE_ENTRY") return "Purchase entry";
-  if (value === "PURCHASE_ORDER") return "Purchase order";
-  if (value === "SUPPLIER_BILL") return "Supplier bill";
-  return "Purchase document";
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
