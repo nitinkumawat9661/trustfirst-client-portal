@@ -1,10 +1,12 @@
 "use client";
 
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@trustfirst/ui";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Save, Trash2, WifiOff } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type KeyboardEvent, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { calculateEstimateMoneyTotals } from "@/lib/hardware/estimate-money";
+import { queueReservedTradeDraft } from "@/lib/offline-data";
+import type { OfflineQueueScope } from "@/lib/offline-queue";
 import type {
   HardwareEstimateEditData,
   HardwarePartySummary,
@@ -43,11 +45,13 @@ const emptyLine: EstimateLine = {
 export function EstimateBillForm({
   initialDocument,
   locations,
+  offlineScope,
   parties,
   products,
 }: {
   initialDocument?: HardwareEstimateEditData;
   locations: LocationOption[];
+  offlineScope?: OfflineQueueScope;
   parties: HardwarePartySummary[];
   products: HardwareProductSummary[];
 }) {
@@ -71,12 +75,14 @@ export function EstimateBillForm({
     })) ?? [{ ...emptyLine }],
   );
   const [locationId, setLocationId] = useState(initialDocument?.locationId ?? locations[0]?.id ?? "");
+  const [online, setOnline] = useState(true);
   const [paidAmount, setPaidAmount] = useState(
     initialDocument && initialDocument.paidAmountCents > 0
       ? String(initialDocument.paidAmountCents / 100)
       : "",
   );
   const [paymentMode, setPaymentMode] = useState(initialDocument?.paymentMode ?? "Cash");
+  const [queuedDocumentNumber, setQueuedDocumentNumber] = useState<string | null>(null);
   const [referenceNumber, setReferenceNumber] = useState(initialDocument?.referenceNumber ?? "");
   const [taxMode, setTaxMode] = useState<"intra-state" | "inter-state">(initialDocument?.taxMode ?? "intra-state");
   const [saving, setSaving] = useState(false);
@@ -91,6 +97,17 @@ export function EstimateBillForm({
     (line) => Number.isInteger(Number(line.quantity)) && Number(line.unitRate) > 0,
   );
   const totals = useMemo(() => calculateEstimateTotals(completedLines), [completedLines]);
+
+  useEffect(() => {
+    const updateOnlineState = () => setOnline(navigator.onLine);
+    updateOnlineState();
+    window.addEventListener("online", updateOnlineState);
+    window.addEventListener("offline", updateOnlineState);
+    return () => {
+      window.removeEventListener("online", updateOnlineState);
+      window.removeEventListener("offline", updateOnlineState);
+    };
+  }, []);
 
   function updateLine(index: number, patch: Partial<EstimateLine>) {
     setLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, ...patch } : line));
@@ -155,7 +172,7 @@ export function EstimateBillForm({
     focusProduct(action.nextIndex);
   }
 
-  async function resolveCustomer() {
+  async function resolveCustomer(allowCreate: boolean) {
     if (customerId) return customerId;
     const normalizedName = normalizeProductSearchText(customerName);
     if (!normalizedName) throw new Error("Enter or select a customer name.");
@@ -167,6 +184,9 @@ export function EstimateBillForm({
       setCustomerName(exact.name);
       return exact.id;
     }
+    if (!allowCreate) {
+      throw new Error("Offline Estimate Bills require an existing saved customer. Connect once to create this customer, then retry offline.");
+    }
     const created = await postHardwareJson<HardwarePartySummary>("/api/hardware/parties/quick-add", {
       name: customerName.trim(),
       role: "customer",
@@ -176,6 +196,62 @@ export function EstimateBillForm({
     setCustomerId(created.data.id);
     setCustomerName(created.data.name);
     return created.data.id;
+  }
+
+  function buildTradeInput(resolvedCustomerId: string) {
+    const items = completedLines.map((line) => {
+      const grossCents = Math.round(Number(line.quantity) * Number(line.unitRate) * 100);
+      const discountCents = Math.round(grossCents * Number(line.discountPercent) / 100);
+      return {
+        discountCents,
+        metadata: {
+          discountPercent: Number(line.discountPercent) || 0,
+          hsnCode: line.hsnCode || null,
+          unitCode: line.unitCode || null,
+        },
+        productId: line.productId,
+        quantity: Number(line.quantity),
+        taxRateBps: Math.round(Number(line.gstRate) * 100),
+        unitAmountCents: Math.round(Number(line.unitRate) * 100),
+      };
+    });
+    const metadata = {
+      customerAddress: customerAddress.trim() || null,
+      documentDate,
+      estimateBill: true,
+      gstFilingEligible: completedLines.some((line) => Number(line.gstRate) > 0),
+      paidAmountCents: paidAmount.trim()
+        ? Math.round(Number(paidAmount) * 100)
+        : paymentMode === "Credit"
+          ? 0
+          : totals.totalCents,
+      paymentMode,
+      referenceNumber: referenceNumber.trim() || null,
+      stockMovementOnConfirm: true,
+      taxMode,
+    };
+    return {
+      currency: "INR",
+      customerId: resolvedCustomerId,
+      items,
+      metadata,
+      roundOffCents: totals.roundOffCents,
+      type: "SALES_QUOTATION",
+    };
+  }
+
+  async function queueOfflineEstimate(tradeInput: Record<string, unknown>) {
+    if (!offlineScope) {
+      throw new Error("Offline setup is unavailable for this session. Reopen the Estimate Bill from the installed ERP app while online.");
+    }
+    const queued = await queueReservedTradeDraft(offlineScope, {
+      confirm: true,
+      input: tradeInput,
+      locationId,
+      series: "HSQ",
+    });
+    setQueuedDocumentNumber(queued.documentNumber);
+    window.dispatchEvent(new CustomEvent("trustfirst:offline-queue-changed"));
   }
 
   async function saveAndPrint() {
@@ -190,43 +266,21 @@ export function EstimateBillForm({
 
     setSaving(true);
     try {
-      const resolvedCustomerId = await resolveCustomer();
-      const items = completedLines.map((line) => {
-        const grossCents = Math.round(Number(line.quantity) * Number(line.unitRate) * 100);
-        const discountCents = Math.round(grossCents * Number(line.discountPercent) / 100);
-        return {
-          discountCents,
-          metadata: {
-            discountPercent: Number(line.discountPercent) || 0,
-            hsnCode: line.hsnCode || null,
-            unitCode: line.unitCode || null,
-          },
-          productId: line.productId,
-          quantity: Number(line.quantity),
-          taxRateBps: Math.round(Number(line.gstRate) * 100),
-          unitAmountCents: Math.round(Number(line.unitRate) * 100),
-        };
-      });
-      const metadata = {
-        customerAddress: customerAddress.trim() || null,
-        documentDate,
-        estimateBill: true,
-        gstFilingEligible: completedLines.some((line) => Number(line.gstRate) > 0),
-        paidAmountCents,
-        paymentMode,
-        referenceNumber: referenceNumber.trim() || null,
-        stockMovementOnConfirm: true,
-        taxMode,
-      };
+      const offlineNow = !navigator.onLine;
+      if (initialDocument && offlineNow) {
+        throw new Error("Existing Estimate Bills cannot be edited offline yet. Reconnect before updating this bill.");
+      }
+      const resolvedCustomerId = await resolveCustomer(!offlineNow);
+      const tradeInput = buildTradeInput(resolvedCustomerId);
+      if (offlineNow) {
+        await queueOfflineEstimate(tradeInput);
+        return;
+      }
+
       const payload = {
-        currency: "INR",
-        customerId: resolvedCustomerId,
+        ...tradeInput,
         idempotencyKey,
-        items,
         locationId,
-        metadata,
-        roundOffCents: totals.roundOffCents,
-        type: "SALES_QUOTATION",
       };
       const result = initialDocument
         ? await patchHardwareJson<{ id: string }>(
@@ -254,6 +308,12 @@ export function EstimateBillForm({
 
   return (
     <div className="space-y-5">
+      {!online && !initialDocument ? (
+        <p className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+          <WifiOff className="size-4 shrink-0" />
+          Offline mode: this device will use its next reserved HSQ number and sync the final sale automatically after reconnection.
+        </p>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>{initialDocument ? `Edit ${initialDocument.documentNumber}` : "Estimate Bill details"}</CardTitle>
@@ -421,10 +481,27 @@ export function EstimateBillForm({
         </CardContent>
       </Card>
 
+      {queuedDocumentNumber ? (
+        <p className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
+          Estimate Bill <strong>{queuedDocumentNumber}</strong> is saved safely on this device. It will sync automatically in number order after the internet returns. Server print/PDF becomes available after sync.
+        </p>
+      ) : null}
       {serverError ? <p className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">{serverError}</p> : null}
-      <div className="sticky bottom-3 flex justify-end rounded-md border border-border bg-background/95 p-3 shadow-lg backdrop-blur">
-        <Button disabled={saving} onClick={saveAndPrint} type="button">
-          <Save className="size-4" />{saving ? "Saving..." : initialDocument ? "Update and print Estimate Bill" : "Save and print Estimate Bill"}
+      <div className="sticky bottom-3 flex items-center justify-between gap-3 rounded-md border border-border bg-background/95 p-3 shadow-lg backdrop-blur">
+        <span className="text-xs text-muted-foreground">
+          {!online && !initialDocument ? "Reserved offline HSQ numbering active" : "Online validation and posting active"}
+        </span>
+        <Button disabled={saving || Boolean(queuedDocumentNumber)} onClick={saveAndPrint} type="button">
+          <Save className="size-4" />
+          {saving
+            ? "Saving..."
+            : queuedDocumentNumber
+              ? `${queuedDocumentNumber} queued`
+              : initialDocument
+                ? "Update and print Estimate Bill"
+                : online
+                  ? "Save and print Estimate Bill"
+                  : "Save Estimate Bill offline"}
         </Button>
       </div>
     </div>

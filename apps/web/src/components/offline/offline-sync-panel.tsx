@@ -119,18 +119,24 @@ export function OfflineSyncPanel({ scope }: OfflineSyncPanelProps) {
       setOnline(false);
     }
 
+    function handleQueueChanged() {
+      void refresh();
+    }
+
     function handleUpdateAvailable() {
       setUpdateAvailable(true);
     }
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    window.addEventListener("trustfirst:offline-queue-changed", handleQueueChanged);
     window.addEventListener("trustfirst:pwa-update-available", handleUpdateAvailable);
 
     return () => {
       window.clearTimeout(initialRefresh);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("trustfirst:offline-queue-changed", handleQueueChanged);
       window.removeEventListener("trustfirst:pwa-update-available", handleUpdateAvailable);
     };
   }, [refresh, refreshEnrolledSnapshot, refreshOfflineSetupState, sync]);

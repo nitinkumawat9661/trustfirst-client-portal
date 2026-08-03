@@ -22,7 +22,12 @@ export default async function NewHardwareQuotationPage() {
         eyebrow="Sales"
         title="New Estimate Bill"
       />
-      <EstimateBillForm locations={locations} parties={parties} products={products} />
+      <EstimateBillForm
+        locations={locations}
+        offlineScope={context}
+        parties={parties}
+        products={products}
+      />
     </div>
   );
 }
