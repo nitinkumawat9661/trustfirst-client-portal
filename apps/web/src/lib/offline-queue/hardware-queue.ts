@@ -5,6 +5,14 @@ type HardwareDraftOptions = {
   conflict?: ConflictDetectionContract;
 };
 
+export function queueHardwareTradeDraft(
+  queue: OfflineMutationQueue,
+  payload: Record<string, unknown>,
+  options: HardwareDraftOptions = {},
+) {
+  return queue.add(withConflict({ action: "hardware.tradeDraft.create", payload }, options));
+}
+
 export function queueHardwareSaleDraft(
   queue: OfflineMutationQueue,
   payload: Record<string, unknown>,

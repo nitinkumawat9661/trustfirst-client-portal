@@ -11,6 +11,7 @@ const forbiddenPayloadKeys = [
 ];
 
 const allowedActions = new Set<QueuedMutationAction>([
+  "hardware.tradeDraft.create",
   "hardware.saleDraft.create",
   "hardware.purchaseDraft.create",
   "hardware.customerDraft.create",
