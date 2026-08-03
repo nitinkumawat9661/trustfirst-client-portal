@@ -120,7 +120,7 @@ async function queueOfflinePurchase<T>(
         documentNumber: queued.documentNumber,
         id: queued.queueItem.id,
         offlineQueued: true,
-      } as T,
+      } as unknown as T,
       ok: true,
     };
   } catch (error) {
