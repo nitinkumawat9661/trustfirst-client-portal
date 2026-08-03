@@ -91,7 +91,7 @@ export function assertAdditiveMigration(migrationName) {
     [/\bDROP\s+(?:TABLE|COLUMN|SCHEMA|TYPE|INDEX|CONSTRAINT)\b/iu, "DROP operation"],
     [/\bTRUNCATE\b/iu, "TRUNCATE operation"],
     [/\bDELETE\s+FROM\b/iu, "DELETE operation"],
-    [/\bUPDATE\s+(?:\"[^\"]+\"|[A-Za-z0-9_.]+)\s+SET\b/iu, "data UPDATE operation"],
+    [/\bUPDATE\s+(?:"[^"]+"|[A-Za-z0-9_.]+)\s+SET\b/iu, "data UPDATE operation"],
     [/\bALTER\s+TABLE\b[\s\S]*?\bDROP\b/iu, "ALTER TABLE DROP operation"],
     [/\bALTER\s+TABLE\b[\s\S]*?\bRENAME\b/iu, "ALTER TABLE RENAME operation"],
     [/\bALTER\s+TABLE\b[\s\S]*?\bALTER\s+COLUMN\b/iu, "ALTER COLUMN operation"],
