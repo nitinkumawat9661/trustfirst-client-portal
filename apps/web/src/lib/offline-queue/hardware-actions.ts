@@ -10,6 +10,7 @@ export type QueueEndpointContract = {
 export function endpointForQueuedMutation(item: QueuedMutation): QueueEndpointContract {
   switch (item.action) {
     case "hardware.tradeDraft.create":
+    case "hardware.quickPosSale.create":
       return { body: { item }, method: "POST", path: "/api/offline/sync", requiresDeviceAuth: true };
     case "hardware.saleDraft.create":
       return { body: item.payload, method: "POST", path: "/api/hardware/sales" };
