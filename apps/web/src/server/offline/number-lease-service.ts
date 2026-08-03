@@ -93,6 +93,7 @@ export class OfflineNumberLeaseService {
         AND "deviceId" = ${deviceId}
         AND "status" = 'ACTIVE'
         AND "revokedAt" IS NULL
+        AND "expiresAt" > NOW()
         AND "nextValue" <= "endValue"
       ORDER BY "series" ASC, "createdAt" DESC
     `;
