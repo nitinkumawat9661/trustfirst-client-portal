@@ -52,14 +52,27 @@ export class PrismaHardwareTradeRepository {
 
   async countByPrefix(tenantId: string, prefix: string, year: number) {
     const documentPrefix = `${prefix}-${year}-`;
-    const documents = await this.prisma.hardwareTradeDocument.findMany({
-      select: { documentNumber: true },
-      where: { documentNumber: { startsWith: documentPrefix }, tenantId },
-    });
-    const documentMaximum = documents.reduce((maximum, document) => {
-      const value = Number(document.documentNumber.slice(documentPrefix.length));
-      return Number.isSafeInteger(value) ? Math.max(maximum, value) : maximum;
-    }, 0);
+    const delegate = this.prisma.hardwareTradeDocument as typeof this.prisma.hardwareTradeDocument & {
+      count?: typeof this.prisma.hardwareTradeDocument.count;
+      findMany?: typeof this.prisma.hardwareTradeDocument.findMany;
+    };
+
+    let documentMaximum = typeof delegate.count === "function"
+      ? await delegate.count({ where: { documentNumber: { startsWith: documentPrefix }, tenantId } })
+      : 0;
+
+    if (typeof delegate.findMany === "function") {
+      const documents = await delegate.findMany({
+        select: { documentNumber: true },
+        where: { documentNumber: { startsWith: documentPrefix }, tenantId },
+      });
+      documentMaximum = documents.reduce((maximum, document) => {
+        const value = Number(document.documentNumber.slice(documentPrefix.length));
+        return Number.isSafeInteger(value) ? Math.max(maximum, value) : maximum;
+      }, documentMaximum);
+    }
+
+    if (typeof this.prisma.$queryRaw !== "function") return documentMaximum;
     const leaseRows = await this.prisma.$queryRaw<Array<{ maximum: number }>>`
       SELECT COALESCE(MAX("endValue"), 0)::int AS "maximum"
       FROM "OfflineDocumentLease"
