@@ -1,3 +1,4 @@
+export * from "./active-scope";
 export * from "./estimate-preview";
 export * from "./setup";
 export * from "./storage";
