@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import {
   formatOfflineAddress,
   IndexedDbOfflineDataStorage,
-  type OfflineEstimatePrintPreview,
+  type OfflineEstimatePrintPreview as OfflineEstimatePrintPreviewData,
   type OfflineSnapshot,
 } from "@/lib/offline-data";
 import type { QueuedMutation } from "@/lib/offline-queue";
@@ -14,7 +14,7 @@ import { OfflineEstimatePrintPreview } from "./offline-estimate-print-preview";
 const queueKeyPrefix = "trustfirst.offlineQueue.v1.";
 
 export function OfflineEstimatePrintManager() {
-  const [preview, setPreview] = useState<OfflineEstimatePrintPreview | null>(null);
+  const [preview, setPreview] = useState<OfflineEstimatePrintPreviewData | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -98,7 +98,7 @@ function isQueuedEstimate(value: unknown): value is QueuedMutation {
 function buildEstimatePreview(
   item: QueuedMutation,
   snapshot: OfflineSnapshot,
-): OfflineEstimatePrintPreview | null {
+): OfflineEstimatePrintPreviewData | null {
   const payload = asRecord(item.payload);
   const input = asRecord(payload.input);
   const metadata = asRecord(input.metadata);
