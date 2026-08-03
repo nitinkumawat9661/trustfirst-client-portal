@@ -23,8 +23,10 @@ export type ConsumedOfflineNumber = {
 
 export type OfflineDataStorage = {
   consumeNumber(scope: OfflineDataScope, series: OfflineNumberSeries): Promise<ConsumedOfflineNumber>;
+  consumeNumbers(scope: OfflineDataScope, series: OfflineNumberSeries[]): Promise<ConsumedOfflineNumber[]>;
   read(scope: OfflineDataScope): Promise<OfflineDataRecord | null>;
   restoreNumber(scope: OfflineDataScope, consumed: ConsumedOfflineNumber): Promise<void>;
+  restoreNumbers(scope: OfflineDataScope, consumed: ConsumedOfflineNumber[]): Promise<void>;
   write(scope: OfflineDataScope, enrollment: OfflineDeviceEnrollment, snapshot: OfflineSnapshot): Promise<void>;
 };
 
@@ -61,8 +63,13 @@ export class IndexedDbOfflineDataStorage implements OfflineDataStorage {
   }
 
   async consumeNumber(scope: OfflineDataScope, series: OfflineNumberSeries) {
+    return (await this.consumeNumbers(scope, [series]))[0] as ConsumedOfflineNumber;
+  }
+
+  async consumeNumbers(scope: OfflineDataScope, series: OfflineNumberSeries[]) {
+    if (series.length === 0) return [];
     const database = await openDatabase();
-    return new Promise<ConsumedOfflineNumber>((resolve, reject) => {
+    return new Promise<ConsumedOfflineNumber[]>((resolve, reject) => {
       const transaction = database.transaction(storeName, "readwrite");
       const objectStore = transaction.objectStore(storeName);
       const request = objectStore.get(offlineDataScopeKey(scope));
@@ -74,7 +81,7 @@ export class IndexedDbOfflineDataStorage implements OfflineDataStorage {
           return;
         }
         try {
-          const consumed = consumeFromRecord(record, series);
+          const consumed = consumeManyFromRecord(record, series);
           const put = objectStore.put(record);
           put.onerror = () => reject(put.error);
           put.onsuccess = () => resolve(consumed);
@@ -86,6 +93,11 @@ export class IndexedDbOfflineDataStorage implements OfflineDataStorage {
   }
 
   async restoreNumber(scope: OfflineDataScope, consumed: ConsumedOfflineNumber) {
+    await this.restoreNumbers(scope, [consumed]);
+  }
+
+  async restoreNumbers(scope: OfflineDataScope, consumed: ConsumedOfflineNumber[]) {
+    if (consumed.length === 0) return;
     const database = await openDatabase();
     return new Promise<void>((resolve, reject) => {
       const transaction = database.transaction(storeName, "readwrite");
@@ -99,7 +111,7 @@ export class IndexedDbOfflineDataStorage implements OfflineDataStorage {
           return;
         }
         try {
-          restoreInRecord(record, consumed);
+          restoreManyInRecord(record, consumed);
           const put = objectStore.put(record);
           put.onerror = () => reject(put.error);
           put.onsuccess = () => resolve();
@@ -131,15 +143,23 @@ export class MemoryOfflineDataStorage implements OfflineDataStorage {
   }
 
   async consumeNumber(scope: OfflineDataScope, series: OfflineNumberSeries) {
+    return (await this.consumeNumbers(scope, [series]))[0] as ConsumedOfflineNumber;
+  }
+
+  async consumeNumbers(scope: OfflineDataScope, series: OfflineNumberSeries[]) {
     const record = await this.read(scope);
     if (!record) throw new Error("Offline device data is not set up on this device.");
-    return consumeFromRecord(record, series);
+    return consumeManyFromRecord(record, series);
   }
 
   async restoreNumber(scope: OfflineDataScope, consumed: ConsumedOfflineNumber) {
+    await this.restoreNumbers(scope, [consumed]);
+  }
+
+  async restoreNumbers(scope: OfflineDataScope, consumed: ConsumedOfflineNumber[]) {
     const record = await this.read(scope);
     if (!record) throw new Error("Offline device data is not set up on this device.");
-    restoreInRecord(record, consumed);
+    restoreManyInRecord(record, consumed);
   }
 }
 
@@ -163,6 +183,37 @@ export function formatOfflineNumber(lease: OfflineNumberLease, value: number) {
   return lease.format === "invoice"
     ? `${lease.prefix}/${lease.financialYear}/${String(value).padStart(5, "0")}`
     : `${lease.prefix}-${lease.financialYear}-${String(value).padStart(4, "0")}`;
+}
+
+function consumeManyFromRecord(
+  record: OfflineDataRecord,
+  series: OfflineNumberSeries[],
+): ConsumedOfflineNumber[] {
+  const working = cloneRecordForLeaseMutation(record);
+  const consumed = series.map((value) => consumeFromRecord(working, value));
+  commitLeaseMutation(record, working);
+  return consumed;
+}
+
+function restoreManyInRecord(record: OfflineDataRecord, consumed: ConsumedOfflineNumber[]) {
+  const working = cloneRecordForLeaseMutation(record);
+  for (const value of [...consumed].reverse()) restoreInRecord(working, value);
+  commitLeaseMutation(record, working);
+}
+
+function cloneRecordForLeaseMutation(record: OfflineDataRecord): OfflineDataRecord {
+  return {
+    ...record,
+    snapshot: {
+      ...record.snapshot,
+      numberLeases: record.snapshot.numberLeases.map((lease) => ({ ...lease })),
+    },
+  };
+}
+
+function commitLeaseMutation(target: OfflineDataRecord, source: OfflineDataRecord) {
+  target.snapshot.numberLeases = source.snapshot.numberLeases;
+  target.updatedAt = source.updatedAt;
 }
 
 function consumeFromRecord(record: OfflineDataRecord, series: OfflineNumberSeries): ConsumedOfflineNumber {
