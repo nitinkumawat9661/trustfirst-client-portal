@@ -288,13 +288,7 @@ export function EstimateBillForm({
             payload,
           )
         : await postHardwareJson<{ id: string }>("/api/hardware/sales", payload);
-      if (!result.ok) {
-        if (!initialDocument && isConnectivityFailure(result.message)) {
-          await queueOfflineEstimate(tradeInput);
-          return;
-        }
-        throw new Error(result.message);
-      }
+      if (!result.ok) throw new Error(result.message);
 
       if (!initialDocument) {
         const confirmed = await postHardwareJson<{ id: string }>(
@@ -516,10 +510,6 @@ export function EstimateBillForm({
 
 function isPlainEnter(event: KeyboardEvent<HTMLElement>) {
   return event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
-}
-
-function isConnectivityFailure(message: string) {
-  return message === "The server could not be reached. Check the connection and retry.";
 }
 
 function formatRateBps(value: number) {
