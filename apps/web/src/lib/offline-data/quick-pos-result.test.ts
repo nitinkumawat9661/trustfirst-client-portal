@@ -33,4 +33,15 @@ describe("queued Quick POS result", () => {
       paidAmountCents: 5001,
     }, numbers)).toThrow("Paid amount cannot exceed bill total");
   });
+
+  it("rejects malformed totals and incomplete reserved-number results", () => {
+    expect(() => buildQueuedQuickPosResult({
+      clientTotalCents: 50.5,
+      paidAmountCents: 0,
+    }, numbers)).toThrow("Counter sale total is invalid");
+    expect(() => buildQueuedQuickPosResult({
+      clientTotalCents: 5000,
+      paidAmountCents: 0,
+    }, { ...numbers, invoiceNumber: "" })).toThrow("Reserved counter-sale numbers are incomplete");
+  });
 });
