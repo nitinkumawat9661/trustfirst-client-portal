@@ -1,3 +1,4 @@
+import { IndexedDbOfflineDataStorage } from "../offline-data";
 import { endpointForQueuedMutation } from "./hardware-actions";
 import type { OfflineMutationQueue } from "./queue";
 import type { QueuedMutation, QueuedMutationExecutor, SyncResult } from "./types";
@@ -24,34 +25,55 @@ export async function processOfflineQueue(queue: OfflineMutationQueue, executor:
 export async function fetchQueuedMutation(item: QueuedMutation): Promise<SyncResult> {
   try {
     const endpoint = endpointForQueuedMutation(item);
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      "x-idempotency-key": item.idempotencyKey,
+      "x-offline-queue-id": item.id,
+    };
+
+    if (endpoint.requiresDeviceAuth) {
+      const record = await new IndexedDbOfflineDataStorage().read({ tenantId: item.tenantId, userId: item.userId });
+      if (!record) {
+        return {
+          conflict: item.conflict ?? { resolvedBy: "manual" },
+          error: "Offline device setup is missing on this browser.",
+          ok: false,
+          retryable: false,
+        };
+      }
+      headers["x-offline-device-id"] = record.enrollment.deviceId;
+      headers["x-offline-device-token"] = record.enrollment.token;
+    }
+
     const response = await fetch(endpoint.path, {
       body: JSON.stringify(endpoint.body),
       credentials: "same-origin",
-      headers: {
-        "content-type": "application/json",
-        "x-idempotency-key": item.idempotencyKey,
-        "x-offline-queue-id": item.id,
-      },
+      headers,
       method: endpoint.method,
     });
+    if (response.ok) return { ok: true };
 
-    if (response.ok) {
-      return { ok: true };
-    }
-
+    const message = await readErrorMessage(response);
     if (response.status === 409) {
       return {
         conflict: item.conflict ?? { resolvedBy: "manual" },
-        error: "Sync conflict detected.",
+        error: message ?? "Sync conflict detected.",
         ok: false,
         retryable: false,
       };
     }
-
+    if ([400, 401, 403, 404, 422].includes(response.status)) {
+      return {
+        conflict: item.conflict ?? { resolvedBy: "manual" },
+        error: message ?? "Queued action was rejected and requires review.",
+        ok: false,
+        retryable: false,
+      };
+    }
     return {
-      error: `Sync failed with status ${response.status}.`,
+      error: message ?? `Sync failed with status ${response.status}.`,
       ok: false,
-      retryable: response.status >= 500 || response.status === 429,
+      retryable: response.status >= 500 || response.status === 408 || response.status === 425 || response.status === 429,
     };
   } catch (error) {
     return {
@@ -59,5 +81,16 @@ export async function fetchQueuedMutation(item: QueuedMutation): Promise<SyncRes
       ok: false,
       retryable: true,
     };
+  }
+}
+
+async function readErrorMessage(response: Response) {
+  try {
+    const body = await response.json() as { error?: { message?: unknown } };
+    return typeof body.error?.message === "string" && body.error.message.trim()
+      ? body.error.message.trim()
+      : null;
+  } catch {
+    return null;
   }
 }
