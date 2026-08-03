@@ -7,6 +7,7 @@ import {
   offlineSnapshotSchemaVersion,
   type OfflineDataScope,
   type OfflineDeviceEnrollment,
+  type OfflineNumberLease,
   type OfflineSetupSummary,
   type OfflineSnapshot,
 } from "./types";
@@ -63,6 +64,11 @@ async function downloadAndStoreSnapshot(
   enrollment: OfflineDeviceEnrollment,
   storage: OfflineDataStorage,
 ) {
+  await requestJson<OfflineNumberLease[]>("/api/offline/leases/reserve", {
+    body: JSON.stringify({ deviceId: enrollment.deviceId }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
   const snapshot = await requestJson<OfflineSnapshot>(
     `/api/offline/snapshot?deviceId=${encodeURIComponent(enrollment.deviceId)}`,
     { cache: "no-store" },
