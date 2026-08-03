@@ -1,17 +1,20 @@
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const deployScript = fs.readFileSync(
-  fileURLToPath(new URL("../../../../../scripts/deploy-production-ci.sh", import.meta.url)),
-  "utf8",
-);
-const migrationSafety = fs.readFileSync(
-  fileURLToPath(new URL("../../../../../scripts/migration-safety.mjs", import.meta.url)),
-  "utf8",
-);
+const deployScriptPath = fileURLToPath(new URL("../../../../../scripts/deploy-production-ci.sh", import.meta.url));
+const migrationSafetyPath = fileURLToPath(new URL("../../../../../scripts/migration-safety.mjs", import.meta.url));
+const deployScript = fs.readFileSync(deployScriptPath, "utf8");
+const migrationSafety = fs.readFileSync(migrationSafetyPath, "utf8");
 
 describe("production additive migration deployment", () => {
+  it("parses the migration safety module before deployment", () => {
+    const syntax = spawnSync(process.execPath, ["--check", migrationSafetyPath], { encoding: "utf8" });
+    expect(`${syntax.stdout}${syntax.stderr}`).toBe("");
+    expect(syntax.status).toBe(0);
+  });
+
   it("captures migration status without triggering the global ERR trap", () => {
     expect(deployScript).toContain('if MIGRATION_STATUS="$(npm exec --workspace @trustfirst/database -- prisma migrate status');
     expect(deployScript).not.toContain('set +e\nMIGRATION_STATUS="$(npm exec');
