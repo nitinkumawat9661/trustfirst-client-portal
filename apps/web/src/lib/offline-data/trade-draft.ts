@@ -1,7 +1,5 @@
 import {
-  IndexedDbOfflineQueueStorage,
   LocalStorageOfflineQueueStorage,
-  MigratingOfflineQueueStorage,
   OfflineMutationQueue,
   queueHardwareTradeDraft,
   type OfflineQueueScope,
@@ -33,10 +31,7 @@ export async function queueReservedTradeDraft(
   const reserved = await dataStorage.consumeNumber(scope, input.series);
   const queue = new OfflineMutationQueue({
     scope,
-    storage: new MigratingOfflineQueueStorage(
-      new IndexedDbOfflineQueueStorage(),
-      new LocalStorageOfflineQueueStorage(window.localStorage),
-    ),
+    storage: new LocalStorageOfflineQueueStorage(window.localStorage),
   });
   const queueItem = await queueHardwareTradeDraft(queue, {
     confirm: input.confirm ?? true,
