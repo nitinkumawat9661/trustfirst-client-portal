@@ -112,6 +112,21 @@ describe("offline data storage", () => {
     });
   });
 
+  it("restores only the most recently consumed reserved number", async () => {
+    const storage = new MemoryOfflineDataStorage();
+    await storage.write(scope, enrollment(), snapshot());
+
+    const first = await storage.consumeNumber(scope, "HSQ");
+    await storage.restoreNumber(scope, first);
+    await expect(storage.consumeNumber(scope, "HSQ")).resolves.toEqual(first);
+
+    const second = await storage.consumeNumber(scope, "HSQ");
+    await expect(storage.restoreNumber(scope, first)).rejects.toThrow(
+      "cannot be restored after a later number has been consumed",
+    );
+    await storage.restoreNumber(scope, second);
+  });
+
   it("rejects a snapshot from another tenant before writing local data", async () => {
     const storage = new MemoryOfflineDataStorage();
     await expect(storage.write(
