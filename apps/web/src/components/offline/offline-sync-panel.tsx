@@ -1,8 +1,14 @@
 "use client";
 
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, cn } from "@trustfirst/ui";
-import { AlertTriangle, CheckCircle2, RefreshCw, Trash2, Wifi, WifiOff, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Database, HardDriveDownload, RefreshCw, Trash2, Wifi, WifiOff, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  readOfflineSetupSummary,
+  refreshOfflineDeviceSnapshot,
+  setupOfflineDevice,
+  type OfflineSetupSummary,
+} from "@/lib/offline-data";
 import {
   getOfflineBannerState,
   getSyncStatusViewModel,
@@ -35,6 +41,9 @@ export function OfflineSyncPanel({ scope }: OfflineSyncPanelProps) {
   const [snapshot, setSnapshot] = useState<QueueSnapshot>(emptySnapshot);
   const [syncing, setSyncing] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [offlineSetup, setOfflineSetup] = useState<OfflineSetupSummary | null>(null);
+  const [preparingOffline, setPreparingOffline] = useState(false);
+  const [offlineSetupError, setOfflineSetupError] = useState<string | null>(null);
 
   const queue = useMemo(() => {
     if (typeof window === "undefined") return null;
@@ -51,6 +60,24 @@ export function OfflineSyncPanel({ scope }: OfflineSyncPanelProps) {
     setSnapshot(nextSnapshot);
   }, [queue]);
 
+  const refreshOfflineSetupState = useCallback(async () => {
+    try {
+      setOfflineSetup(await readOfflineSetupSummary(scope));
+    } catch {
+      setOfflineSetup(null);
+    }
+  }, [scope]);
+
+  const refreshEnrolledSnapshot = useCallback(async () => {
+    if (!navigator.onLine) return;
+    try {
+      const summary = await refreshOfflineDeviceSnapshot(scope);
+      if (summary) setOfflineSetup(summary);
+    } catch {
+      // A stale snapshot remains usable when an automatic refresh cannot complete.
+    }
+  }, [scope]);
+
   const sync = useCallback(async () => {
     if (!queue || !navigator.onLine) return;
     setSyncing(true);
@@ -62,14 +89,30 @@ export function OfflineSyncPanel({ scope }: OfflineSyncPanelProps) {
     }
   }, [queue, refresh]);
 
+  const prepareOffline = useCallback(async () => {
+    if (!navigator.onLine) return;
+    setPreparingOffline(true);
+    setOfflineSetupError(null);
+    try {
+      const summary = await setupOfflineDevice(scope);
+      setOfflineSetup(summary);
+    } catch (error) {
+      setOfflineSetupError(error instanceof Error ? error.message : "Offline device setup failed.");
+    } finally {
+      setPreparingOffline(false);
+    }
+  }, [scope]);
+
   useEffect(() => {
     const initialRefresh = window.setTimeout(() => {
       void refresh();
+      void refreshOfflineSetupState();
     }, 0);
 
     function handleOnline() {
       setOnline(true);
       void sync();
+      void refreshEnrolledSnapshot();
     }
 
     function handleOffline() {
@@ -90,7 +133,7 @@ export function OfflineSyncPanel({ scope }: OfflineSyncPanelProps) {
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("trustfirst:pwa-update-available", handleUpdateAvailable);
     };
-  }, [refresh, sync]);
+  }, [refresh, refreshEnrolledSnapshot, refreshOfflineSetupState, sync]);
 
   const banner = getOfflineBannerState(online);
   const status = getSyncStatusViewModel(snapshot, online);
@@ -126,6 +169,42 @@ export function OfflineSyncPanel({ scope }: OfflineSyncPanelProps) {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="rounded-md border border-border p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <Database className="size-4" />
+                  Offline device data
+                </p>
+                {offlineSetup ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Ready · {offlineSetup.productCount} products · {offlineSetup.partyCount} parties · {offlineSetup.stockRowCount} stock rows
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Run once while online to enroll this device and save its tenant data.
+                  </p>
+                )}
+              </div>
+              {offlineSetup ? <Badge>ready</Badge> : <Badge>not set</Badge>}
+            </div>
+            {offlineSetup ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Snapshot: {new Date(offlineSetup.generatedAt).toLocaleString("en-IN")}
+              </p>
+            ) : null}
+            {offlineSetupError ? <p className="mt-2 text-xs text-destructive">{offlineSetupError}</p> : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button disabled={!online || preparingOffline} onClick={prepareOffline} size="sm" type="button">
+                <HardDriveDownload className={cn("size-4", preparingOffline && "animate-pulse")} />
+                {preparingOffline ? "Preparing…" : offlineSetup ? "Refresh offline data" : "Setup offline device"}
+              </Button>
+              <Button disabled={!online || preparingOffline || !offlineSetup} onClick={refreshEnrolledSnapshot} size="sm" type="button" variant="outline">
+                <RefreshCw className="size-4" />
+                Update snapshot
+              </Button>
+            </div>
+          </div>
           <div className="grid grid-cols-3 gap-2 text-center text-xs">
             <Metric label="Pending" value={snapshot.pending + snapshot.syncing} />
             <Metric label="Failed" value={snapshot.failed} />
@@ -169,7 +248,7 @@ export function OfflineSyncPanel({ scope }: OfflineSyncPanelProps) {
           type="button"
         >
           {online ? <Wifi className="size-4 text-emerald-700 dark:text-emerald-300" /> : <WifiOff className="size-4 text-amber-700 dark:text-amber-300" />}
-          <span>Sync</span>
+          <span>{offlineSetup ? "Offline ready" : "Sync"}</span>
           {snapshot.pending + snapshot.failed > 0 ? <Badge>{snapshot.pending + snapshot.failed}</Badge> : null}
         </button>
       )}
