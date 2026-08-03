@@ -24,6 +24,10 @@ CANARY_NAME="${PM2_APP_NAME}-canary"
 DEPLOY_ROOT="$HOME/.trustfirst-deploy"
 RELEASE_DIR="$DEPLOY_ROOT/releases/$DEPLOY_SHA"
 BACKUP_DIR="$DEPLOY_ROOT/backups/$(date +%Y%m%d%H%M%S)-$DEPLOY_SHA"
+DB_BACKUP_DIR="$DEPLOY_ROOT/database-backups"
+DB_BACKUP_FILE=""
+DB_BACKUP_SHA=""
+MIGRATIONS_APPLIED=0
 SWITCHED=0
 RESTORING=0
 CAFE_BEFORE=""
@@ -57,6 +61,13 @@ need_sudo() {
 safe_trustfirst_path() {
   case "$1" in
     /var/www/trustfirst-client-portal|/var/www/trustfirst-client-portal/*|/var/www/trustfirst-client-portal-releases/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+safe_database_backup_path() {
+  case "$1" in
+    "$DB_BACKUP_DIR"/*.dump) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -110,6 +121,30 @@ start_production() {
     --time \
     --update-env \
     -- run start --workspace @trustfirst/web -- --hostname 127.0.0.1
+}
+
+create_database_backup() {
+  command -v pg_dump >/dev/null 2>&1 || fail "pg_dump is required before applying database migrations."
+  command -v pg_restore >/dev/null 2>&1 || fail "pg_restore is required to verify the database backup."
+  command -v sha256sum >/dev/null 2>&1 || fail "sha256sum is required to verify the database backup."
+
+  local stamp pg_url
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  pg_url="${DATABASE_URL%%\?*}"
+  mkdir -p "$DB_BACKUP_DIR"
+  chmod 700 "$DB_BACKUP_DIR"
+  DB_BACKUP_FILE="$DB_BACKUP_DIR/${stamp}-${DEPLOY_SHA}.dump"
+  safe_database_backup_path "$DB_BACKUP_FILE" || fail "Refusing unsafe database backup path."
+
+  log "Creating isolated TrustFirst database backup before additive migrations."
+  pg_dump --format=custom --no-owner --no-acl --file "$DB_BACKUP_FILE" "$pg_url"
+  [ -s "$DB_BACKUP_FILE" ] || fail "Database backup file is empty."
+  pg_restore --list "$DB_BACKUP_FILE" >/dev/null
+  chmod 600 "$DB_BACKUP_FILE"
+  DB_BACKUP_SHA="$(sha256sum "$DB_BACKUP_FILE" | awk '{print $1}')"
+  [ -n "$DB_BACKUP_SHA" ] || fail "Database backup checksum could not be generated."
+  log "Database backup verified: $DB_BACKUP_FILE"
+  log "Database backup SHA-256: $DB_BACKUP_SHA"
 }
 
 resolve_pm2_mapping() {
@@ -345,6 +380,10 @@ restore_previous_release() {
     log "Production was not switched; existing release remains unchanged."
   fi
 
+  if [ "$MIGRATIONS_APPLIED" = "1" ]; then
+    log "Additive database migrations remain applied for backward compatibility."
+    log "Verified pre-migration database backup retained at: $DB_BACKUP_FILE"
+  fi
   cleanup_staging
   exit "$original_status"
 }
@@ -438,14 +477,33 @@ npm ci --include=dev
 npm run deploy:env
 npm run db:generate
 
-set +e
-MIGRATION_STATUS="$(npm exec --workspace @trustfirst/database -- prisma migrate status --schema prisma/schema.prisma 2>&1)"
-MIGRATION_EXIT=$?
-set -e
+if MIGRATION_STATUS="$(npm exec --workspace @trustfirst/database -- prisma migrate status --schema prisma/schema.prisma 2>&1)"; then
+  MIGRATION_EXIT=0
+else
+  MIGRATION_EXIT=$?
+fi
 printf '%s\n' "$MIGRATION_STATUS"
-[ "$MIGRATION_EXIT" -eq 0 ] || fail "Prisma migration status failed. No migration was applied."
+
 if printf '%s\n' "$MIGRATION_STATUS" | grep -qi "Following migrations have not yet been applied"; then
-  fail "Pending database migrations detected. Deployment stopped without applying them."
+  log "Pending migrations detected. Verifying additive-only SQL before applying."
+  create_database_backup
+  npm run deploy:migration-check -- --apply
+  MIGRATIONS_APPLIED=1
+
+  if POST_MIGRATION_STATUS="$(npm exec --workspace @trustfirst/database -- prisma migrate status --schema prisma/schema.prisma 2>&1)"; then
+    POST_MIGRATION_EXIT=0
+  else
+    POST_MIGRATION_EXIT=$?
+  fi
+  printf '%s\n' "$POST_MIGRATION_STATUS"
+  [ "$POST_MIGRATION_EXIT" -eq 0 ] || fail "Prisma migration verification failed after apply."
+  if printf '%s\n' "$POST_MIGRATION_STATUS" | grep -qi "Following migrations have not yet been applied"; then
+    fail "Database still reports pending migrations after apply."
+  fi
+elif [ "$MIGRATION_EXIT" -ne 0 ]; then
+  fail "Prisma migration status failed. No migration was applied."
+else
+  npm run deploy:migration-check
 fi
 
 npm run build
@@ -518,5 +576,11 @@ log "Deployed commit: $DEPLOY_SHA"
 log "Production port: $PRODUCTION_PORT"
 log "Canary port: $CANARY_PORT"
 log "CafeLuxe untouched: yes"
-log "Database migrations applied: no"
+if [ "$MIGRATIONS_APPLIED" = "1" ]; then
+  log "Database migrations applied: yes (verified additive only)"
+  log "Database backup retained: $DB_BACKUP_FILE"
+  log "Database backup SHA-256: $DB_BACKUP_SHA"
+else
+  log "Database migrations applied: no"
+fi
 log "Seed/data mutation performed: no"
