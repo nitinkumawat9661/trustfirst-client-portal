@@ -1,4 +1,6 @@
 import { DocumentSequenceKind, type Prisma } from "@trustfirst/database";
+import { AppError } from "../domain/errors";
+import { offlineQuickPosInvoiceNumber } from "../offline/offline-number-context";
 
 type AllocateDocumentNumberInput = {
   financialYear?: string;
@@ -14,6 +16,25 @@ export async function allocateDocumentNumber(
 ) {
   const financialYear =
     input.financialYear ?? financialYearForDate(input.occurredAt ?? new Date());
+  const prefix = normalizePrefix(input.prefix);
+  const reserved = input.kind === DocumentSequenceKind.INVOICE
+    ? offlineQuickPosInvoiceNumber({ financialYear, prefix, tenantId: input.tenantId })
+    : null;
+
+  if (reserved) {
+    const existing = await tx.invoice.findFirst({
+      select: { id: true },
+      where: { invoiceNumber: reserved, tenantId: input.tenantId },
+    });
+    if (existing) {
+      throw new AppError({
+        code: "CONFLICT",
+        message: `Reserved invoice number ${reserved} is already in use.`,
+        status: 409,
+      });
+    }
+    return reserved;
+  }
 
   const sequence = await tx.documentSequence.upsert({
     create: {
@@ -39,7 +60,7 @@ export async function allocateDocumentNumber(
     },
   });
 
-  return `${normalizePrefix(input.prefix)}/${financialYear}/${sequence.lastValue
+  return `${prefix}/${financialYear}/${sequence.lastValue
     .toString()
     .padStart(5, "0")}`;
 }

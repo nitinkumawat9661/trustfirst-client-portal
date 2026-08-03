@@ -112,6 +112,78 @@ describe("offline data storage", () => {
     });
   });
 
+  it("consumes and restores the HSO plus MS/INV pair atomically", async () => {
+    const storage = new MemoryOfflineDataStorage();
+    const numberLeases: OfflineSnapshot["numberLeases"] = [
+      {
+        deviceId: "device_1",
+        endValue: 210,
+        expiresAt: "2027-02-01T00:00:00.000Z",
+        financialYear: "2026",
+        format: "trade",
+        id: "lease_hso",
+        nextValue: 201,
+        prefix: "HSO",
+        series: "HSO",
+        startValue: 201,
+      },
+      {
+        deviceId: "device_1",
+        endValue: 310,
+        expiresAt: "2027-02-01T00:00:00.000Z",
+        financialYear: "2026-27",
+        format: "invoice",
+        id: "lease_invoice",
+        nextValue: 301,
+        prefix: "MS/INV",
+        series: "MS/INV",
+        startValue: 301,
+      },
+    ];
+    await storage.write(scope, enrollment(), snapshot({ numberLeases }));
+
+    const consumed = await storage.consumeNumbers(scope, ["HSO", "MS/INV"]);
+    expect(consumed).toEqual([
+      {
+        formattedNumber: "HSO-2026-0201",
+        leaseId: "lease_hso",
+        series: "HSO",
+        value: 201,
+      },
+      {
+        formattedNumber: "MS/INV/2026-27/00301",
+        leaseId: "lease_invoice",
+        series: "MS/INV",
+        value: 301,
+      },
+    ]);
+
+    await storage.restoreNumbers(scope, consumed);
+    await expect(storage.consumeNumbers(scope, ["HSO", "MS/INV"])).resolves.toEqual(consumed);
+  });
+
+  it("does not consume the first number when a grouped lease is missing", async () => {
+    const storage = new MemoryOfflineDataStorage();
+    await storage.write(scope, enrollment(), snapshot({
+      numberLeases: [{
+        deviceId: "device_1",
+        endValue: 210,
+        expiresAt: "2027-02-01T00:00:00.000Z",
+        financialYear: "2026",
+        format: "trade",
+        id: "lease_hso",
+        nextValue: 201,
+        prefix: "HSO",
+        series: "HSO",
+        startValue: 201,
+      }],
+    }));
+
+    await expect(storage.consumeNumbers(scope, ["HSO", "MS/INV"]))
+      .rejects.toThrow("No reserved offline MS/INV numbers remain");
+    await expect(storage.consumeNumber(scope, "HSO")).resolves.toMatchObject({ value: 201 });
+  });
+
   it("restores only the most recently consumed reserved number", async () => {
     const storage = new MemoryOfflineDataStorage();
     await storage.write(scope, enrollment(), snapshot());
