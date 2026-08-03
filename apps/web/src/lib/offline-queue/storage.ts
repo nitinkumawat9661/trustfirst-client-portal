@@ -16,10 +16,49 @@ export class MemoryOfflineQueueStorage implements OfflineQueueStorage {
   }
 }
 
+/**
+ * Browser-compatible queue storage.
+ *
+ * The existing constructor is retained for backwards compatibility, while
+ * IndexedDB becomes the primary store whenever the browser supports it. The
+ * small localStorage copy remains a fallback and migration source so pending
+ * mutations are not lost during the upgrade.
+ */
 export class LocalStorageOfflineQueueStorage implements OfflineQueueStorage {
+  private readonly indexedDb = typeof indexedDB === "undefined"
+    ? null
+    : new IndexedDbOfflineQueueStorage();
+
   constructor(private readonly storage: Pick<Storage, "getItem" | "setItem">) {}
 
   async read(scopeKey: string) {
+    const fallbackItems = this.readLocal(scopeKey);
+    if (!this.indexedDb) return fallbackItems;
+
+    try {
+      const indexedItems = await this.indexedDb.read(scopeKey);
+      if (indexedItems.length > 0) return indexedItems;
+      if (fallbackItems.length > 0) {
+        await this.indexedDb.write(scopeKey, fallbackItems);
+      }
+      return fallbackItems;
+    } catch {
+      return fallbackItems;
+    }
+  }
+
+  async write(scopeKey: string, items: QueuedMutation[]) {
+    this.storage.setItem(scopeKey, JSON.stringify(items));
+    if (!this.indexedDb) return;
+
+    try {
+      await this.indexedDb.write(scopeKey, items);
+    } catch {
+      // The localStorage copy remains available when IndexedDB is blocked.
+    }
+  }
+
+  private readLocal(scopeKey: string) {
     const raw = this.storage.getItem(scopeKey);
     if (!raw) return [];
 
@@ -29,10 +68,6 @@ export class LocalStorageOfflineQueueStorage implements OfflineQueueStorage {
     } catch {
       return [];
     }
-  }
-
-  async write(scopeKey: string, items: QueuedMutation[]) {
-    this.storage.setItem(scopeKey, JSON.stringify(items));
   }
 }
 
