@@ -34,6 +34,18 @@ function snapshot(overrides: Partial<OfflineSnapshot> = {}): OfflineSnapshot {
     documents: { purchases: [], quotations: [], sales: [] },
     generatedAt: "2026-08-03T12:01:00.000Z",
     locations: [{ code: "MAIN", id: "location_1", name: "Main" }],
+    numberLeases: [{
+      deviceId: "device_1",
+      endValue: 110,
+      expiresAt: "2027-02-01T00:00:00.000Z",
+      financialYear: "2026",
+      format: "trade",
+      id: "lease_1",
+      nextValue: 101,
+      prefix: "HSQ",
+      series: "HSQ",
+      startValue: 101,
+    }],
     permissions: ["hardware.catalog.read"],
     products: [{
       barcode: null,
@@ -76,9 +88,27 @@ describe("offline data storage", () => {
     expect(record?.snapshot.products[0]?.name).toBe("Basin");
     expect(offlineSetupSummary(record)).toMatchObject({
       deviceId: "device_1",
+      numberLeaseCount: 1,
       partyCount: 1,
       productCount: 1,
       stockRowCount: 1,
+    });
+  });
+
+  it("consumes reserved series numbers in order and preserves local progress on refresh", async () => {
+    const storage = new MemoryOfflineDataStorage();
+    await storage.write(scope, enrollment(), snapshot());
+
+    await expect(storage.consumeNumber(scope, "HSQ")).resolves.toEqual({
+      formattedNumber: "HSQ-2026-0101",
+      leaseId: "lease_1",
+      series: "HSQ",
+      value: 101,
+    });
+    await storage.write(scope, enrollment(), snapshot());
+    await expect(storage.consumeNumber(scope, "HSQ")).resolves.toMatchObject({
+      formattedNumber: "HSQ-2026-0102",
+      value: 102,
     });
   });
 
