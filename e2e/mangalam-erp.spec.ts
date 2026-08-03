@@ -135,7 +135,12 @@ test("customer, supplier, sale, purchase, Estimate Bill and same-page printing w
   await expect(page.locator(".bill-words")).toContainText(/^Rupees .+ Only$/);
 
   await page.emulateMedia({ media: "print" });
-  await expect(page.locator(".no-print")).toHaveCSS("display", "none");
+  const nonPrintElements = page.locator(".no-print");
+  const nonPrintCount = await nonPrintElements.count();
+  expect(nonPrintCount).toBeGreaterThan(0);
+  for (let index = 0; index < nonPrintCount; index += 1) {
+    await expect(nonPrintElements.nth(index)).toHaveCSS("display", "none");
+  }
   await expect(page.locator(".bill-page")).toHaveCSS("display", "flex");
   const stickyHeader = page.locator("header.sticky");
   if (await stickyHeader.count()) await expect(stickyHeader.first()).toHaveCSS("display", "none");
