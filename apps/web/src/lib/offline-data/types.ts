@@ -1,4 +1,4 @@
-export const offlineSnapshotSchemaVersion = 1 as const;
+export const offlineSnapshotSchemaVersion = 2 as const;
 
 export type OfflineDataScope = {
   tenantId: string;
@@ -11,6 +11,29 @@ export type OfflineDeviceEnrollment = OfflineDataScope & {
   enrolledAt: string;
   label: string | null;
   token: string;
+};
+
+export type OfflineNumberSeries =
+  | "HPE"
+  | "HPO"
+  | "HPR"
+  | "HSB"
+  | "HSO"
+  | "HSQ"
+  | "HSR"
+  | "MS/INV";
+
+export type OfflineNumberLease = {
+  deviceId: string;
+  endValue: number;
+  expiresAt: string;
+  financialYear: string;
+  format: "invoice" | "trade";
+  id: string;
+  nextValue: number;
+  prefix: string;
+  series: OfflineNumberSeries;
+  startValue: number;
 };
 
 export type OfflineSnapshotProduct = {
@@ -72,6 +95,7 @@ export type OfflineSnapshot = OfflineDataScope & {
   };
   generatedAt: string;
   locations: Array<{ code: string; id: string; name: string }>;
+  numberLeases: OfflineNumberLease[];
   permissions: string[];
   products: OfflineSnapshotProduct[];
   schemaVersion: typeof offlineSnapshotSchemaVersion;
@@ -101,6 +125,7 @@ export type OfflineSnapshot = OfflineDataScope & {
 export type OfflineSetupSummary = {
   deviceId: string;
   generatedAt: string;
+  numberLeaseCount: number;
   productCount: number;
   partyCount: number;
   stockRowCount: number;
