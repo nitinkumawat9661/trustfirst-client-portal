@@ -1,3 +1,10 @@
+import {
+  offlinePurchaseLabel,
+  offlinePurchaseSeries,
+  queueReservedTradeDraft,
+  readActiveOfflineScope,
+} from "../../lib/offline-data";
+
 type ApiEnvelope<T> = {
   data?: T;
   error?: { message?: string };
@@ -46,6 +53,9 @@ async function sendHardwareJson<T>(
   method: "PATCH" | "POST",
   body?: unknown,
 ): Promise<HardwareApiResult<T>> {
+  const offlinePurchase = await queueOfflinePurchase<T>(endpoint, method, body);
+  if (offlinePurchase) return offlinePurchase;
+
   try {
     const response = await fetch(endpoint, {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -66,6 +76,71 @@ async function sendHardwareJson<T>(
       ok: false,
     };
   }
+}
+
+async function queueOfflinePurchase<T>(
+  endpoint: string,
+  method: "PATCH" | "POST",
+  body: unknown,
+): Promise<HardwareApiResult<T> | null> {
+  if (
+    typeof window === "undefined" ||
+    typeof navigator === "undefined" ||
+    navigator.onLine ||
+    method !== "POST" ||
+    endpoint !== "/api/hardware/purchases"
+  ) {
+    return null;
+  }
+
+  const input = asRecord(body);
+  const series = offlinePurchaseSeries(input.type);
+  if (!series) {
+    return {
+      message: "This purchase document type is not available offline.",
+      ok: false,
+    };
+  }
+  const scope = readActiveOfflineScope();
+  if (!scope) {
+    return {
+      message: "Offline tenant scope is unavailable. Reopen the installed ERP while online once, then retry.",
+      ok: false,
+    };
+  }
+
+  try {
+    const queued = await queueReservedTradeDraft(scope, {
+      confirm: false,
+      input,
+      series,
+    });
+    window.dispatchEvent(new CustomEvent("trustfirst:offline-queue-changed", {
+      detail: {
+        documentNumber: queued.documentNumber,
+        label: offlinePurchaseLabel(input.type),
+      },
+    }));
+    return {
+      data: {
+        documentNumber: queued.documentNumber,
+        id: queued.queueItem.id,
+        offlineQueued: true,
+      } as unknown as T,
+      ok: true,
+    };
+  } catch (error) {
+    return {
+      message: error instanceof Error ? error.message : "Purchase could not be saved to the offline queue.",
+      ok: false,
+    };
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
 async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {

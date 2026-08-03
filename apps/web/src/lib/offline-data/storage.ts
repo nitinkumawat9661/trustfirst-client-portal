@@ -24,6 +24,7 @@ export type ConsumedOfflineNumber = {
 export type OfflineDataStorage = {
   consumeNumber(scope: OfflineDataScope, series: OfflineNumberSeries): Promise<ConsumedOfflineNumber>;
   read(scope: OfflineDataScope): Promise<OfflineDataRecord | null>;
+  restoreNumber(scope: OfflineDataScope, consumed: ConsumedOfflineNumber): Promise<void>;
   write(scope: OfflineDataScope, enrollment: OfflineDeviceEnrollment, snapshot: OfflineSnapshot): Promise<void>;
 };
 
@@ -83,6 +84,31 @@ export class IndexedDbOfflineDataStorage implements OfflineDataStorage {
       };
     });
   }
+
+  async restoreNumber(scope: OfflineDataScope, consumed: ConsumedOfflineNumber) {
+    const database = await openDatabase();
+    return new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(storeName, "readwrite");
+      const objectStore = transaction.objectStore(storeName);
+      const request = objectStore.get(offlineDataScopeKey(scope));
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const record = validateRecord(request.result, scope);
+        if (!record) {
+          reject(new Error("Offline device data is not set up on this device."));
+          return;
+        }
+        try {
+          restoreInRecord(record, consumed);
+          const put = objectStore.put(record);
+          put.onerror = () => reject(put.error);
+          put.onsuccess = () => resolve();
+        } catch (error) {
+          reject(error);
+        }
+      };
+    });
+  }
 }
 
 export class MemoryOfflineDataStorage implements OfflineDataStorage {
@@ -108,6 +134,12 @@ export class MemoryOfflineDataStorage implements OfflineDataStorage {
     const record = await this.read(scope);
     if (!record) throw new Error("Offline device data is not set up on this device.");
     return consumeFromRecord(record, series);
+  }
+
+  async restoreNumber(scope: OfflineDataScope, consumed: ConsumedOfflineNumber) {
+    const record = await this.read(scope);
+    if (!record) throw new Error("Offline device data is not set up on this device.");
+    restoreInRecord(record, consumed);
   }
 }
 
@@ -147,6 +179,21 @@ function consumeFromRecord(record: OfflineDataRecord, series: OfflineNumberSerie
     series,
     value,
   };
+}
+
+function restoreInRecord(record: OfflineDataRecord, consumed: ConsumedOfflineNumber) {
+  const lease = record.snapshot.numberLeases.find(
+    (candidate) => candidate.id === consumed.leaseId && candidate.series === consumed.series,
+  );
+  if (!lease) throw new Error("Reserved offline number lease could not be restored.");
+  if (lease.nextValue !== consumed.value + 1) {
+    throw new Error("Reserved offline number cannot be restored after a later number has been consumed.");
+  }
+  if (formatOfflineNumber(lease, consumed.value) !== consumed.formattedNumber) {
+    throw new Error("Reserved offline number does not match its local lease.");
+  }
+  lease.nextValue = consumed.value;
+  record.updatedAt = new Date().toISOString();
 }
 
 function mergeLocalLeaseProgress(previous: OfflineSnapshot | null, incoming: OfflineSnapshot): OfflineSnapshot {
