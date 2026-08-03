@@ -28,6 +28,16 @@ type HardwareTradeDocumentWithRelations = Prisma.HardwareTradeDocumentGetPayload
   include: typeof tradeInclude;
 }>;
 
+type NumberingDocumentDelegate = {
+  count?: (input: {
+    where: { documentNumber: { startsWith: string }; tenantId: string };
+  }) => Promise<number>;
+  findMany?: (input: {
+    select: { documentNumber: true };
+    where: { documentNumber: { startsWith: string }; tenantId: string };
+  }) => Promise<Array<{ documentNumber: string }>>;
+};
+
 export class PrismaHardwareTradeRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -52,10 +62,7 @@ export class PrismaHardwareTradeRepository {
 
   async countByPrefix(tenantId: string, prefix: string, year: number) {
     const documentPrefix = `${prefix}-${year}-`;
-    const delegate = this.prisma.hardwareTradeDocument as typeof this.prisma.hardwareTradeDocument & {
-      count?: typeof this.prisma.hardwareTradeDocument.count;
-      findMany?: typeof this.prisma.hardwareTradeDocument.findMany;
-    };
+    const delegate = this.prisma.hardwareTradeDocument as unknown as NumberingDocumentDelegate;
 
     let documentMaximum = typeof delegate.count === "function"
       ? await delegate.count({ where: { documentNumber: { startsWith: documentPrefix }, tenantId } })
@@ -66,7 +73,7 @@ export class PrismaHardwareTradeRepository {
         select: { documentNumber: true },
         where: { documentNumber: { startsWith: documentPrefix }, tenantId },
       });
-      documentMaximum = documents.reduce((maximum, document) => {
+      documentMaximum = documents.reduce((maximum: number, document: { documentNumber: string }) => {
         const value = Number(document.documentNumber.slice(documentPrefix.length));
         return Number.isSafeInteger(value) ? Math.max(maximum, value) : maximum;
       }, documentMaximum);
