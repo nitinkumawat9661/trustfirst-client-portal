@@ -28,6 +28,16 @@ type HardwareTradeDocumentWithRelations = Prisma.HardwareTradeDocumentGetPayload
   include: typeof tradeInclude;
 }>;
 
+type NumberingDocumentDelegate = {
+  count?: (input: {
+    where: { documentNumber: { startsWith: string }; tenantId: string };
+  }) => Promise<number>;
+  findMany?: (input: {
+    select: { documentNumber: true };
+    where: { documentNumber: { startsWith: string }; tenantId: string };
+  }) => Promise<Array<{ documentNumber: string }>>;
+};
+
 export class PrismaHardwareTradeRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -50,10 +60,34 @@ export class PrismaHardwareTradeRepository {
     });
   }
 
-  countByPrefix(tenantId: string, prefix: string, year: number) {
-    return this.prisma.hardwareTradeDocument.count({
-      where: { documentNumber: { startsWith: `${prefix}-${year}-` }, tenantId },
-    });
+  async countByPrefix(tenantId: string, prefix: string, year: number) {
+    const documentPrefix = `${prefix}-${year}-`;
+    const delegate = this.prisma.hardwareTradeDocument as unknown as NumberingDocumentDelegate;
+
+    let documentMaximum = typeof delegate.count === "function"
+      ? await delegate.count({ where: { documentNumber: { startsWith: documentPrefix }, tenantId } })
+      : 0;
+
+    if (typeof delegate.findMany === "function") {
+      const documents = await delegate.findMany({
+        select: { documentNumber: true },
+        where: { documentNumber: { startsWith: documentPrefix }, tenantId },
+      });
+      documentMaximum = documents.reduce((maximum: number, document: { documentNumber: string }) => {
+        const value = Number(document.documentNumber.slice(documentPrefix.length));
+        return Number.isSafeInteger(value) ? Math.max(maximum, value) : maximum;
+      }, documentMaximum);
+    }
+
+    if (typeof this.prisma.$queryRaw !== "function") return documentMaximum;
+    const leaseRows = await this.prisma.$queryRaw<Array<{ maximum: number }>>`
+      SELECT COALESCE(MAX("endValue"), 0)::int AS "maximum"
+      FROM "OfflineDocumentLease"
+      WHERE "tenantId" = ${tenantId}
+        AND "series" = ${prefix}
+        AND "financialYear" = ${String(year)}
+    `;
+    return Math.max(documentMaximum, leaseRows[0]?.maximum ?? 0);
   }
 
   findByNumber(tenantId: string, documentNumber: string) {
@@ -137,9 +171,9 @@ export class PrismaHardwareTradeRepository {
       });
       await tx.auditEvent.create({
         data: {
-            action: AuditAction.HARDWARE_STOCK_MOVED,
-            actorId: input.actorId,
-            metadata: { movements: input.movements.length, tradeAction: "confirmed" },
+          action: AuditAction.HARDWARE_STOCK_MOVED,
+          actorId: input.actorId,
+          metadata: { movements: input.movements.length, tradeAction: "confirmed" },
           targetId: document.id,
           targetType: "HardwareTradeDocument",
           tenantId: input.tenantId,

@@ -1,18 +1,28 @@
 import type {
   OfflineDataScope,
   OfflineDeviceEnrollment,
+  OfflineNumberLease,
+  OfflineNumberSeries,
   OfflineSetupSummary,
   OfflineSnapshot,
 } from "./types";
 
-type OfflineDataRecord = {
+export type OfflineDataRecord = {
   enrollment: OfflineDeviceEnrollment;
   scopeKey: string;
   snapshot: OfflineSnapshot;
   updatedAt: string;
 };
 
+export type ConsumedOfflineNumber = {
+  formattedNumber: string;
+  leaseId: string;
+  series: OfflineNumberSeries;
+  value: number;
+};
+
 export type OfflineDataStorage = {
+  consumeNumber(scope: OfflineDataScope, series: OfflineNumberSeries): Promise<ConsumedOfflineNumber>;
   read(scope: OfflineDataScope): Promise<OfflineDataRecord | null>;
   write(scope: OfflineDataScope, enrollment: OfflineDeviceEnrollment, snapshot: OfflineSnapshot): Promise<void>;
 };
@@ -34,17 +44,43 @@ export class IndexedDbOfflineDataStorage implements OfflineDataStorage {
   async write(scope: OfflineDataScope, enrollment: OfflineDeviceEnrollment, snapshot: OfflineSnapshot) {
     assertScope(enrollment, scope, "Offline device enrollment");
     assertScope(snapshot, scope, "Offline snapshot");
+    const existing = await this.read(scope);
     const database = await openDatabase();
     const record: OfflineDataRecord = {
       enrollment,
       scopeKey: offlineDataScopeKey(scope),
-      snapshot,
+      snapshot: mergeLocalLeaseProgress(existing?.snapshot ?? null, snapshot),
       updatedAt: new Date().toISOString(),
     };
     await new Promise<void>((resolve, reject) => {
       const request = database.transaction(storeName, "readwrite").objectStore(storeName).put(record);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve();
+    });
+  }
+
+  async consumeNumber(scope: OfflineDataScope, series: OfflineNumberSeries) {
+    const database = await openDatabase();
+    return new Promise<ConsumedOfflineNumber>((resolve, reject) => {
+      const transaction = database.transaction(storeName, "readwrite");
+      const objectStore = transaction.objectStore(storeName);
+      const request = objectStore.get(offlineDataScopeKey(scope));
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const record = validateRecord(request.result, scope);
+        if (!record) {
+          reject(new Error("Offline device data is not set up on this device."));
+          return;
+        }
+        try {
+          const consumed = consumeFromRecord(record, series);
+          const put = objectStore.put(record);
+          put.onerror = () => reject(put.error);
+          put.onsuccess = () => resolve(consumed);
+        } catch (error) {
+          reject(error);
+        }
+      };
     });
   }
 }
@@ -59,12 +95,19 @@ export class MemoryOfflineDataStorage implements OfflineDataStorage {
   async write(scope: OfflineDataScope, enrollment: OfflineDeviceEnrollment, snapshot: OfflineSnapshot) {
     assertScope(enrollment, scope, "Offline device enrollment");
     assertScope(snapshot, scope, "Offline snapshot");
+    const existing = await this.read(scope);
     this.records.set(offlineDataScopeKey(scope), {
       enrollment,
       scopeKey: offlineDataScopeKey(scope),
-      snapshot,
+      snapshot: mergeLocalLeaseProgress(existing?.snapshot ?? null, snapshot),
       updatedAt: new Date().toISOString(),
     });
+  }
+
+  async consumeNumber(scope: OfflineDataScope, series: OfflineNumberSeries) {
+    const record = await this.read(scope);
+    if (!record) throw new Error("Offline device data is not set up on this device.");
+    return consumeFromRecord(record, series);
   }
 }
 
@@ -77,9 +120,44 @@ export function offlineSetupSummary(record: OfflineDataRecord | null): OfflineSe
   return {
     deviceId: record.enrollment.deviceId,
     generatedAt: record.snapshot.generatedAt,
+    numberLeaseCount: record.snapshot.numberLeases.length,
     partyCount: record.snapshot.customers.length + record.snapshot.suppliers.length,
     productCount: record.snapshot.products.length,
     stockRowCount: record.snapshot.stock.length,
+  };
+}
+
+export function formatOfflineNumber(lease: OfflineNumberLease, value: number) {
+  return lease.format === "invoice"
+    ? `${lease.prefix}/${lease.financialYear}/${String(value).padStart(5, "0")}`
+    : `${lease.prefix}-${lease.financialYear}-${String(value).padStart(4, "0")}`;
+}
+
+function consumeFromRecord(record: OfflineDataRecord, series: OfflineNumberSeries): ConsumedOfflineNumber {
+  const lease = record.snapshot.numberLeases
+    .filter((candidate) => candidate.series === series && candidate.nextValue <= candidate.endValue)
+    .sort((left, right) => left.nextValue - right.nextValue)[0];
+  if (!lease) throw new Error(`No reserved offline ${series} numbers remain. Connect to the internet to reserve more.`);
+  const value = lease.nextValue;
+  lease.nextValue += 1;
+  record.updatedAt = new Date().toISOString();
+  return {
+    formattedNumber: formatOfflineNumber(lease, value),
+    leaseId: lease.id,
+    series,
+    value,
+  };
+}
+
+function mergeLocalLeaseProgress(previous: OfflineSnapshot | null, incoming: OfflineSnapshot): OfflineSnapshot {
+  if (!previous) return incoming;
+  const previousById = new Map(previous.numberLeases.map((lease) => [lease.id, lease]));
+  return {
+    ...incoming,
+    numberLeases: incoming.numberLeases.map((lease) => {
+      const local = previousById.get(lease.id);
+      return local ? { ...lease, nextValue: Math.max(lease.nextValue, local.nextValue) } : lease;
+    }),
   };
 }
 
@@ -107,6 +185,7 @@ function validateRecord(value: unknown, scope: OfflineDataScope): OfflineDataRec
   try {
     assertScope(record.enrollment, scope, "Offline device enrollment");
     assertScope(record.snapshot, scope, "Offline snapshot");
+    if (!Array.isArray(record.snapshot.numberLeases)) return null;
     return record as OfflineDataRecord;
   } catch {
     return null;
