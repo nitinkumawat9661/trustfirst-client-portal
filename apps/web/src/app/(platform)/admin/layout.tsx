@@ -2,6 +2,7 @@ import { getPrisma } from "@trustfirst/database";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import { AdminDashboardShell } from "@/components/admin/admin-dashboard-shell";
+import { OfflineQueueNotice } from "@/components/offline/offline-queue-notice";
 import { OfflineScopeRegistration } from "@/components/offline/offline-scope-registration";
 import { requireCurrentUser } from "@/server/auth/session";
 import { readEffectiveHost, resolveAppSurfaceFromHost } from "@/server/domain/host-routing";
@@ -21,6 +22,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   return (
     <>
       <OfflineScopeRegistration scope={offlineScope} />
+      <OfflineQueueNotice />
       <AdminDashboardShell
         brandName={tenant?.name ?? "Business workspace"}
         offlineScope={offlineScope}
