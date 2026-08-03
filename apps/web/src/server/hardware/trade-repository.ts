@@ -7,6 +7,11 @@ import {
   type Prisma,
   type PrismaClient,
 } from "@trustfirst/database";
+import { AppError } from "../domain/errors";
+import {
+  isOfflineQuickPosTradeNumber,
+  offlineQuickPosTradeSequence,
+} from "../offline/offline-number-context";
 
 const tradeInclude = {
   billingInvoice: true,
@@ -61,6 +66,13 @@ export class PrismaHardwareTradeRepository {
   }
 
   async countByPrefix(tenantId: string, prefix: string, year: number) {
+    const reserved = offlineQuickPosTradeSequence({
+      financialYear: String(year),
+      prefix,
+      tenantId,
+    });
+    if (reserved) return reserved.value - 1;
+
     const documentPrefix = `${prefix}-${year}-`;
     const delegate = this.prisma.hardwareTradeDocument as unknown as NumberingDocumentDelegate;
 
@@ -90,8 +102,16 @@ export class PrismaHardwareTradeRepository {
     return Math.max(documentMaximum, leaseRows[0]?.maximum ?? 0);
   }
 
-  findByNumber(tenantId: string, documentNumber: string) {
-    return this.prisma.hardwareTradeDocument.findFirst({ where: { documentNumber, tenantId } });
+  async findByNumber(tenantId: string, documentNumber: string) {
+    const existing = await this.prisma.hardwareTradeDocument.findFirst({ where: { documentNumber, tenantId } });
+    if (existing && isOfflineQuickPosTradeNumber({ documentNumber, tenantId })) {
+      throw new AppError({
+        code: "CONFLICT",
+        message: `Reserved trade number ${documentNumber} is already in use.`,
+        status: 409,
+      });
+    }
+    return existing;
   }
 
   create(input: {
