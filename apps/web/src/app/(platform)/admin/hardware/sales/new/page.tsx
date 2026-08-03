@@ -1,6 +1,6 @@
 import { getPrisma } from "@trustfirst/database";
 import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
-import { QuickPosForm } from "@/components/hardware/quick-pos-form";
+import { OfflineQuickPosForm } from "@/components/hardware/offline-quick-pos-form";
 import { requireCurrentUser } from "@/server/auth/session";
 import { HardwareService } from "@/server/hardware";
 import styles from "./quick-pos-layout.module.css";
@@ -23,7 +23,7 @@ export default async function NewHardwareSalePage() {
   return (
     <div className={`${styles.quickPosPage} space-y-6`}>
       <HardwarePageHeader description="Search products by name, brand, category, SKU, model, size, or colour—even with spelling mistakes or words in a different order. Review price and stock, then post and print a professional A4 invoice." eyebrow="Sales" title="Quick POS bill" />
-      <QuickPosForm
+      <OfflineQuickPosForm
         brands={brands}
         categories={categories}
         customers={parties}
