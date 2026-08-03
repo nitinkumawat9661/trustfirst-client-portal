@@ -114,7 +114,12 @@ async function queueOfflinePurchase<T>(
       input,
       series,
     });
-    window.dispatchEvent(new CustomEvent("trustfirst:offline-queue-changed"));
+    window.dispatchEvent(new CustomEvent("trustfirst:offline-queue-changed", {
+      detail: {
+        documentNumber: queued.documentNumber,
+        label: purchaseLabel(input.type),
+      },
+    }));
     return {
       data: {
         documentNumber: queued.documentNumber,
@@ -136,6 +141,13 @@ function purchaseSeries(value: unknown): Exclude<OfflineNumberSeries, "HPR" | "H
   if (value === "PURCHASE_ORDER") return "HPO";
   if (value === "SUPPLIER_BILL") return "HSB";
   return null;
+}
+
+function purchaseLabel(value: unknown) {
+  if (value === "PURCHASE_ENTRY") return "Purchase entry";
+  if (value === "PURCHASE_ORDER") return "Purchase order";
+  if (value === "SUPPLIER_BILL") return "Supplier bill";
+  return "Purchase document";
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
