@@ -19,9 +19,7 @@ export async function setupOfflineDevice(
   scope: OfflineDataScope,
   storage: OfflineDataStorage = new IndexedDbOfflineDataStorage(),
 ): Promise<OfflineSetupSummary> {
-  if (typeof navigator === "undefined" || !navigator.onLine) {
-    throw new Error("Internet is required for first-time offline device setup.");
-  }
+  requireOnline("Internet is required for first-time offline device setup.");
 
   const previous = await storage.read(scope);
   const deviceKey = previous?.enrollment.deviceKey ?? `mangalam-${crypto.randomUUID()}`;
@@ -40,6 +38,31 @@ export async function setupOfflineDevice(
   });
 
   assertScope(enrollment, scope, "Enrolled device");
+  return downloadAndStoreSnapshot(scope, enrollment, storage);
+}
+
+export async function refreshOfflineDeviceSnapshot(
+  scope: OfflineDataScope,
+  storage: OfflineDataStorage = new IndexedDbOfflineDataStorage(),
+): Promise<OfflineSetupSummary | null> {
+  requireOnline("Internet is required to refresh offline data.");
+  const previous = await storage.read(scope);
+  if (!previous) return null;
+  return downloadAndStoreSnapshot(scope, previous.enrollment, storage);
+}
+
+export async function readOfflineSetupSummary(
+  scope: OfflineDataScope,
+  storage: OfflineDataStorage = new IndexedDbOfflineDataStorage(),
+) {
+  return offlineSetupSummary(await storage.read(scope));
+}
+
+async function downloadAndStoreSnapshot(
+  scope: OfflineDataScope,
+  enrollment: OfflineDeviceEnrollment,
+  storage: OfflineDataStorage,
+) {
   const snapshot = await requestJson<OfflineSnapshot>(
     `/api/offline/snapshot?deviceId=${encodeURIComponent(enrollment.deviceId)}`,
     { cache: "no-store" },
@@ -53,13 +76,6 @@ export async function setupOfflineDevice(
   const summary = offlineSetupSummary(await storage.read(scope));
   if (!summary) throw new Error("Offline data could not be verified after saving.");
   return summary;
-}
-
-export async function readOfflineSetupSummary(
-  scope: OfflineDataScope,
-  storage: OfflineDataStorage = new IndexedDbOfflineDataStorage(),
-) {
-  return offlineSetupSummary(await storage.read(scope));
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -81,6 +97,10 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(!result.ok ? result.error?.message ?? "Offline setup failed." : "Offline setup failed.");
   }
   return result.data;
+}
+
+function requireOnline(message: string) {
+  if (typeof navigator === "undefined" || !navigator.onLine) throw new Error(message);
 }
 
 function deviceLabel() {
