@@ -14,6 +14,7 @@ import { AppError } from "../domain/errors";
 import { HardwareService, stockForProduct } from "../hardware/hardware-service";
 import { HardwareTradeService } from "../hardware/trade-service";
 import { PermissionResolverService } from "../permissions/permission-service";
+import { OfflineNumberLeaseService } from "./number-lease-service";
 
 type OfflineActorContext = {
   tenantId: string;
@@ -142,7 +143,11 @@ export class OfflineService {
     }
 
     const generatedAt = new Date().toISOString();
-    if (deviceId) await this.markSnapshot(context, deviceId);
+    let numberLeases: OfflineSnapshot["numberLeases"] = [];
+    if (deviceId) {
+      await this.markSnapshot(context, deviceId);
+      numberLeases = await new OfflineNumberLeaseService(this.prisma).listForDevice(context, deviceId);
+    }
 
     return {
       brands: brands.map((brand) => ({ id: brand.id, name: brand.name, slug: brand.slug })),
@@ -155,6 +160,7 @@ export class OfflineService {
       },
       generatedAt,
       locations: locations.map((location) => ({ code: location.code, id: location.id, name: location.name })),
+      numberLeases,
       permissions,
       products: products.map((product) => ({
         barcode: product.barcode,
