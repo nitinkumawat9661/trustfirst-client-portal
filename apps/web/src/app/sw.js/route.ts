@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { serviceWorkerCachePrefix } from "@/server/domain/app-branding";
+import { serviceWorkerCachePrefix } from "../../server/domain/app-branding";
 import {
   readEffectiveHost,
   resolveAppSurfaceFromHost,
-} from "@/server/domain/host-routing";
+} from "../../server/domain/host-routing";
 
 export const dynamic = "force-dynamic";
 
