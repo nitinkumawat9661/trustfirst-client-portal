@@ -484,7 +484,7 @@ else
 fi
 printf '%s\n' "$MIGRATION_STATUS"
 
-if printf '%s\n' "$MIGRATION_STATUS" | grep -qi "Following migrations have not yet been applied"; then
+if printf '%s\n' "$MIGRATION_STATUS" | grep -Eqi 'Following migration(s|\(s\))? have not yet been applied'; then
   log "Pending migrations detected. Verifying additive-only SQL before applying."
   create_database_backup
   npm run deploy:migration-check -- --apply
@@ -497,7 +497,7 @@ if printf '%s\n' "$MIGRATION_STATUS" | grep -qi "Following migrations have not y
   fi
   printf '%s\n' "$POST_MIGRATION_STATUS"
   [ "$POST_MIGRATION_EXIT" -eq 0 ] || fail "Prisma migration verification failed after apply."
-  if printf '%s\n' "$POST_MIGRATION_STATUS" | grep -qi "Following migrations have not yet been applied"; then
+  if printf '%s\n' "$POST_MIGRATION_STATUS" | grep -Eqi 'Following migration(s|\(s\))? have not yet been applied'; then
     fail "Database still reports pending migrations after apply."
   fi
 elif [ "$MIGRATION_EXIT" -ne 0 ]; then

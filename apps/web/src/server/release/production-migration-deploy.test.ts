@@ -17,6 +17,15 @@ describe("production additive migration deployment", () => {
     expect(deployScript).not.toContain('set +e\nMIGRATION_STATUS="$(npm exec');
   });
 
+  it("recognizes Prisma singular, plural and migration(s) pending headings", () => {
+    const pattern = /Following migration(?:s|\(s\))? have not yet been applied/i;
+    expect(pattern.test("Following migration have not yet been applied:")).toBe(true);
+    expect(pattern.test("Following migrations have not yet been applied:")).toBe(true);
+    expect(pattern.test("Following migration(s) have not yet been applied:")).toBe(true);
+    expect(migrationSafety).toContain("Following migration(?:s|\\(s\\))? have not yet been applied");
+    expect(deployScript).toContain("Following migration(s|\\(s\\))? have not yet been applied");
+  });
+
   it("creates and verifies an isolated backup before applying migrations", () => {
     expect(deployScript).toContain("create_database_backup");
     expect(deployScript).toContain("pg_dump --format=custom --no-owner --no-acl");
