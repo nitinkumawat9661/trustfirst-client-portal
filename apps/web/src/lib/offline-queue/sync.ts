@@ -1,4 +1,4 @@
-import { IndexedDbOfflineDataStorage } from "../offline-data";
+import { IndexedDbOfflineDataStorage } from "../offline-data/storage";
 import { endpointForQueuedMutation } from "./hardware-actions";
 import type { OfflineMutationQueue } from "./queue";
 import type { QueuedMutation, QueuedMutationExecutor, SyncResult } from "./types";
