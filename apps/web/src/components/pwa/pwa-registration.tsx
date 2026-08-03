@@ -11,6 +11,7 @@ const offlineWarmRoutes = [
   "/admin/hardware/purchases",
   "/admin/hardware/purchases/new",
   "/admin/hardware/sales",
+  "/admin/hardware/sales/new",
   "/admin/hardware/quotations",
   "/admin/hardware/quotations/new",
   "/admin/hardware/suppliers",
