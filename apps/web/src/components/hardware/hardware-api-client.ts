@@ -3,7 +3,7 @@ import {
   offlinePurchaseSeries,
   queueReservedTradeDraft,
   readActiveOfflineScope,
-} from "@/lib/offline-data";
+} from "../../lib/offline-data";
 
 type ApiEnvelope<T> = {
   data?: T;
