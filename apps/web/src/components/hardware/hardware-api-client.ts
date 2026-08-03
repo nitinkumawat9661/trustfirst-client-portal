@@ -1,4 +1,5 @@
 import {
+  buildQueuedQuickPosResult,
   offlinePurchaseLabel,
   offlinePurchaseSeries,
   queueReservedQuickPosSale,
@@ -54,6 +55,9 @@ async function sendHardwareJson<T>(
   method: "PATCH" | "POST",
   body?: unknown,
 ): Promise<HardwareApiResult<T>> {
+  const offlineCustomerBlock = blockOfflineCustomerCreation<T>(endpoint, method);
+  if (offlineCustomerBlock) return offlineCustomerBlock;
+
   const offlineQuickPos = await queueOfflineQuickPos<T>(endpoint, method, body);
   if (offlineQuickPos) return offlineQuickPos;
 
@@ -82,6 +86,24 @@ async function sendHardwareJson<T>(
   }
 }
 
+function blockOfflineCustomerCreation<T>(
+  endpoint: string,
+  method: "PATCH" | "POST",
+): HardwareApiResult<T> | null {
+  if (
+    typeof navigator === "undefined" ||
+    navigator.onLine ||
+    method !== "POST" ||
+    endpoint !== "/api/hardware/parties/quick-add"
+  ) {
+    return null;
+  }
+  return {
+    message: "Offline counter sales require an existing saved customer. Use Walk-in Customer or reconnect once to create this customer.",
+    ok: false,
+  };
+}
+
 async function queueOfflineQuickPos<T>(
   endpoint: string,
   method: "PATCH" | "POST",
@@ -98,15 +120,6 @@ async function queueOfflineQuickPos<T>(
   }
 
   const input = asRecord(body);
-  const totalCents = readNonNegativeInteger(input.clientTotalCents);
-  const paidAmountCents = readNonNegativeInteger(input.paidAmountCents) ?? 0;
-  if (totalCents === null) {
-    return { message: "Counter sale total is invalid.", ok: false };
-  }
-  if (paidAmountCents > totalCents) {
-    return { message: "Paid amount cannot exceed bill total.", ok: false };
-  }
-
   const scope = readActiveOfflineScope();
   if (!scope) {
     return {
@@ -117,29 +130,18 @@ async function queueOfflineQuickPos<T>(
 
   try {
     const queued = await queueReservedQuickPosSale(scope, input);
-    const paymentStatus = paidAmountCents >= totalCents
-      ? "paid"
-      : paidAmountCents > 0
-        ? "partial"
-        : "unpaid";
+    const result = buildQueuedQuickPosResult(input, {
+      documentNumber: queued.documentNumber,
+      invoiceNumber: queued.invoiceNumber,
+      queueItemId: queued.queueItem.id,
+    });
     window.dispatchEvent(new CustomEvent("trustfirst:offline-queue-changed", {
       detail: {
         documentNumber: queued.invoiceNumber,
         label: "Counter sale",
       },
     }));
-    return {
-      data: {
-        documentId: queued.queueItem.id,
-        documentNumber: queued.documentNumber,
-        invoiceId: null,
-        invoiceNumber: queued.invoiceNumber,
-        offlineQueued: true,
-        paymentStatus,
-        totalCents,
-      } as unknown as T,
-      ok: true,
-    };
+    return { data: result as unknown as T, ok: true };
   } catch (error) {
     return {
       message: error instanceof Error ? error.message : "Counter sale could not be saved to the offline queue.",
@@ -211,12 +213,6 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-}
-
-function readNonNegativeInteger(value: unknown) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
-    ? value
-    : null;
 }
 
 async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
