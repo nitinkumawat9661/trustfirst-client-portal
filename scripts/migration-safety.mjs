@@ -10,13 +10,14 @@ if (!process.env.DATABASE_URL) {
 const schema = "prisma/schema.prisma";
 const migrationsRoot = path.resolve("packages/database/prisma/migrations");
 const prismaArgs = ["--workspace", "@trustfirst/database", "--", "prisma"];
+const pendingHeadingPattern = /Following migration(?:s|\(s\))? have not yet been applied/i;
 const status = runPrisma(["migrate", "status", "--schema", schema], "pipe");
 const statusOutput = `${status.stdout ?? ""}${status.stderr ?? ""}`;
 process.stdout.write(statusOutput);
 
 const pendingMigrations = pendingMigrationNames(statusOutput);
 const hasPendingMigrations = pendingMigrations.length > 0
-  || /Following migrations have not yet been applied/i.test(statusOutput);
+  || pendingHeadingPattern.test(statusOutput);
 
 if (status.status !== 0 && !hasPendingMigrations) {
   console.error("Prisma migration status failed. Review the database before deploying.");
@@ -59,7 +60,7 @@ function runPrisma(args, stdio) {
 
 export function pendingMigrationNames(output) {
   const lines = output.split(/\r?\n/u).map((line) => line.trim());
-  const start = lines.findIndex((line) => /Following migrations have not yet been applied/i.test(line));
+  const start = lines.findIndex((line) => pendingHeadingPattern.test(line));
   if (start < 0) return [];
 
   const pending = [];
