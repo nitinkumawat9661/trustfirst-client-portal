@@ -1,6 +1,8 @@
 import {
+  buildQueuedQuickPosResult,
   offlinePurchaseLabel,
   offlinePurchaseSeries,
+  queueReservedQuickPosSale,
   queueReservedTradeDraft,
   readActiveOfflineScope,
 } from "../../lib/offline-data";
@@ -53,6 +55,12 @@ async function sendHardwareJson<T>(
   method: "PATCH" | "POST",
   body?: unknown,
 ): Promise<HardwareApiResult<T>> {
+  const offlineCustomerBlock = blockOfflineCustomerCreation<T>(endpoint, method);
+  if (offlineCustomerBlock) return offlineCustomerBlock;
+
+  const offlineQuickPos = await queueOfflineQuickPos<T>(endpoint, method, body);
+  if (offlineQuickPos) return offlineQuickPos;
+
   const offlinePurchase = await queueOfflinePurchase<T>(endpoint, method, body);
   if (offlinePurchase) return offlinePurchase;
 
@@ -73,6 +81,70 @@ async function sendHardwareJson<T>(
   } catch {
     return {
       message: "The server could not be reached. Check the connection and retry.",
+      ok: false,
+    };
+  }
+}
+
+function blockOfflineCustomerCreation<T>(
+  endpoint: string,
+  method: "PATCH" | "POST",
+): HardwareApiResult<T> | null {
+  if (
+    typeof navigator === "undefined" ||
+    navigator.onLine ||
+    method !== "POST" ||
+    endpoint !== "/api/hardware/parties/quick-add"
+  ) {
+    return null;
+  }
+  return {
+    message: "Offline counter sales require an existing saved customer. Use Walk-in Customer or reconnect once to create this customer.",
+    ok: false,
+  };
+}
+
+async function queueOfflineQuickPos<T>(
+  endpoint: string,
+  method: "PATCH" | "POST",
+  body: unknown,
+): Promise<HardwareApiResult<T> | null> {
+  if (
+    typeof window === "undefined" ||
+    typeof navigator === "undefined" ||
+    navigator.onLine ||
+    method !== "POST" ||
+    endpoint !== "/api/hardware/pos/sale"
+  ) {
+    return null;
+  }
+
+  const input = asRecord(body);
+  const scope = readActiveOfflineScope();
+  if (!scope) {
+    return {
+      message: "Offline tenant scope is unavailable. Reopen the installed ERP while online once, then retry.",
+      ok: false,
+    };
+  }
+
+  try {
+    const queued = await queueReservedQuickPosSale(scope, input);
+    const result = buildQueuedQuickPosResult(input, {
+      documentNumber: queued.documentNumber,
+      invoiceNumber: queued.invoiceNumber,
+      queueItemId: queued.queueItem.id,
+    });
+    window.dispatchEvent(new CustomEvent("trustfirst:offline-queue-changed", {
+      detail: {
+        documentNumber: queued.invoiceNumber,
+        label: "Counter sale",
+      },
+    }));
+    return { data: result as unknown as T, ok: true };
+  } catch (error) {
+    return {
+      message: error instanceof Error ? error.message : "Counter sale could not be saved to the offline queue.",
       ok: false,
     };
   }
