@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     assertCsrfSafeRequest(request);
     const user = await requireCurrentUser();
     if (!user.activeTenantId) {
-      throw new AppError({ code: "TENANT_REQUIRED", message: "Select an active tenant before offline setup.", status: 400 });
+      throw new AppError({ code: "BAD_REQUEST", message: "Select an active tenant before offline setup.", status: 400 });
     }
     const input = enrollmentSchema.parse(await request.json());
     const service = new OfflineService(getPrisma());
