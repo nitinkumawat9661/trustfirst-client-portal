@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
+import { OfflineEstimatePrintManager } from "@/components/offline/offline-estimate-print-manager";
 import { PwaRegistration } from "@/components/pwa/pwa-registration";
 import {
   readEffectiveHost,
@@ -25,6 +26,7 @@ export default function RootLayout({
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col">
         {children}
+        <OfflineEstimatePrintManager />
         <PwaRegistration />
       </body>
     </html>

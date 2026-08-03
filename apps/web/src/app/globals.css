@@ -59,3 +59,47 @@ body {
   background: #d2a24c;
   color: #17120a;
 }
+
+@media print {
+  @page {
+    margin: 0;
+    size: A4 portrait;
+  }
+
+  body.offline-estimate-printing {
+    background: #ffffff !important;
+  }
+
+  body.offline-estimate-printing > * {
+    visibility: hidden !important;
+  }
+
+  body.offline-estimate-printing .offline-estimate-print-root,
+  body.offline-estimate-printing .offline-estimate-print-root * {
+    visibility: visible !important;
+  }
+
+  body.offline-estimate-printing .offline-estimate-print-root {
+    background: #ffffff !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    color: #000000 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    min-height: 297mm !important;
+    padding: 8mm !important;
+    position: absolute !important;
+    top: 0 !important;
+    width: 210mm !important;
+  }
+
+  body.offline-estimate-printing .no-print {
+    display: none !important;
+  }
+
+  .offline-estimate-print-summary,
+  .offline-estimate-print-footer {
+    break-inside: avoid;
+  }
+}
