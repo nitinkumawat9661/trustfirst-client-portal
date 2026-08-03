@@ -45,8 +45,11 @@ export function PwaRegistration() {
   useEffect(() => {
     const standalone = window.matchMedia("(display-mode: standalone)").matches
       || Boolean((navigator as NavigatorWithStandalone).standalone);
-    setInstalled(standalone);
-    setFullscreenAvailable(Boolean(document.fullscreenEnabled));
+    const fullscreenSupported = Boolean(document.fullscreenEnabled);
+    queueMicrotask(() => {
+      setInstalled(standalone);
+      setFullscreenAvailable(fullscreenSupported);
+    });
 
     function handleInstallPrompt(event: Event) {
       event.preventDefault();
