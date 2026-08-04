@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { z } from "zod";
-import { patchHardwareJson, postHardwareJson } from "./hardware-api-client";
+import { patchHardwareJson, postHardwareProductJson } from "./hardware-api-client";
 
 const moneyPattern = /^\d+(\.\d{1,2})?$/u;
 const optionalMoney = z.string().refine((value) => value === "" || moneyPattern.test(value), {
@@ -30,9 +30,12 @@ const productFormSchema = z.object({
   gstRate: z.string().refine((value) => value === "" || (Number(value) >= 0 && Number(value) <= 100), {
     message: "GST must be between 0 and 100.",
   }),
-  hsnCode: z.string().max(20),
+  hsnCode: z.string().max(12).refine(
+    (value) => value === "" || /^[A-Z0-9-]{2,12}$/iu.test(value.trim()),
+    { message: "HSN / SAC must contain 2 to 12 letters, digits, or dashes." },
+  ),
   lowStockThreshold: z.number().int().min(0),
-  name: z.string().trim().min(1, "Product name is required.").max(240),
+  name: z.string().trim().min(2, "Product name must contain at least 2 characters.").max(240),
   purchasePrice: optionalMoney,
   salePrice: requiredSalePrice,
   sku: z.string().trim().max(120),
@@ -42,6 +45,7 @@ const productFormSchema = z.object({
 type ProductFormValues = z.infer<typeof productFormSchema>;
 type LookupOption = { id: string; name: string };
 type UnitOption = { code: string; id: string; name: string };
+type SavedProductResult = { offlineQueued?: boolean };
 
 export type HardwareProductFormProduct = {
   barcode: string;
@@ -97,14 +101,18 @@ export function HardwareProductForm({
 
   const currentName = watch("name");
   const currentSalePrice = watch("salePrice");
-  const canSubmit = currentName.trim().length > 0 && moneyPattern.test(currentSalePrice) && Number(currentSalePrice) > 0;
+  const canSubmit = currentName.trim().length >= 2 && moneyPattern.test(currentSalePrice) && Number(currentSalePrice) > 0;
 
   async function onSubmit(values: ProductFormValues) {
     setServerError(null);
+    if (isEditing && typeof navigator !== "undefined" && !navigator.onLine) {
+      setServerError("Editing an existing product requires an internet connection so server changes cannot be overwritten silently.");
+      return;
+    }
     const commonPayload = {
       gstTaxConfig: values.gstRate ? { rateBps: Math.round(Number(values.gstRate) * 100) } : {},
       lowStockThreshold: values.lowStockThreshold,
-      metadata: { hsnCode: values.hsnCode.trim() || null },
+      metadata: { hsnCode: values.hsnCode.trim().toUpperCase() || null },
       name: values.name.trim(),
       purchaseCostCents: values.purchasePrice ? toCents(values.purchasePrice) : 0,
       salesPriceCents: toCents(values.salePrice),
@@ -127,13 +135,18 @@ export function HardwareProductForm({
           ...(values.unitId ? { unitId: values.unitId } : {}),
         };
     const result = isEditing && product
-      ? await patchHardwareJson<unknown>(`/api/hardware/products/${product.id}`, payload)
-      : await postHardwareJson<unknown>("/api/hardware/products", payload);
+      ? await patchHardwareJson<SavedProductResult>(`/api/hardware/products/${product.id}`, payload)
+      : await postHardwareProductJson<SavedProductResult>(payload, {
+          brandName: brands.find((brand) => brand.id === values.brandId)?.name ?? null,
+          categoryName: categories.find((category) => category.id === values.categoryId)?.name ?? null,
+          unitCode: units.find((unit) => unit.id === values.unitId)?.code ?? null,
+        });
     if (!result.ok) {
       setServerError(result.message);
       return;
     }
-    router.push(`/admin/hardware/products?${isEditing ? "updated" : "created"}=1`);
+    const status = result.data.offlineQueued ? "queued" : isEditing ? "updated" : "created";
+    router.push(`/admin/hardware/products?${status}=1`);
     router.refresh();
   }
 
@@ -152,7 +165,7 @@ export function HardwareProductForm({
               <Input inputMode="decimal" min="0.01" step="0.01" type="number" {...register("salePrice")} />
             </Field>
           </div>
-          <p className="text-sm text-muted-foreground">Product name and sale price are required before the product can be saved.</p>
+          <p className="text-sm text-muted-foreground">Product name and sale price are required. A new product can be queued offline; edits to existing products require internet.</p>
           <button
             className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium"
             onClick={() => setDetailsOpen((open) => !open)}
@@ -177,7 +190,7 @@ export function HardwareProductForm({
                 </select>
               </Field>
               <Field error={errors.hsnCode?.message} label="HSN / SAC">
-                <Input autoComplete="off" {...register("hsnCode")} />
+                <Input autoComplete="off" className="uppercase" {...register("hsnCode")} />
               </Field>
               <Field error={errors.gstRate?.message} label="GST rate (%)">
                 <Input inputMode="decimal" min="0" max="100" step="0.01" type="number" {...register("gstRate")} />
