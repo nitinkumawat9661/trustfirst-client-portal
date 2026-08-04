@@ -8,9 +8,11 @@ import {
   type OfflineDeviceEnrollment,
   type OfflineSnapshot,
   type OfflineSnapshotDocument,
+  type OfflineSnapshotFinancialPosition,
   type OfflineSnapshotStock,
 } from "../../lib/offline-data/types";
 import { AppError } from "../domain/errors";
+import { HardwareFinancialService, type PartyFinancialPosition } from "../hardware/financial-service";
 import { HardwareService, stockForProduct } from "../hardware/hardware-service";
 import { HardwareTradeService } from "../hardware/trade-service";
 import { PermissionResolverService } from "../permissions/permission-service";
@@ -94,6 +96,7 @@ export class OfflineService {
     const resolved = await this.permissions.resolveForMembership(context.userId, context.tenantId);
     const permissions = resolved.permissions.map(String);
     const hardware = new HardwareService(this.prisma);
+    const financial = new HardwareFinancialService(this.prisma);
     const trade = new HardwareTradeService(this.prisma);
 
     const canCatalog = allowed(permissions, "hardware.catalog.read");
@@ -142,6 +145,15 @@ export class OfflineService {
       throw new AppError({ code: "NOT_FOUND", message: "Active tenant was not found.", status: 404 });
     }
 
+    const [customerPositions, supplierPositions] = await Promise.all([
+      canSales
+        ? Promise.all(customers.map((party) => financial.partyPosition(context, "customer", party.id)))
+        : Promise.resolve([]),
+      canPurchases
+        ? Promise.all(suppliers.map((party) => financial.partyPosition(context, "supplier", party.id)))
+        : Promise.resolve([]),
+    ]);
+
     const generatedAt = new Date().toISOString();
     let numberLeases: OfflineSnapshot["numberLeases"] = [];
     if (deviceId) {
@@ -157,6 +169,10 @@ export class OfflineService {
         purchases: purchases.map(toSnapshotDocument),
         quotations: quotations.map(toSnapshotDocument),
         sales: sales.map(toSnapshotDocument),
+      },
+      financialPositions: {
+        customers: customerPositions.map(toSnapshotFinancialPosition),
+        suppliers: supplierPositions.map(toSnapshotFinancialPosition),
       },
       generatedAt,
       locations: locations.map((location) => ({ code: location.code, id: location.id, name: location.name })),
@@ -287,6 +303,30 @@ function toSnapshotDocument(document: {
     totalCents: document.totalCents,
     type: document.type,
     updatedAt: document.updatedAt.toISOString(),
+  };
+}
+
+function toSnapshotFinancialPosition(
+  position: PartyFinancialPosition,
+): OfflineSnapshotFinancialPosition {
+  return {
+    advanceBalanceCents: position.advanceBalanceCents,
+    openItems: position.openItems.map((item) => ({
+      documentNumber: item.documentNumber,
+      dueCents: item.dueCents,
+      hardwareDocumentId: item.hardwareDocumentId,
+      invoiceId: item.invoiceId,
+      invoiceNumber: item.invoiceNumber,
+      occurredAt: item.occurredAt.toISOString(),
+      originalCents: item.originalCents,
+      paidCents: item.paidCents,
+      sourceId: item.sourceId,
+      targetTransactionId: item.targetTransactionId,
+    })),
+    partyId: position.partyId,
+    partyName: position.partyName,
+    refundableBalanceCents: position.refundableBalanceCents,
+    totalOutstandingCents: position.totalOutstandingCents,
   };
 }
 
