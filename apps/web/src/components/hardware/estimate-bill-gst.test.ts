@@ -21,7 +21,7 @@ const baseLine = {
 
 describe("bill and estimate GST behavior", () => {
   it("keeps a normal bill GST-free until a line rate is selected", () => {
-    const totals = quickPosPrintTestUtils.calculateTotals([baseLine], "0", "0");
+    const totals = quickPosPrintTestUtils.calculateTotals([baseLine], "0", "0", "unpaid");
 
     expect(totals.subtotalCents).toBe(10_000);
     expect(totals.taxCents).toBe(0);
@@ -33,7 +33,7 @@ describe("bill and estimate GST behavior", () => {
       { ...baseLine, gstRate: "5" },
       { ...baseLine, gstRate: "18", productId: "product-2", rate: "200" },
       { ...baseLine, gstRate: "0", productId: "product-3", rate: "50" },
-    ], "0", "0");
+    ], "0", "0", "unpaid");
 
     expect(totals.subtotalCents).toBe(35_000);
     expect(totals.taxCents).toBe(4_100);
