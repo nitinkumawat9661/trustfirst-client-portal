@@ -50,7 +50,7 @@ test("customer, supplier, sale, purchase, Estimate Bill and same-page printing w
   await page.keyboard.press("Escape");
   const postBillButton = page.getByRole("button", { name: "Post bill", exact: true });
   await expect(postBillButton).toBeDisabled();
-  await page.getByLabel("Payment status", { exact: true }).selectOption("unpaid");
+  await page.getByTestId("quick-pos-payment-status").selectOption("unpaid");
   await expect(postBillButton).toBeEnabled();
   await postBillButton.click();
   await expect(page.getByText("After issue")).toBeVisible();
@@ -101,7 +101,7 @@ test("customer, supplier, sale, purchase, Estimate Bill and same-page printing w
   await estimateGst.press("Enter");
   await expect(page.getByText("Item 2", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Automatic round-off", { exact: true })).toHaveAttribute("readonly", "");
-  await page.getByLabel("Payment status", { exact: true }).selectOption("unpaid");
+  await page.getByTestId("estimate-payment-status").selectOption("unpaid");
   await page.getByRole("button", { name: "Save and print Estimate Bill" }).click();
   await page.waitForURL(/\/admin\/hardware\/print\//);
   await expect(page.getByText(/Estimate Bill/i).first()).toBeVisible();
