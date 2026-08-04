@@ -13,6 +13,7 @@ import {
   readOfflinePaymentReceipt,
   type OfflinePaymentExpectedTarget,
   type OfflinePaymentReceipt,
+  type OfflineSnapshotFinancialPosition,
   type QueuedOfflinePartyPayment,
 } from "../../lib/offline-data";
 import type { HardwarePartySummary, PartyFinancialPosition } from "@/server/hardware";
@@ -150,8 +151,10 @@ export function HardwarePaymentWorkbench({
       void hydrateQueuedPayments();
       if (navigator.onLine && partyId) void loadPosition(partyId);
     };
-    updateConnection();
-    void hydrateQueuedPayments();
+    queueMicrotask(() => {
+      updateConnection();
+      void hydrateQueuedPayments();
+    });
     window.addEventListener("online", updateConnection);
     window.addEventListener("offline", updateConnection);
     window.addEventListener("trustfirst:offline-queue-changed", handleQueueChange);
@@ -422,7 +425,7 @@ export function mergeQueuedPaymentRows(
   return [...rows.values()].sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime());
 }
 
-function normalizeOfflinePosition(position: Awaited<ReturnType<typeof readOfflineFinancialPosition>> extends infer T ? Exclude<T, null> : never): PartyFinancialPosition {
+function normalizeOfflinePosition(position: OfflineSnapshotFinancialPosition): PartyFinancialPosition {
   return {
     ...position,
     openItems: position.openItems.map((item) => ({ ...item, occurredAt: new Date(item.occurredAt) })),
