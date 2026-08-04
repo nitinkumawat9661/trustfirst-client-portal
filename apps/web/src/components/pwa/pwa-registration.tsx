@@ -19,6 +19,7 @@ const offlineWarmRoutes = [
   "/admin/hardware/customers",
   "/admin/hardware/outstanding",
   "/admin/hardware/ledger",
+  "/admin/hardware/payments",
   "/admin/hardware/reports",
   "/admin/settings",
 ] as const;
