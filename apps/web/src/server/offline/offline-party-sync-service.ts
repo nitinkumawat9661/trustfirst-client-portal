@@ -141,15 +141,19 @@ async function lockPartyIdentity(
   tenantId: string,
   input: QuickHardwarePartyInput,
 ) {
-  const locks = [
-    `offline-party:${tenantId}:name:${normalizeComparable(input.name)}`,
-    ...(normalizeMobile(input.mobile)
-      ? [`offline-party:${tenantId}:mobile:${normalizeMobile(input.mobile)}`]
-      : []),
-  ].sort();
-  for (const lock of locks) {
+  for (const lock of partyLockKeys(tenantId, input)) {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lock}))`;
   }
+}
+
+function partyLockKeys(tenantId: string, input: QuickHardwarePartyInput) {
+  const mobile = normalizeMobile(input.mobile);
+  const slugBase = slugify(input.name) || "party";
+  return [
+    `offline-party:${tenantId}:name:${normalizeComparable(input.name)}`,
+    `offline-party:${tenantId}:slug:${slugBase}`,
+    ...(mobile ? [`offline-party:${tenantId}:mobile:${mobile}`] : []),
+  ].sort();
 }
 
 async function findReceipt(
@@ -376,6 +380,7 @@ export const offlinePartySyncTestUtils = {
   matchesOfflineIdentity,
   normalizeComparable,
   normalizeMobile,
+  partyLockKeys,
   signedOpeningBalance,
   slugify,
 };
