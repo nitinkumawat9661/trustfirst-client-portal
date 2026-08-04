@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { offlineError, offlineResponse } from "../../../../server/offline/http";
 import { authenticateOfflineDevice } from "../../../../server/offline/offline-device-auth";
 import { OfflinePartySyncService } from "../../../../server/offline/offline-party-sync-service";
+import { OfflineProductSyncService } from "../../../../server/offline/offline-product-sync-service";
 import { OfflineQuickPosSyncService } from "../../../../server/offline/offline-quick-pos-sync-service";
 import { OfflineSyncService } from "../../../../server/offline/offline-sync-service";
 
@@ -16,7 +17,9 @@ export async function POST(request: NextRequest) {
       ? await new OfflineQuickPosSyncService(prisma).process(device, body.item)
       : action === "hardware.partyDraft.create"
         ? await new OfflinePartySyncService(prisma).process(device, body.item)
-        : await new OfflineSyncService(prisma).process(device, body.item);
+        : action === "hardware.productDraft.create"
+          ? await new OfflineProductSyncService(prisma).process(device, body.item)
+          : await new OfflineSyncService(prisma).process(device, body.item);
     return offlineResponse(result);
   } catch (error) {
     return offlineError(error);
