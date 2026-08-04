@@ -14,6 +14,7 @@ export function endpointForQueuedMutation(item: QueuedMutation): QueueEndpointCo
     case "hardware.partyDraft.create":
     case "hardware.productDraft.create":
     case "hardware.stockAdjustmentDraft.create":
+    case "hardware.partyPaymentDraft.create":
       return { body: { item }, method: "POST", path: "/api/offline/sync", requiresDeviceAuth: true };
     case "hardware.saleDraft.create":
       return { body: item.payload, method: "POST", path: "/api/hardware/sales" };
