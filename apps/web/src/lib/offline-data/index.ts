@@ -8,6 +8,8 @@ export * from "./purchase-draft";
 export * from "./quick-pos-draft";
 export * from "./quick-pos-result";
 export * from "./setup";
+export * from "./stock-draft";
+export * from "./stock-result";
 export * from "./storage";
 export * from "./trade-draft";
 export * from "./types";
