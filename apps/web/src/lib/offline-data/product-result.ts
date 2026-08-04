@@ -40,7 +40,7 @@ export type QueuedOfflineProductSummary = {
   salesPriceCents: number;
   sku: string;
   status: "ACTIVE";
-  stockSetupStatus: "PENDING";
+  stockSetupStatus: "PENDING" | "TRACKED";
   unitCode: string | null;
 };
 
