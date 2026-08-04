@@ -84,6 +84,28 @@ export type OfflineSnapshotDocument = {
   updatedAt: string;
 };
 
+export type OfflineSnapshotFinancialOpenItem = {
+  documentNumber: string;
+  dueCents: number;
+  hardwareDocumentId: string | null;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  occurredAt: string;
+  originalCents: number;
+  paidCents: number;
+  sourceId: string | null;
+  targetTransactionId: string;
+};
+
+export type OfflineSnapshotFinancialPosition = {
+  advanceBalanceCents: number;
+  openItems: OfflineSnapshotFinancialOpenItem[];
+  partyId: string;
+  partyName: string;
+  refundableBalanceCents: number;
+  totalOutstandingCents: number;
+};
+
 export type OfflineSnapshot = OfflineDataScope & {
   brands: Array<{ id: string; name: string; slug: string }>;
   categories: Array<{ id: string; name: string; slug: string }>;
@@ -92,6 +114,10 @@ export type OfflineSnapshot = OfflineDataScope & {
     purchases: OfflineSnapshotDocument[];
     quotations: OfflineSnapshotDocument[];
     sales: OfflineSnapshotDocument[];
+  };
+  financialPositions?: {
+    customers: OfflineSnapshotFinancialPosition[];
+    suppliers: OfflineSnapshotFinancialPosition[];
   };
   generatedAt: string;
   locations: Array<{ code: string; id: string; name: string }>;
