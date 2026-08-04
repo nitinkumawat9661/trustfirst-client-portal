@@ -21,6 +21,14 @@ export function queueHardwareQuickPosSale(
   return queue.add(withConflict({ action: "hardware.quickPosSale.create", payload }, options));
 }
 
+export function queueHardwarePartyDraft(
+  queue: OfflineMutationQueue,
+  payload: Record<string, unknown>,
+  options: HardwareDraftOptions = {},
+) {
+  return queue.add(withConflict({ action: "hardware.partyDraft.create", payload }, options));
+}
+
 export function queueHardwareSaleDraft(
   queue: OfflineMutationQueue,
   payload: Record<string, unknown>,

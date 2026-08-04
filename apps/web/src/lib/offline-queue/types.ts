@@ -6,6 +6,7 @@ export type OfflineQueueScope = {
 export type HardwareOfflineAction =
   | "hardware.tradeDraft.create"
   | "hardware.quickPosSale.create"
+  | "hardware.partyDraft.create"
   | "hardware.saleDraft.create"
   | "hardware.purchaseDraft.create"
   | "hardware.customerDraft.create"
