@@ -130,9 +130,10 @@ export function HardwareInventoryPanel({
     movementForm.reset({ ...values, notes: "", productId: "", quantity: 1 });
     setProductName("");
     if (isQueuedMovement(result.data)) {
+      const queuedMovement = result.data;
       setVisibleMovements((current) => [
-        result.data,
-        ...current.filter((movement) => movement.id !== result.data.id),
+        queuedMovement,
+        ...current.filter((movement) => movement.id !== queuedMovement.id),
       ]);
       return;
     }
