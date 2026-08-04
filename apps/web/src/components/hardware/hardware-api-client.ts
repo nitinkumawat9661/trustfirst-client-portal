@@ -2,6 +2,7 @@ import {
   buildQueuedQuickPosResult,
   offlinePurchaseLabel,
   offlinePurchaseSeries,
+  queueOfflinePartyDraft,
   queueReservedQuickPosSale,
   queueReservedTradeDraft,
   readActiveOfflineScope,
@@ -22,6 +23,14 @@ export async function postHardwareJson<T>(
   body?: unknown,
 ): Promise<HardwareApiResult<T>> {
   return sendHardwareJson<T>(endpoint, "POST", body);
+}
+
+export async function postHardwarePartyJson<T>(
+  body: Record<string, unknown>,
+): Promise<HardwareApiResult<T>> {
+  const offlineParty = await queueOfflineParty<T>(body);
+  if (offlineParty) return offlineParty;
+  return sendHardwareJson<T>("/api/hardware/parties/quick-add", "POST", body);
 }
 
 export async function patchHardwareJson<T>(
@@ -102,6 +111,40 @@ function blockOfflineCustomerCreation<T>(
     message: "Offline counter sales require an existing saved customer. Use Walk-in Customer or reconnect once to create this customer.",
     ok: false,
   };
+}
+
+async function queueOfflineParty<T>(
+  body: Record<string, unknown>,
+): Promise<HardwareApiResult<T> | null> {
+  if (
+    typeof window === "undefined"
+    || typeof navigator === "undefined"
+    || navigator.onLine
+  ) {
+    return null;
+  }
+  const scope = readActiveOfflineScope();
+  if (!scope) {
+    return {
+      message: "Offline tenant scope is unavailable. Reopen the installed ERP while online once, then retry.",
+      ok: false,
+    };
+  }
+  try {
+    const queued = await queueOfflinePartyDraft(scope, body);
+    window.dispatchEvent(new CustomEvent("trustfirst:offline-queue-changed", {
+      detail: {
+        documentNumber: queued.party.name,
+        label: queued.party.role === "supplier" ? "Supplier" : "Customer",
+      },
+    }));
+    return { data: queued.party as unknown as T, ok: true };
+  } catch (error) {
+    return {
+      message: error instanceof Error ? error.message : "Party could not be saved to the offline queue.",
+      ok: false,
+    };
+  }
 }
 
 async function queueOfflineQuickPos<T>(
