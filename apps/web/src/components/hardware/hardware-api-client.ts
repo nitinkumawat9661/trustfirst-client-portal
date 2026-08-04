@@ -4,10 +4,14 @@ import {
   offlinePurchaseSeries,
   queueOfflineCatalogProduct,
   queueOfflinePartyDraft,
+  queueOfflinePartyPayment,
   queueOfflineStockMovement,
   queueReservedQuickPosSale,
   queueReservedTradeDraft,
   readActiveOfflineScope,
+  type OfflinePaymentDisplay,
+  type OfflinePaymentExpectedTarget,
+  type OfflinePaymentRole,
   type OfflineProductDisplay,
   type OfflineStockDisplay,
 } from "../../lib/offline-data";
@@ -54,6 +58,23 @@ export async function postHardwareStockJson<T>(
   const offlineStock = await queueOfflineStock<T>(body, expectedCurrentStock, display);
   if (offlineStock) return offlineStock;
   return sendHardwareJson<T>("/api/hardware/inventory", "POST", body);
+}
+
+export async function postHardwarePartyPaymentJson<T>(
+  role: OfflinePaymentRole,
+  body: Record<string, unknown>,
+  expectedTargets: OfflinePaymentExpectedTarget[],
+  display: OfflinePaymentDisplay = {},
+): Promise<HardwareApiResult<T>> {
+  const offlinePayment = await queueOfflinePayment<T>(role, body, expectedTargets, display);
+  if (offlinePayment) return offlinePayment;
+  return sendHardwareJson<T>(
+    role === "supplier"
+      ? "/api/hardware/financial/supplier-payments"
+      : "/api/hardware/financial/customer-payments",
+    "POST",
+    body,
+  );
 }
 
 export async function patchHardwareJson<T>(
@@ -257,6 +278,43 @@ async function queueOfflineStock<T>(
   } catch (error) {
     return {
       message: error instanceof Error ? error.message : "Stock movement could not be saved to the offline queue.",
+      ok: false,
+    };
+  }
+}
+
+async function queueOfflinePayment<T>(
+  role: OfflinePaymentRole,
+  body: Record<string, unknown>,
+  expectedTargets: OfflinePaymentExpectedTarget[],
+  display: OfflinePaymentDisplay,
+): Promise<HardwareApiResult<T> | null> {
+  if (
+    typeof window === "undefined"
+    || typeof navigator === "undefined"
+    || navigator.onLine
+  ) {
+    return null;
+  }
+  const scope = readActiveOfflineScope();
+  if (!scope) {
+    return {
+      message: "Offline tenant scope is unavailable. Reopen the installed ERP while online once, then retry.",
+      ok: false,
+    };
+  }
+  try {
+    const queued = await queueOfflinePartyPayment(scope, role, body, expectedTargets, display);
+    window.dispatchEvent(new CustomEvent("trustfirst:offline-queue-changed", {
+      detail: {
+        documentNumber: queued.payment.partyName,
+        label: role === "supplier" ? "Supplier payment" : "Customer receipt",
+      },
+    }));
+    return { data: queued.payment as unknown as T, ok: true };
+  } catch (error) {
+    return {
+      message: error instanceof Error ? error.message : "Payment could not be saved to the offline queue.",
       ok: false,
     };
   }

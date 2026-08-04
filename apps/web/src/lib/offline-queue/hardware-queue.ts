@@ -69,6 +69,14 @@ export function queueHardwareStockAdjustmentDraft(
   return queue.add(withConflict({ action: "hardware.stockAdjustmentDraft.create", payload }, options));
 }
 
+export function queueHardwarePartyPaymentDraft(
+  queue: OfflineMutationQueue,
+  payload: Record<string, unknown>,
+  options: HardwareDraftOptions = {},
+) {
+  return queue.add(withConflict({ action: "hardware.partyPaymentDraft.create", payload }, options));
+}
+
 export function queueHardwareManualPaymentDraft(
   queue: OfflineMutationQueue,
   payload: Record<string, unknown>,

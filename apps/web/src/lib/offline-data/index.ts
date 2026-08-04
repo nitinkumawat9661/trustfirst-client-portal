@@ -2,6 +2,8 @@ export * from "./active-scope";
 export * from "./estimate-preview";
 export * from "./party-draft";
 export * from "./party-result";
+export * from "./payment-draft";
+export * from "./payment-result";
 export * from "./product-draft";
 export * from "./product-result";
 export * from "./purchase-draft";
