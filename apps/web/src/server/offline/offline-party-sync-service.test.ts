@@ -14,6 +14,18 @@ describe("offline party sync helpers", () => {
     expect(offlinePartySyncTestUtils.normalizeMobile("98765 43210")).toBe("9876543210");
   });
 
+  it("serializes name, mobile and fallback slug identities before party creation", () => {
+    expect(offlinePartySyncTestUtils.partyLockKeys("tenant-1", {
+      mobile: "+91 98765-43210",
+      name: "श्री राम",
+      role: "customer",
+    })).toEqual([
+      "offline-party:tenant-1:mobile:9876543210",
+      "offline-party:tenant-1:name:श्री राम",
+      "offline-party:tenant-1:slug:party",
+    ]);
+  });
+
   it("builds queue identity metadata and preserves the online opening-balance sign contract", () => {
     const input = {
       address: "Sikar",
