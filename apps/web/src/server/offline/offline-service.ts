@@ -253,7 +253,7 @@ async function snapshotFinancialPositions(
   const advanceType = role === "supplier"
     ? FinancialTransactionType.SUPPLIER_ADVANCE
     : FinancialTransactionType.CUSTOMER_ADVANCE;
-  const creditTypes = role === "supplier"
+  const creditTypes: FinancialTransactionType[] = role === "supplier"
     ? [FinancialTransactionType.PURCHASE_RETURN_CREDIT, FinancialTransactionType.SUPPLIER_REFUND_RECEIVED]
     : [FinancialTransactionType.SALE_RETURN_CREDIT, FinancialTransactionType.CUSTOMER_REFUND_PENDING];
   const transactions = await prisma.financialTransaction.findMany({
