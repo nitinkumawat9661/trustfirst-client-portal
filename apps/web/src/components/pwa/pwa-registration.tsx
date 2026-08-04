@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 const offlineWarmRoutes = [
   "/admin",
   "/admin/hardware/products",
+  "/admin/hardware/products/new",
   "/admin/hardware/inventory",
   "/admin/hardware/purchases",
   "/admin/hardware/purchases/new",
