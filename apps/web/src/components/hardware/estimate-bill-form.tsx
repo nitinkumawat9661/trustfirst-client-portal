@@ -5,6 +5,7 @@ import { Plus, Save, Trash2, WifiOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { calculateEstimateMoneyTotals } from "@/lib/hardware/estimate-money";
+import { resolveBillPayment, type BillPaymentChoice, type ResolvedBillPayment } from "../../lib/hardware/payment-choice";
 import { queueReservedTradeDraft } from "@/lib/offline-data";
 import type { OfflineQueueScope } from "@/lib/offline-queue";
 import type {
@@ -81,7 +82,16 @@ export function EstimateBillForm({
       ? String(initialDocument.paidAmountCents / 100)
       : "",
   );
-  const [paymentMode, setPaymentMode] = useState(initialDocument?.paymentMode ?? "Cash");
+  const [paymentChoice, setPaymentChoice] = useState<BillPaymentChoice>(() => {
+    if (!initialDocument) return "";
+    if (initialDocument.paidAmountCents <= 0) return "unpaid";
+    return initialDocument.paidAmountCents >= calculateInitialDocumentTotal(initialDocument) ? "paid" : "partial";
+  });
+  const [paymentMode, setPaymentMode] = useState(
+    initialDocument?.paymentMode && initialDocument.paymentMode !== "Credit"
+      ? initialDocument.paymentMode
+      : "Cash",
+  );
   const [queuedDocumentNumber, setQueuedDocumentNumber] = useState<string | null>(null);
   const [referenceNumber, setReferenceNumber] = useState(initialDocument?.referenceNumber ?? "");
   const [taxMode, setTaxMode] = useState<"intra-state" | "inter-state">(initialDocument?.taxMode ?? "intra-state");
@@ -198,7 +208,7 @@ export function EstimateBillForm({
     return created.data.id;
   }
 
-  function buildTradeInput(resolvedCustomerId: string) {
+  function buildTradeInput(resolvedCustomerId: string, resolvedPayment: ResolvedBillPayment) {
     const items = completedLines.map((line) => {
       const grossCents = Math.round(Number(line.quantity) * Number(line.unitRate) * 100);
       const discountCents = Math.round(grossCents * Number(line.discountPercent) / 100);
@@ -220,12 +230,8 @@ export function EstimateBillForm({
       documentDate,
       estimateBill: true,
       gstFilingEligible: completedLines.some((line) => Number(line.gstRate) > 0),
-      paidAmountCents: paidAmount.trim()
-        ? Math.round(Number(paidAmount) * 100)
-        : paymentMode === "Credit"
-          ? 0
-          : totals.totalCents,
-      paymentMode,
+      paidAmountCents: resolvedPayment.paidAmountCents,
+      paymentMode: resolvedPayment.paymentMode,
       referenceNumber: referenceNumber.trim() || null,
       stockMovementOnConfirm: true,
       taxMode,
@@ -258,10 +264,16 @@ export function EstimateBillForm({
     setServerError(null);
     if (!locationId) return setServerError("Select a stock location.");
     if (!canSaveEstimate) return setServerError("Select every product and enter valid quantity and rate. Untouched blank rows are allowed.");
-    const enteredPaidCents = paidAmount.trim() ? Math.round(Number(paidAmount) * 100) : null;
-    const paidAmountCents = enteredPaidCents ?? (paymentMode === "Credit" ? 0 : totals.totalCents);
-    if (!Number.isFinite(paidAmountCents) || paidAmountCents < 0 || paidAmountCents > totals.totalCents) {
-      return setServerError("Paid amount must be between zero and the Estimate Bill total.");
+    let resolvedPayment: ResolvedBillPayment;
+    try {
+      resolvedPayment = resolveBillPayment({
+        choice: paymentChoice,
+        enteredPaidAmountCents: paidAmount.trim() ? Math.round(Number(paidAmount) * 100) : null,
+        paymentMode,
+        totalCents: totals.totalCents,
+      });
+    } catch (error) {
+      return setServerError(error instanceof Error ? error.message : "Select the bill payment status.");
     }
 
     setSaving(true);
@@ -271,7 +283,7 @@ export function EstimateBillForm({
         throw new Error("Existing Estimate Bills cannot be edited offline yet. Reconnect before updating this bill.");
       }
       const resolvedCustomerId = await resolveCustomer(!offlineNow);
-      const tradeInput = buildTradeInput(resolvedCustomerId);
+      const tradeInput = buildTradeInput(resolvedCustomerId, resolvedPayment);
       if (offlineNow) {
         await queueOfflineEstimate(tradeInput);
         return;
@@ -369,14 +381,45 @@ export function EstimateBillForm({
               {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
             </select>
           </Field>
-          <Field label="Payment mode">
-            <select className={selectClassName} onChange={(event) => setPaymentMode(event.target.value)} value={paymentMode}>
-              {["Cash", "UPI", "Bank Transfer", "Cheque", "Card", "Other", "Credit"].map((option) => <option key={option}>{option}</option>)}
+          <Field label="Payment status">
+            <select
+              className={selectClassName}
+              data-testid="estimate-payment-status"
+              onChange={(event) => {
+                const choice = event.target.value as BillPaymentChoice;
+                setPaymentChoice(choice);
+                if (choice !== "partial") setPaidAmount("");
+              }}
+              value={paymentChoice}
+            >
+              <option value="">Select paid or unpaid</option>
+              <option value="unpaid">Unpaid / credit</option>
+              <option value="paid">Paid in full</option>
+              <option value="partial">Partially paid</option>
             </select>
           </Field>
-          <Field label="Paid amount (blank = full for non-credit)">
-            <Input inputMode="decimal" min="0" onChange={(event) => setPaidAmount(event.target.value)} step="0.01" type="number" value={paidAmount} />
-          </Field>
+          {paymentChoice === "paid" || paymentChoice === "partial" ? (
+            <Field label="Payment mode">
+              <select className={selectClassName} onChange={(event) => setPaymentMode(event.target.value)} value={paymentMode}>
+                {["Cash", "UPI", "Bank Transfer", "Cheque", "Card", "Other"].map((option) => <option key={option}>{option}</option>)}
+              </select>
+            </Field>
+          ) : null}
+          {paymentChoice === "partial" ? (
+            <Field label="Paid amount">
+              <Input inputMode="decimal" min="0.01" onChange={(event) => setPaidAmount(event.target.value)} step="0.01" type="number" value={paidAmount} />
+            </Field>
+          ) : null}
+          {paymentChoice === "paid" ? (
+            <p className="self-end rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+              Full payment of {money(totals.totalCents)} will be recorded when the bill is generated.
+            </p>
+          ) : null}
+          {paymentChoice === "unpaid" ? (
+            <p className="self-end rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              This bill will be generated as unpaid and added to the customer outstanding balance.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -522,6 +565,15 @@ function Field({ children, className, label }: { children: React.ReactNode; clas
 
 function TotalRow({ label, value }: { label: string; value: number }) {
   return <div className="flex justify-between gap-4"><dt className="text-muted-foreground">{label}</dt><dd>{money(value)}</dd></div>;
+}
+
+function calculateInitialDocumentTotal(document: HardwareEstimateEditData) {
+  return calculateEstimateMoneyTotals(document.items.map((item) => ({
+    discountCents: Math.round(item.quantity * item.unitRateCents * item.discountPercent / 100),
+    quantity: item.quantity,
+    taxRateBps: Math.round(item.gstRate * 100),
+    unitAmountCents: item.unitRateCents,
+  }))).totalCents;
 }
 
 function calculateLineTotal(line: EstimateLine) {

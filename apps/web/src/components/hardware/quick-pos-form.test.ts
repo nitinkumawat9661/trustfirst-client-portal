@@ -31,7 +31,7 @@ describe("quick POS print preview helpers", () => {
       unitCode: "PCS",
     }];
 
-    const totals = quickPosPrintTestUtils.calculateTotals(lines, "100", "5");
+    const totals = quickPosPrintTestUtils.calculateTotals(lines, "100", "5", "partial");
     const preview = quickPosPrintTestUtils.buildBillPreview({
       cashierName: "Counter",
       customerAddress: "Test billing address",

@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { z } from "zod";
-import { patchHardwareJson, postHardwareProductJson } from "./hardware-api-client";
+import { patchHardwareJson, postHardwareProductJson, postHardwareStockJson } from "./hardware-api-client";
 
 const moneyPattern = /^\d+(\.\d{1,2})?$/u;
 const optionalMoney = z.string().refine((value) => value === "" || moneyPattern.test(value), {
@@ -39,13 +39,18 @@ const productFormSchema = z.object({
   purchasePrice: optionalMoney,
   salePrice: requiredSalePrice,
   sku: z.string().trim().max(120),
+  stockLevel: z.string().refine((value) => value === "" || /^\d+$/u.test(value), {
+    message: "Stock level must be a non-negative whole number.",
+  }),
+  stockLocationId: z.string(),
   unitId: z.string(),
 });
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
 type LookupOption = { id: string; name: string };
 type UnitOption = { code: string; id: string; name: string };
-type SavedProductResult = { offlineQueued?: boolean };
+type StockLocationOption = { currentStock: number; id: string; name: string };
+type SavedProductResult = { id?: string; offlineQueued?: boolean };
 
 export type HardwareProductFormProduct = {
   barcode: string;
@@ -65,11 +70,13 @@ export type HardwareProductFormProduct = {
 export function HardwareProductForm({
   brands,
   categories,
+  locations,
   product,
   units,
 }: {
   brands: LookupOption[];
   categories: LookupOption[];
+  locations: StockLocationOption[];
   product?: HardwareProductFormProduct;
   units: UnitOption[];
 }) {
@@ -81,6 +88,7 @@ export function HardwareProductForm({
     formState: { errors, isSubmitting },
     handleSubmit,
     register,
+    setValue,
     watch,
   } = useForm<ProductFormValues>({
     defaultValues: {
@@ -94,6 +102,8 @@ export function HardwareProductForm({
       purchasePrice: product?.purchasePrice ?? "",
       salePrice: product?.salePrice ?? "",
       sku: product?.sku ?? "",
+      stockLevel: isEditing ? String(locations[0]?.currentStock ?? 0) : "",
+      stockLocationId: locations[0]?.id ?? "",
       unitId: product?.unitId ?? "",
     },
     resolver: zodResolver(productFormSchema),
@@ -101,6 +111,8 @@ export function HardwareProductForm({
 
   const currentName = watch("name");
   const currentSalePrice = watch("salePrice");
+  const selectedStockLocationId = watch("stockLocationId");
+  const selectedStockLocation = locations.find((location) => location.id === selectedStockLocationId);
   const canSubmit = currentName.trim().length >= 2 && moneyPattern.test(currentSalePrice) && Number(currentSalePrice) > 0;
 
   async function onSubmit(values: ProductFormValues) {
@@ -109,10 +121,20 @@ export function HardwareProductForm({
       setServerError("Editing an existing product requires an internet connection so server changes cannot be overwritten silently.");
       return;
     }
+    const stockLevel = values.stockLevel === "" ? null : Number(values.stockLevel);
+    if (stockLevel !== null && !values.stockLocationId) {
+      setServerError("Select a stock location when setting stock level.");
+      return;
+    }
+    const initialStock = locations.find((location) => location.id === values.stockLocationId)?.currentStock ?? 0;
+    const stockChanged = stockLevel !== null && (!isEditing || stockLevel !== initialStock);
     const commonPayload = {
       gstTaxConfig: values.gstRate ? { rateBps: Math.round(Number(values.gstRate) * 100) } : {},
       lowStockThreshold: values.lowStockThreshold,
-      metadata: { hsnCode: values.hsnCode.trim().toUpperCase() || null },
+      metadata: {
+        hsnCode: values.hsnCode.trim().toUpperCase() || null,
+        ...(stockLevel !== null ? { stockSetupPendingAt: null, stockSetupStatus: "TRACKED" } : {}),
+      },
       name: values.name.trim(),
       purchaseCostCents: values.purchasePrice ? toCents(values.purchasePrice) : 0,
       salesPriceCents: toCents(values.salePrice),
@@ -132,6 +154,7 @@ export function HardwareProductForm({
           ...(values.brandId ? { brandId: values.brandId } : {}),
           ...(values.categoryId ? { categoryId: values.categoryId } : {}),
           ...(values.sku.trim() ? { sku: values.sku.trim() } : {}),
+          ...(stockLevel !== null ? { stockLevel: { locationId: values.stockLocationId, quantity: stockLevel } } : {}),
           ...(values.unitId ? { unitId: values.unitId } : {}),
         };
     const result = isEditing && product
@@ -144,6 +167,32 @@ export function HardwareProductForm({
     if (!result.ok) {
       setServerError(result.message);
       return;
+    }
+    if (stockChanged && !result.data.offlineQueued) {
+      if (!result.data.id) {
+        setServerError("Product was saved, but its stock identity was not returned. Refresh and set stock from Inventory.");
+        return;
+      }
+      const stockResult = await postHardwareStockJson(
+        {
+          locationId: values.stockLocationId,
+          notes: "Stock level set from product section",
+          productId: result.data.id,
+          quantity: stockLevel as number,
+          referenceId: result.data.id,
+          referenceType: "product_form",
+          type: "ADJUSTMENT",
+        },
+        initialStock,
+        {
+          locationName: selectedStockLocation?.name ?? null,
+          productName: values.name.trim(),
+        },
+      );
+      if (!stockResult.ok) {
+        setServerError(`Product details were saved, but stock level was not updated: ${stockResult.message}`);
+        return;
+      }
     }
     const status = result.data.offlineQueued ? "queued" : isEditing ? "updated" : "created";
     router.push(`/admin/hardware/products?${status}=1`);
@@ -165,7 +214,28 @@ export function HardwareProductForm({
               <Input inputMode="decimal" min="0.01" step="0.01" type="number" {...register("salePrice")} />
             </Field>
           </div>
-          <p className="text-sm text-muted-foreground">Product name and sale price are required. A new product can be queued offline; edits to existing products require internet.</p>
+          <div className="grid gap-4 rounded-md border border-border bg-muted/30 p-4 md:grid-cols-2">
+            <Field error={errors.stockLevel?.message} label={isEditing ? "Stock level at selected location" : "Opening stock level"}>
+              <Input inputMode="numeric" min="0" placeholder={isEditing ? undefined : "Optional"} step="1" type="number" {...register("stockLevel")} />
+            </Field>
+            <Field label="Stock location">
+              <select
+                className={selectClassName}
+                {...register("stockLocationId", {
+                  onChange: (event) => {
+                    const location = locations.find((candidate) => candidate.id === event.target.value);
+                    setValue("stockLevel", isEditing ? String(location?.currentStock ?? 0) : "", { shouldDirty: true });
+                  },
+                })}
+              >
+                <option value="">Select stock location</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>{location.name}{isEditing ? ` — current ${location.currentStock}` : ""}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <p className="text-sm text-muted-foreground">Product name and sale price are required. Stock can be set here for a selected location. A new product can be queued offline; edits to existing products require internet.</p>
           <button
             className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium"
             onClick={() => setDetailsOpen((open) => !open)}

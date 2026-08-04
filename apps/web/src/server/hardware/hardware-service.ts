@@ -1601,7 +1601,8 @@ function importFingerprint(tenantId: string, rows: NormalizedImportRow[]) {
 }
 
 function toProductSummary(product: ProductRecord, movements: MovementRecord[]): HardwareProductSummary {
-  const currentStock = stockForProduct(movements.filter((movement) => movement.productId === product.id));
+  const productMovements = movements.filter((movement) => movement.productId === product.id);
+  const currentStock = stockForProduct(productMovements);
   const gstTaxConfig = asRecord(product.gstTaxConfig);
   const metadata = asRecord(product.metadata);
   return {
@@ -1622,7 +1623,7 @@ function toProductSummary(product: ProductRecord, movements: MovementRecord[]): 
     salesDiscountBps: readRateBps(metadata.lastSalesDiscountBps) ?? 0,
     salesPriceCents: product.salesPriceCents,
     sku: product.sku,
-    stockSetupStatus: metadata.stockSetupStatus === "PENDING" ? "PENDING" : "TRACKED",
+    stockSetupStatus: metadata.stockSetupStatus === "PENDING" && productMovements.length === 0 ? "PENDING" : "TRACKED",
     status: "ACTIVE",
     unitCode: product.unit?.code ?? null,
   };

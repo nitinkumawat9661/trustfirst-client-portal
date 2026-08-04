@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import type { HardwarePartySummary, HardwareProductSummary } from "@/server/hardware";
+import { resolveBillPayment, type BillPaymentChoice } from "../../lib/hardware/payment-choice";
 import { buildWhatsAppBillUrl } from "@/server/hardware/whatsapp";
 import { nextBillingLineAction } from "./billing-keyboard";
 import { canPostBillingLines, completedBillingLines } from "./billing-lines";
@@ -90,7 +91,8 @@ export function QuickPosForm({
   const [invoiceDiscount, setInvoiceDiscount] = useState("0");
   const [lines, setLines] = useState<PosLine[]>([{ ...emptyLine }]);
   const [notes, setNotes] = useState("");
-  const [paid, setPaid] = useState("0");
+  const [paid, setPaid] = useState("");
+  const [paymentChoice, setPaymentChoice] = useState<BillPaymentChoice>("");
   const [paymentMode, setPaymentMode] = useState("CASH");
   const [previewOpen, setPreviewOpen] = useState(true);
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
@@ -109,7 +111,10 @@ export function QuickPosForm({
   const gstInputRefs = useRef<Array<HTMLSelectElement | null>>([]);
   const completedLines = useMemo(() => completedBillingLines(lines), [lines]);
   const canPost = canPostBillingLines(lines);
-  const totals = useMemo(() => calculateTotals(completedLines, paid, invoiceDiscount), [completedLines, invoiceDiscount, paid]);
+  const totals = useMemo(
+    () => calculateTotals(completedLines, paid, invoiceDiscount, paymentChoice),
+    [completedLines, invoiceDiscount, paid, paymentChoice],
+  );
   const pendingStockProducts = completedLines
     .map((line) => availableProducts.find((product) => product.id === line.productId))
     .filter((product): product is HardwareProductSummary => product?.stockSetupStatus === "PENDING");
@@ -187,6 +192,18 @@ export function QuickPosForm({
   async function postBill(options: { printAfterPost?: boolean } = {}) {
     setServerError(null);
     setPrintStatus(null);
+    let resolvedPayment: ReturnType<typeof resolveBillPayment>;
+    try {
+      resolvedPayment = resolveBillPayment({
+        choice: paymentChoice,
+        enteredPaidAmountCents: paid.trim() ? Math.round(Number(paid) * 100) : null,
+        paymentMode,
+        totalCents: totals.totalCents,
+      });
+    } catch (error) {
+      setServerError(error instanceof Error ? error.message : "Select the bill payment status.");
+      return;
+    }
     setSaving(true);
     let resolvedCustomerId = customerId;
     if (!resolvedCustomerId && customerName.trim()) {
@@ -239,8 +256,8 @@ export function QuickPosForm({
       }),
       locationId,
       notes: notes.trim() || undefined,
-      paidAmountCents: totals.paidCents,
-      paymentMode: totals.paidCents > 0 ? paymentMode : undefined,
+      paidAmountCents: resolvedPayment.paidAmountCents,
+      paymentMode: resolvedPayment.paidAmountCents > 0 ? resolvedPayment.paymentMode : undefined,
       roundOffCents: totals.roundOffCents,
       taxMode: "intra-state",
     });
@@ -437,29 +454,61 @@ export function QuickPosForm({
             <TotalRow label="Round-off" value={totals.roundOffCents} />
             <div className="flex justify-between border-t border-border pt-3 text-base font-semibold"><span>Total</span><span>{money(totals.totalCents)}</span></div>
             <label className="grid gap-2 font-medium">
-              Paid
-              <Input inputMode="decimal" min="0" step="0.01" type="number" value={paid} onChange={(event) => setPaid(event.target.value)} />
-            </label>
-            <label className="grid gap-2 font-medium">
-              Payment mode
-              <select className={selectClassName} disabled={totals.paidCents <= 0} value={paymentMode} onChange={(event) => setPaymentMode(event.target.value)}>
-                <option value="CASH">Cash</option>
-                <option value="UPI">UPI</option>
-                <option value="CARD">Card</option>
-                <option value="BANK_TRANSFER">Bank transfer</option>
-                <option value="CHEQUE">Cheque</option>
-                <option value="OTHER">Other</option>
+              Payment status
+              <select
+                className={selectClassName}
+                data-testid="quick-pos-payment-status"
+                value={paymentChoice}
+                onChange={(event) => {
+                  const choice = event.target.value as BillPaymentChoice;
+                  setPaymentChoice(choice);
+                  if (choice !== "partial") setPaid("");
+                }}
+              >
+                <option value="">Select paid or unpaid</option>
+                <option value="unpaid">Unpaid / credit</option>
+                <option value="paid">Paid in full</option>
+                <option value="partial">Partially paid</option>
               </select>
             </label>
+            {paymentChoice === "paid" || paymentChoice === "partial" ? (
+              <label className="grid gap-2 font-medium">
+                Payment mode
+                <select className={selectClassName} value={paymentMode} onChange={(event) => setPaymentMode(event.target.value)}>
+                  <option value="CASH">Cash</option>
+                  <option value="UPI">UPI</option>
+                  <option value="CARD">Card</option>
+                  <option value="BANK_TRANSFER">Bank transfer</option>
+                  <option value="CHEQUE">Cheque</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </label>
+            ) : null}
+            {paymentChoice === "partial" ? (
+              <label className="grid gap-2 font-medium">
+                Paid amount
+                <Input inputMode="decimal" min="0.01" step="0.01" type="number" value={paid} onChange={(event) => setPaid(event.target.value)} />
+              </label>
+            ) : null}
+            {paymentChoice === "paid" ? (
+              <p className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900">
+                Full payment of {money(totals.totalCents)} will be recorded.
+              </p>
+            ) : null}
+            {paymentChoice === "unpaid" ? (
+              <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                The full balance will remain outstanding for this customer.
+              </p>
+            ) : null}
             <TotalRow label="Balance" value={totals.balanceCents} />
             <label className="grid gap-2 font-medium">
               Notes
               <textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" maxLength={1000} value={notes} onChange={(event) => setNotes(event.target.value)} />
             </label>
-            <Button className="w-full" disabled={saving || confirmed || !canPost || !locationId} onClick={() => postBill()} type="button">
+            <Button className="w-full" disabled={saving || confirmed || !canPost || !locationId || !paymentChoice} onClick={() => postBill()} type="button">
               <Check className="size-4" />{saving ? "Posting..." : confirmed ? "Posted" : "Post bill"}
             </Button>
-            <Button className="w-full" disabled={saving || postingPrint || (!confirmed && (!canPost || !locationId))} onClick={postAndPrint} type="button" variant="outline">
+            <Button className="w-full" disabled={saving || postingPrint || (!confirmed && (!canPost || !locationId || !paymentChoice))} onClick={postAndPrint} type="button" variant="outline">
               <Printer className="size-4" />{postingPrint ? "Posting..." : confirmed ? "Print A4 invoice" : "Post and print A4"}
             </Button>
           </CardContent>
@@ -835,7 +884,7 @@ function TotalRow({ label, value }: { label: string; value: number }) {
   return <div className="flex justify-between gap-4"><span className="text-muted-foreground">{label}</span><span>{money(value)}</span></div>;
 }
 
-function calculateTotals(lines: PosLine[], paid: string, invoiceDiscount: string) {
+function calculateTotals(lines: PosLine[], paid: string, invoiceDiscount: string, paymentChoice: BillPaymentChoice) {
   const totals = lines.reduce((result, line) => {
     const gross = Math.round((Number(line.quantity) || 0) * (Number(line.rate) || 0) * 100);
     const discount = Math.round(gross * (Number(line.discountPercent) || 0) / 100);
@@ -846,7 +895,12 @@ function calculateTotals(lines: PosLine[], paid: string, invoiceDiscount: string
   const invoiceDiscountCents = Math.min(Math.round((Number(invoiceDiscount) || 0) * 100), totals.subtotalCents - totals.discountCents + totals.taxCents);
   const rawTotal = totals.subtotalCents - totals.discountCents - invoiceDiscountCents + totals.taxCents;
   const roundedTotal = Math.round(rawTotal / 100) * 100;
-  const paidCents = Math.round((Number(paid) || 0) * 100);
+  const enteredPaidCents = Math.round((Number(paid) || 0) * 100);
+  const paidCents = paymentChoice === "paid"
+    ? roundedTotal
+    : paymentChoice === "partial"
+      ? enteredPaidCents
+      : 0;
   return { ...totals, balanceCents: Math.max(roundedTotal - paidCents, 0), invoiceDiscountCents, paidCents, roundOffCents: roundedTotal - rawTotal, totalCents: roundedTotal };
 }
 
