@@ -8,6 +8,7 @@ export type OfflineProductDraftInput = {
   hsnCode?: string;
   lowStockThreshold?: number;
   name: string;
+  openingStock?: { locationId: string; quantity: number };
   purchaseCostCents?: number;
   salesPriceCents: number;
   sku?: string;
@@ -48,6 +49,7 @@ export function catalogProductPayloadToOfflineInput(
 ): OfflineProductDraftInput {
   const metadata = asRecord(rawPayload.metadata);
   const gstTaxConfig = asRecord(rawPayload.gstTaxConfig);
+  const stockLevel = asRecord(rawPayload.stockLevel);
   return validateOfflineProductInput({
     barcode: rawPayload.barcode,
     brandId: rawPayload.brandId,
@@ -56,6 +58,7 @@ export function catalogProductPayloadToOfflineInput(
     hsnCode: metadata.hsnCode,
     lowStockThreshold: rawPayload.lowStockThreshold,
     name: rawPayload.name,
+    openingStock: Object.keys(stockLevel).length ? stockLevel : undefined,
     purchaseCostCents: rawPayload.purchaseCostCents,
     salesPriceCents: rawPayload.salesPriceCents,
     sku: rawPayload.sku,
@@ -76,6 +79,14 @@ export function validateOfflineProductInput(
     throw new Error("GST rate must be between 0 and 10000 basis points.");
   }
   const hsnCode = optionalText(rawInput.hsnCode, 12)?.toUpperCase();
+  const openingStockRecord = asRecord(rawInput.openingStock);
+  const openingStock = Object.keys(openingStockRecord).length
+    ? {
+        locationId: optionalUuid(openingStockRecord.locationId, "Stock location") as string,
+        quantity: nonNegativeInteger(openingStockRecord.quantity, "Stock level"),
+      }
+    : undefined;
+  if (openingStock && !openingStock.locationId) throw new Error("Select a stock location when setting stock level.");
   if (hsnCode && !/^[A-Z0-9-]{2,12}$/u.test(hsnCode)) {
     throw new Error("HSN / SAC must contain 2 to 12 letters, digits, or dashes.");
   }
@@ -87,6 +98,7 @@ export function validateOfflineProductInput(
     ...(hsnCode ? { hsnCode } : {}),
     lowStockThreshold,
     name,
+    ...(openingStock ? { openingStock } : {}),
     purchaseCostCents,
     salesPriceCents,
     ...(optionalText(rawInput.sku, 120) ? { sku: optionalText(rawInput.sku, 120) as string } : {}),
@@ -102,15 +114,16 @@ export function buildQueuedOfflineProductSummary(
 ): QueuedOfflineProductSummary {
   const input = validateOfflineProductInput(rawInput);
   const lowStockThreshold = input.lowStockThreshold ?? 0;
+  const currentStock = input.openingStock?.quantity ?? 0;
   return {
     barcode: input.barcode ?? null,
     brandName: normalizedDisplay(display.brandName),
     categoryName: normalizedDisplay(display.categoryName),
-    currentStock: 0,
+    currentStock,
     gstRateBps: input.gstRateBps ?? null,
     hsnCode: input.hsnCode ?? null,
     id: `offline-product:${queueItemId}`,
-    lowStock: 0 <= lowStockThreshold,
+    lowStock: currentStock <= lowStockThreshold,
     lowStockThreshold,
     name: input.name,
     offlineQueued: true,
@@ -121,7 +134,7 @@ export function buildQueuedOfflineProductSummary(
     salesPriceCents: input.salesPriceCents,
     sku: input.sku ?? "Auto after sync",
     status: "ACTIVE",
-    stockSetupStatus: "PENDING",
+    stockSetupStatus: input.openingStock ? "TRACKED" : "PENDING",
     unitCode: normalizedDisplay(display.unitCode),
   };
 }

@@ -178,9 +178,7 @@ export class HardwareTradeService {
       await this.ensureStockAvailable(context.tenantId, document, input.locationId);
     }
     const isEstimateSale = document.type === HardwareTradeDocumentType.SALES_QUOTATION;
-    const stockItems = isEstimateSale
-      ? document.items
-      : document.items.filter((item) => !isStockSetupPending(item.product?.metadata));
+    const stockItems = document.items;
     const purchasePaidAmountCents = purchasePaymentAmountFromMetadata(document.metadata, document.totalCents);
     const estimatePaidAmountCents = isEstimateSale
       ? estimatePaymentAmountFromMetadata(document.metadata, document.totalCents)
@@ -663,7 +661,7 @@ export class HardwareTradeService {
       throw validation("Paid amount cannot exceed bill total.");
     }
 
-    const trackedItems = normalizedItems.filter((item) => !isStockSetupPending(products.get(item.productId)?.metadata));
+    const trackedItems = normalizedItems;
     for (const item of trackedItems) {
       const movements = await this.prisma.hardwareInventoryMovement.findMany({
         where: { locationId: input.locationId, productId: item.productId, tenantId: context.tenantId },
@@ -1019,7 +1017,7 @@ export class HardwareTradeService {
           if (!fallbackLocationId) {
             throw validation("Stock location for cancellation could not be resolved.");
           }
-          for (const item of document.items.filter((candidate) => !isStockSetupPending(candidate.product?.metadata))) {
+          for (const item of document.items) {
             await tx.hardwareInventoryMovement.create({
               data: stripUndefined({
                 customerId: document.customerId,
@@ -1275,7 +1273,7 @@ export class HardwareTradeService {
         sourceType: "HardwareTradeDocument",
         tenantId: context.tenantId,
       });
-      for (const item of returnItems.filter((candidate) => !isStockSetupPending(originalItems.get(readString(asRecord(candidate.metadata).originalItemId) ?? "")?.product?.metadata))) {
+      for (const item of returnItems) {
         await tx.hardwareInventoryMovement.create({
           data: stripUndefined({
             customerId: document.customerId,
@@ -1436,7 +1434,6 @@ export class HardwareTradeService {
     });
     for (const item of returnItems) {
       const original = originalItems.get(readString(asRecord(item.metadata).originalItemId) ?? "");
-      if (isStockSetupPending(original?.product?.metadata)) continue;
       const movements = await this.prisma.hardwareInventoryMovement.findMany({
         where: { locationId: input.locationId, productId: item.productId, tenantId: context.tenantId },
       });
@@ -1496,7 +1493,7 @@ export class HardwareTradeService {
         sourceType: "HardwareTradeDocument",
         tenantId: context.tenantId,
       });
-      for (const item of returnItems.filter((candidate) => !isStockSetupPending(originalItems.get(readString(asRecord(candidate.metadata).originalItemId) ?? "")?.product?.metadata))) {
+      for (const item of returnItems) {
         await tx.hardwareInventoryMovement.create({
           data: stripUndefined({
             locationId: input.locationId,
@@ -1839,9 +1836,7 @@ export class HardwareTradeService {
       HardwareTradeDocumentType.PURCHASE_RETURN,
     ]);
     if (!stockOutTypes.has(document.type)) return;
-    const isEstimateSale = document.type === HardwareTradeDocumentType.SALES_QUOTATION;
     for (const item of document.items) {
-      if (!isEstimateSale && isStockSetupPending(item.product?.metadata)) continue;
       const movements = await this.prisma.hardwareInventoryMovement.findMany({
         where: { locationId, productId: item.productId, tenantId },
       });
@@ -1952,9 +1947,6 @@ export class HardwareTradeService {
   }
 }
 
-function isStockSetupPending(value: unknown) {
-  return asRecord(value).stockSetupStatus === "PENDING";
-}
 
 function gstSummary(items: TradeFullRecord["items"]) {
   const grouped = new Map<number, { taxableCents: number; taxCents: number; taxRateBps: number }>();

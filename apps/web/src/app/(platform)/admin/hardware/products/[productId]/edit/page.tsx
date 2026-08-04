@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
 import { HardwareProductForm } from "@/components/hardware/hardware-product-form";
 import { requireCurrentUser } from "@/server/auth/session";
-import { HardwareService } from "@/server/hardware";
+import { HardwareService, stockForProduct } from "@/server/hardware";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +13,19 @@ export default async function EditHardwareProductPage({
   params: Promise<{ productId: string }>;
 }) {
   const user = await requireCurrentUser();
-  const service = new HardwareService(getPrisma());
+  const prisma = getPrisma();
+  const service = new HardwareService(prisma);
   const context = { tenantId: user.activeTenantId ?? "public", userId: user.id };
   const { productId } = await params;
-  const [products, brands, categories, units] = await Promise.all([
+  const [products, brands, categories, locations, movements, units] = await Promise.all([
     service.listProducts(context),
     service.listBrands(context),
     service.listCategories(context),
+    service.listLocations(context),
+    prisma.hardwareInventoryMovement.findMany({
+      select: { locationId: true, quantity: true, type: true },
+      where: { productId, tenantId: context.tenantId },
+    }),
     service.listUnits(context),
   ]);
   const product = products.find((candidate) => candidate.id === productId);
@@ -35,6 +41,11 @@ export default async function EditHardwareProductPage({
       <HardwareProductForm
         brands={brands}
         categories={categories}
+        locations={locations.map((location) => ({
+          currentStock: stockForProduct(movements.filter((movement) => movement.locationId === location.id)),
+          id: location.id,
+          name: location.name,
+        }))}
         product={{
           barcode: product.barcode ?? "",
           brandId: brands.find((brand) => brand.name === product.brandName)?.id ?? "",
