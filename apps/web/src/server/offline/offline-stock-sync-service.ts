@@ -73,6 +73,9 @@ export class OfflineStockSyncService {
     const input = hardwareMovementSchema.parse(payload.input);
 
     return this.prisma.$transaction(async (tx) => {
+      for (const lock of stockIdentityLockKeys(device, item.id, item.idempotencyKey)) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lock}))`;
+      }
       const receipt = await findReceipt(tx, device, item.id, item.idempotencyKey);
       if (receipt?.status === "SUCCESS") return parseStoredResult(receipt.result);
       if (receipt) {
@@ -88,14 +91,14 @@ export class OfflineStockSyncService {
       const currentStock = stockForMovements(movements);
       assertStockContract(input, currentStock, payload.expectedCurrentStock);
       const nextStock = nextStockForMovement(currentStock, input);
-      const metadata = {
+      const metadata = compactRecord({
         ...asRecord(input.metadata),
         expectedCurrentStock: payload.expectedCurrentStock,
         offlineDeviceId: device.id,
         offlineIdempotencyKey: item.idempotencyKey,
         offlineSyncQueueItemId: item.id,
         offlineSyncedAt: new Date().toISOString(),
-      } as Prisma.InputJsonValue;
+      }) as Prisma.InputJsonValue;
       const movement = await tx.hardwareInventoryMovement.create({
         data: compactRecord({
           customerId: input.customerId,
@@ -168,6 +171,17 @@ export class OfflineStockSyncService {
       return result;
     });
   }
+}
+
+function stockIdentityLockKeys(
+  device: Pick<AuthenticatedOfflineDevice, "id" | "tenantId">,
+  queueItemId: string,
+  idempotencyKey: string,
+) {
+  return [
+    `offline-stock:${device.tenantId}:${device.id}:item:${queueItemId}`,
+    `offline-stock:${device.tenantId}:${device.id}:idempotency:${idempotencyKey}`,
+  ].sort();
 }
 
 async function lockProduct(
@@ -346,4 +360,5 @@ export const offlineStockSyncTestUtils = {
   assertStockContract,
   nextStockForMovement,
   stockForMovements,
+  stockIdentityLockKeys,
 };
