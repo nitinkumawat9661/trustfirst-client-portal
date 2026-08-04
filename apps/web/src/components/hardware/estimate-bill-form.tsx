@@ -384,6 +384,7 @@ export function EstimateBillForm({
           <Field label="Payment status">
             <select
               className={selectClassName}
+              data-testid="estimate-payment-status"
               onChange={(event) => {
                 const choice = event.target.value as BillPaymentChoice;
                 setPaymentChoice(choice);

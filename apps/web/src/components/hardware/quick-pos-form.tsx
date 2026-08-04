@@ -457,6 +457,7 @@ export function QuickPosForm({
               Payment status
               <select
                 className={selectClassName}
+                data-testid="quick-pos-payment-status"
                 value={paymentChoice}
                 onChange={(event) => {
                   const choice = event.target.value as BillPaymentChoice;
