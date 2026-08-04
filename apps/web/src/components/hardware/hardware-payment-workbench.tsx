@@ -211,7 +211,8 @@ export function HardwarePaymentWorkbench({
     resetField("amount");
     resetField("excessAsAdvance");
     if (isQueuedPayment(result.data)) {
-      setQueuedPayments((current) => mergeQueuedPaymentRows(current, [result.data]));
+      const queuedPayment = result.data;
+      setQueuedPayments((current) => mergeQueuedPaymentRows(current, [queuedPayment]));
       setStatus({
         kind: "success",
         message: `${role === "supplier" ? "Supplier payment" : "Customer receipt"} saved offline. Final number and print will be available after reconnect sync.`,
