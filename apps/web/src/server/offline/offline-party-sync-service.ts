@@ -327,7 +327,7 @@ function normalizeComparable(value: string) {
   return value
     .normalize("NFKC")
     .toLocaleLowerCase("en-IN")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/gu, " ");
 }
