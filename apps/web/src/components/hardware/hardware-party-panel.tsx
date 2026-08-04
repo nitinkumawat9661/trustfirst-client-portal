@@ -4,15 +4,20 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input } from "@trustfirst/ui";
 import { Plus, UsersRound } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import {
+  listQueuedOfflineParties,
+  readActiveOfflineScope,
+  type QueuedOfflinePartySummary,
+} from "../../lib/offline-data";
 import type { HardwarePartyRole, HardwarePartySummary } from "@/server/hardware";
-import { postHardwareJson } from "./hardware-api-client";
+import { postHardwarePartyJson } from "./hardware-api-client";
 
 const partySchema = z.object({
   address: z.string().max(500),
-  contact: z.string().max(120),
+  contact: z.string().max(30),
   gstin: z.string().max(20).refine(
     (value) => value === "" || /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][A-Z0-9]Z[A-Z0-9]$/i.test(value),
     { message: "Enter a valid 15-character GSTIN or leave it blank." },
@@ -24,6 +29,7 @@ const partySchema = z.object({
 });
 
 type PartyFormValues = z.infer<typeof partySchema>;
+type PartyRow = HardwarePartySummary | QueuedOfflinePartySummary;
 
 export function HardwarePartyPanel({
   parties,
@@ -35,6 +41,7 @@ export function HardwarePartyPanel({
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [visibleParties, setVisibleParties] = useState<PartyRow[]>(parties);
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -46,21 +53,39 @@ export function HardwarePartyPanel({
   });
   const singular = role === "supplier" ? "supplier" : "customer";
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateQueuedParties() {
+      const scope = readActiveOfflineScope();
+      const queued = scope ? await listQueuedOfflineParties(scope, role) : [];
+      if (!cancelled) setVisibleParties(mergePartyRows(parties, queued));
+    }
+
+    void hydrateQueuedParties();
+    window.addEventListener("trustfirst:offline-queue-changed", hydrateQueuedParties);
+    window.addEventListener("online", hydrateQueuedParties);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("trustfirst:offline-queue-changed", hydrateQueuedParties);
+      window.removeEventListener("online", hydrateQueuedParties);
+    };
+  }, [parties, role]);
+
   async function onSubmit(values: PartyFormValues) {
     setServerError(null);
-    const result = await postHardwareJson<unknown>("/api/crm/clients", {
-        customFields: {
-          ...(values.address ? { address: values.address } : {}),
-          ...(values.contact ? { phone: values.contact } : {}),
-          ...(values.gstin ? { gstin: values.gstin.toUpperCase() } : {}),
-          hardwarePartyRole: role,
-          ...(values.openingBalance ? { openingBalanceCents: Math.round(Number(values.openingBalance) * 100) } : {}),
-        },
-        lifecycleStage: "CLIENT",
-        metadata: { sourceModule: "hardware-erp" },
-        name: values.name,
-        source: "hardware-erp",
-        status: "ACTIVE",
+    const openingBalanceCents = values.openingBalance
+      ? Math.round(Number(values.openingBalance) * 100)
+      : undefined;
+    const result = await postHardwarePartyJson<PartyRow>({
+      ...(values.address ? { address: values.address } : {}),
+      ...(openingBalanceCents === undefined
+        ? {}
+        : { balanceDirection: "DR", openingBalanceCents }),
+      ...(values.gstin ? { gstin: values.gstin.toUpperCase() } : {}),
+      ...(values.contact ? { mobile: values.contact } : {}),
+      name: values.name,
+      role,
     });
     if (!result.ok) {
       setServerError(result.message || `${capitalize(singular)} could not be saved.`);
@@ -68,6 +93,13 @@ export function HardwarePartyPanel({
     }
     reset();
     setFormOpen(false);
+    if (isQueuedParty(result.data)) {
+      setVisibleParties((current) => [
+        result.data,
+        ...current.filter((party) => party.id !== result.data.id),
+      ]);
+      return;
+    }
     router.refresh();
   }
 
@@ -97,7 +129,7 @@ export function HardwarePartyPanel({
           </CardContent>
         </Card>
       ) : null}
-      {parties.length === 0 ? (
+      {visibleParties.length === 0 ? (
         <div className="rounded-md border border-dashed border-border px-4 py-10 text-center">
           <UsersRound className="mx-auto size-7 text-muted-foreground" />
           <p className="mt-3 font-medium">No {role === "supplier" ? "suppliers" : "customers"} have been added.</p>
@@ -110,9 +142,12 @@ export function HardwarePartyPanel({
               <tr><th className="px-3 py-3">Name</th><th className="px-3 py-3">GSTIN</th><th className="px-3 py-3">Contact</th><th className="px-3 py-3">Opening balance</th><th className="px-3 py-3">Current balance</th><th className="px-3 py-3">Side</th></tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {parties.map((party) => (
+              {visibleParties.map((party) => (
                 <tr key={party.id}>
-                  <td className="px-3 py-3 font-medium">{party.name}</td>
+                  <td className="px-3 py-3 font-medium">
+                    <span>{party.name}</span>
+                    {isQueuedParty(party) ? <Badge className="ml-2">{queueStatusLabel(party.queueStatus)}</Badge> : null}
+                  </td>
                   <td className="px-3 py-3">{party.gstin ?? <Muted />}</td>
                   <td className="px-3 py-3">{party.contact ?? <Muted />}</td>
                   <td className="px-3 py-3">{money(party.openingBalanceCents)}</td>
@@ -126,6 +161,27 @@ export function HardwarePartyPanel({
       )}
     </div>
   );
+}
+
+export function mergePartyRows(
+  serverParties: PartyRow[],
+  queuedParties: QueuedOfflinePartySummary[],
+): PartyRow[] {
+  const queuedIds = new Set(queuedParties.map((party) => party.id));
+  return [
+    ...queuedParties,
+    ...serverParties.filter((party) => !queuedIds.has(party.id) && !isQueuedParty(party)),
+  ];
+}
+
+function isQueuedParty(party: PartyRow): party is QueuedOfflinePartySummary {
+  return "offlineQueued" in party && party.offlineQueued === true;
+}
+
+function queueStatusLabel(status: QueuedOfflinePartySummary["queueStatus"]) {
+  if (status === "failed") return "Sync failed";
+  if (status === "syncing") return "Syncing";
+  return "Pending sync";
 }
 
 function Field({ children, error, label, required }: { children: React.ReactNode; error?: string | undefined; label: string; required?: boolean | undefined }) {
