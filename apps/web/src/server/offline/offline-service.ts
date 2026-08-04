@@ -1,4 +1,7 @@
 import {
+  FinancialPartyType,
+  FinancialTransactionStatus,
+  FinancialTransactionType,
   HardwareInventoryMovementType,
   type PrismaClient,
 } from "@trustfirst/database";
@@ -8,6 +11,7 @@ import {
   type OfflineDeviceEnrollment,
   type OfflineSnapshot,
   type OfflineSnapshotDocument,
+  type OfflineSnapshotFinancialPosition,
   type OfflineSnapshotStock,
 } from "../../lib/offline-data/types";
 import { AppError } from "../domain/errors";
@@ -35,6 +39,8 @@ type EnrollInput = {
   label?: string | null | undefined;
   metadata?: Record<string, unknown> | undefined;
 };
+
+type SnapshotParty = { id: string; name: string };
 
 const maxDeviceKeyLength = 160;
 const maxDeviceLabelLength = 120;
@@ -142,6 +148,15 @@ export class OfflineService {
       throw new AppError({ code: "NOT_FOUND", message: "Active tenant was not found.", status: 404 });
     }
 
+    const [customerPositions, supplierPositions] = await Promise.all([
+      canSales
+        ? snapshotFinancialPositions(this.prisma, context.tenantId, "customer", customers)
+        : Promise.resolve([]),
+      canPurchases
+        ? snapshotFinancialPositions(this.prisma, context.tenantId, "supplier", suppliers)
+        : Promise.resolve([]),
+    ]);
+
     const generatedAt = new Date().toISOString();
     let numberLeases: OfflineSnapshot["numberLeases"] = [];
     if (deviceId) {
@@ -157,6 +172,10 @@ export class OfflineService {
         purchases: purchases.map(toSnapshotDocument),
         quotations: quotations.map(toSnapshotDocument),
         sales: sales.map(toSnapshotDocument),
+      },
+      financialPositions: {
+        customers: customerPositions,
+        suppliers: supplierPositions,
       },
       generatedAt,
       locations: locations.map((location) => ({ code: location.code, id: location.id, name: location.name })),
@@ -217,6 +236,78 @@ export class OfflineService {
       throw new AppError({ code: "NOT_FOUND", message: "Enrolled offline device was not found.", status: 404 });
     }
   }
+}
+
+async function snapshotFinancialPositions(
+  prisma: PrismaClient,
+  tenantId: string,
+  role: "customer" | "supplier",
+  parties: SnapshotParty[],
+): Promise<OfflineSnapshotFinancialPosition[]> {
+  if (parties.length === 0) return [];
+  const partyIds = parties.map((party) => party.id);
+  const partyType = role === "supplier" ? FinancialPartyType.SUPPLIER : FinancialPartyType.CUSTOMER;
+  const receivableType = role === "supplier"
+    ? FinancialTransactionType.PURCHASE_PAYABLE
+    : FinancialTransactionType.SALE_RECEIVABLE;
+  const advanceType = role === "supplier"
+    ? FinancialTransactionType.SUPPLIER_ADVANCE
+    : FinancialTransactionType.CUSTOMER_ADVANCE;
+  const creditTypes: FinancialTransactionType[] = role === "supplier"
+    ? [FinancialTransactionType.PURCHASE_RETURN_CREDIT, FinancialTransactionType.SUPPLIER_REFUND_RECEIVED]
+    : [FinancialTransactionType.SALE_RETURN_CREDIT, FinancialTransactionType.CUSTOMER_REFUND_PENDING];
+  const transactions = await prisma.financialTransaction.findMany({
+    include: { allocationsFrom: true, allocationsTo: true, invoice: true },
+    orderBy: { occurredAt: "asc" },
+    where: {
+      partyId: { in: partyIds },
+      partyType,
+      status: FinancialTransactionStatus.POSTED,
+      tenantId,
+    },
+  });
+
+  return parties.map((party) => {
+    const partyTransactions = transactions.filter((transaction) => transaction.partyId === party.id);
+    const openItems = partyTransactions
+      .filter((transaction) => transaction.type === receivableType)
+      .map((transaction) => {
+        const paidCents = transaction.allocationsTo.reduce((total, allocation) => total + allocation.amountCents, 0);
+        return {
+          documentNumber: transaction.sourceNumber ?? transaction.transactionNumber,
+          dueCents: Math.max(transaction.debitCents - paidCents, 0),
+          hardwareDocumentId: transaction.hardwareDocumentId,
+          invoiceId: transaction.invoiceId,
+          invoiceNumber: transaction.invoice?.invoiceNumber ?? null,
+          occurredAt: transaction.occurredAt.toISOString(),
+          originalCents: transaction.debitCents,
+          paidCents,
+          sourceId: transaction.sourceId,
+          targetTransactionId: transaction.id,
+        };
+      })
+      .filter((item) => item.dueCents > 0);
+    const advanceBalanceCents = partyTransactions
+      .filter((transaction) => transaction.type === advanceType)
+      .reduce((total, transaction) => {
+        const usedCents = transaction.allocationsFrom.reduce((sum, allocation) => sum + allocation.amountCents, 0);
+        return total + Math.max(transaction.creditCents - usedCents, 0);
+      }, 0);
+    const refundableBalanceCents = partyTransactions
+      .filter((transaction) => creditTypes.includes(transaction.type))
+      .reduce((total, transaction) => total + transaction.creditCents, 0)
+      - partyTransactions
+        .filter((transaction) => transaction.type === FinancialTransactionType.CUSTOMER_REFUND_PAID)
+        .reduce((total, transaction) => total + transaction.debitCents, 0);
+    return {
+      advanceBalanceCents,
+      openItems,
+      partyId: party.id,
+      partyName: party.name,
+      refundableBalanceCents,
+      totalOutstandingCents: openItems.reduce((total, item) => total + item.dueCents, 0),
+    };
+  });
 }
 
 function normalizeDeviceKey(value: string) {
