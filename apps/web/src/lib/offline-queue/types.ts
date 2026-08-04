@@ -12,6 +12,7 @@ export type HardwareOfflineAction =
   | "hardware.customerDraft.create"
   | "hardware.productDraft.create"
   | "hardware.stockAdjustmentDraft.create"
+  | "hardware.partyPaymentDraft.create"
   | "hardware.manualPaymentDraft.create";
 
 export type QueuedMutationAction = HardwareOfflineAction;
