@@ -13,6 +13,25 @@ import { quickHardwareProductSchema, type QuickHardwareProductInput } from "../h
 import type { HardwareProductSummary } from "../hardware/types";
 import type { AuthenticatedOfflineDevice } from "./offline-device-auth";
 
+const productInclude = {
+  brand: { select: { name: true } },
+  category: { select: { name: true } },
+  unit: { select: { code: true } },
+} satisfies Prisma.HardwareProductInclude;
+
+type ProductWithRelations = Prisma.HardwareProductGetPayload<{ include: typeof productInclude }>;
+
+type SyncReceiptRow = {
+  result: unknown;
+  status: string;
+};
+
+type ProductIdentity = {
+  deviceId: string;
+  idempotencyKey: string;
+  queueItemId: string;
+};
+
 const productPayloadSchema = z.object({
   input: z.record(z.string(), z.unknown()),
 });
@@ -45,32 +64,6 @@ const storedProductResultSchema = z.object({
   stockSetupStatus: z.enum(["TRACKED", "PENDING"]),
   unitCode: z.string().nullable(),
 });
-
-type SyncReceiptRow = {
-  result: unknown;
-  status: string;
-};
-
-type ProductIdentity = {
-  deviceId: string;
-  idempotencyKey: string;
-  queueItemId: string;
-};
-
-type ProductWithRelations = {
-  barcode: string | null;
-  brand: { name: string } | null;
-  category: { name: string } | null;
-  gstTaxConfig: unknown;
-  id: string;
-  lowStockThreshold: number;
-  metadata: unknown;
-  name: string;
-  purchaseCostCents: number;
-  salesPriceCents: number;
-  sku: string;
-  unit: { code: string } | null;
-};
 
 export class OfflineProductSyncService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -143,7 +136,7 @@ export class OfflineProductSyncService {
         stockSetupStatus: input.openingStock ? "TRACKED" : "PENDING",
       });
       const product = await tx.hardwareProduct.create({
-        data: {
+        data: compactRecord({
           barcode: input.barcode,
           brandId: input.brandId,
           categoryId: input.categoryId,
@@ -156,12 +149,8 @@ export class OfflineProductSyncService {
           sku,
           tenantId: device.tenantId,
           unitId: unit.id,
-        },
-        include: {
-          brand: { select: { name: true } },
-          category: { select: { name: true } },
-          unit: { select: { code: true } },
-        },
+        }) as Prisma.HardwareProductUncheckedCreateInput,
+        include: productInclude,
       });
       await tx.hardwareTimelineEvent.create({
         data: {
@@ -186,7 +175,7 @@ export class OfflineProductSyncService {
       const openingQuantity = input.openingStock?.quantity ?? 0;
       if (input.openingStock && openingQuantity > 0) {
         const movement = await tx.hardwareInventoryMovement.create({
-          data: {
+          data: compactRecord({
             locationId: input.openingStock.locationId,
             metadata: {
               offlineDeviceId: device.id,
@@ -201,7 +190,7 @@ export class OfflineProductSyncService {
             tenantId: device.tenantId,
             type: HardwareInventoryMovementType.STOCK_IN,
             unitPriceCents: input.salesPriceCents,
-          },
+          }) as Prisma.HardwareInventoryMovementUncheckedCreateInput,
         });
         await tx.hardwareTimelineEvent.create({
           data: {
@@ -270,20 +259,14 @@ async function findDuplicateProduct(
   tenantId: string,
   input: QuickHardwareProductInput,
 ): Promise<ProductWithRelations | null> {
+  const identities: Prisma.HardwareProductWhereInput[] = [
+    { archivedAt: null, name: { equals: input.name.trim(), mode: "insensitive" } },
+    ...(input.sku ? [{ sku: input.sku.trim() }] : []),
+    ...(input.barcode ? [{ barcode: input.barcode }] : []),
+  ];
   return tx.hardwareProduct.findFirst({
-    include: {
-      brand: { select: { name: true } },
-      category: { select: { name: true } },
-      unit: { select: { code: true } },
-    },
-    where: {
-      tenantId,
-      OR: [
-        { archivedAt: null, name: { equals: input.name.trim(), mode: "insensitive" } },
-        ...(input.sku ? [{ sku: input.sku.trim() }] : []),
-        ...(input.barcode ? [{ barcode: input.barcode }] : []),
-      ],
-    },
+    include: productInclude,
+    where: { OR: identities, tenantId },
   });
 }
 
