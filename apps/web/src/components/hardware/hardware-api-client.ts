@@ -2,10 +2,12 @@ import {
   buildQueuedQuickPosResult,
   offlinePurchaseLabel,
   offlinePurchaseSeries,
+  queueOfflineCatalogProduct,
   queueOfflinePartyDraft,
   queueReservedQuickPosSale,
   queueReservedTradeDraft,
   readActiveOfflineScope,
+  type OfflineProductDisplay,
 } from "../../lib/offline-data";
 
 type ApiEnvelope<T> = {
@@ -31,6 +33,15 @@ export async function postHardwarePartyJson<T>(
   const offlineParty = await queueOfflineParty<T>(body);
   if (offlineParty) return offlineParty;
   return sendHardwareJson<T>("/api/hardware/parties/quick-add", "POST", body);
+}
+
+export async function postHardwareProductJson<T>(
+  body: Record<string, unknown>,
+  display: OfflineProductDisplay = {},
+): Promise<HardwareApiResult<T>> {
+  const offlineProduct = await queueOfflineProduct<T>(body, display);
+  if (offlineProduct) return offlineProduct;
+  return sendHardwareJson<T>("/api/hardware/products", "POST", body);
 }
 
 export async function patchHardwareJson<T>(
@@ -66,6 +77,9 @@ async function sendHardwareJson<T>(
 ): Promise<HardwareApiResult<T>> {
   const offlineCustomerBlock = blockOfflineCustomerCreation<T>(endpoint, method);
   if (offlineCustomerBlock) return offlineCustomerBlock;
+
+  const offlineProductBlock = blockOfflineQuickProductCreation<T>(endpoint, method);
+  if (offlineProductBlock) return offlineProductBlock;
 
   const offlineQuickPos = await queueOfflineQuickPos<T>(endpoint, method, body);
   if (offlineQuickPos) return offlineQuickPos;
@@ -113,6 +127,24 @@ function blockOfflineCustomerCreation<T>(
   };
 }
 
+function blockOfflineQuickProductCreation<T>(
+  endpoint: string,
+  method: "PATCH" | "POST",
+): HardwareApiResult<T> | null {
+  if (
+    typeof navigator === "undefined" ||
+    navigator.onLine ||
+    method !== "POST" ||
+    endpoint !== "/api/hardware/products/quick-add"
+  ) {
+    return null;
+  }
+  return {
+    message: "Offline transactions require an existing synced product. Create the product from Catalog > Products, then use it after reconnect sync completes.",
+    ok: false,
+  };
+}
+
 async function queueOfflineParty<T>(
   body: Record<string, unknown>,
 ): Promise<HardwareApiResult<T> | null> {
@@ -142,6 +174,41 @@ async function queueOfflineParty<T>(
   } catch (error) {
     return {
       message: error instanceof Error ? error.message : "Party could not be saved to the offline queue.",
+      ok: false,
+    };
+  }
+}
+
+async function queueOfflineProduct<T>(
+  body: Record<string, unknown>,
+  display: OfflineProductDisplay,
+): Promise<HardwareApiResult<T> | null> {
+  if (
+    typeof window === "undefined"
+    || typeof navigator === "undefined"
+    || navigator.onLine
+  ) {
+    return null;
+  }
+  const scope = readActiveOfflineScope();
+  if (!scope) {
+    return {
+      message: "Offline tenant scope is unavailable. Reopen the installed ERP while online once, then retry.",
+      ok: false,
+    };
+  }
+  try {
+    const queued = await queueOfflineCatalogProduct(scope, body, display);
+    window.dispatchEvent(new CustomEvent("trustfirst:offline-queue-changed", {
+      detail: {
+        documentNumber: queued.product.name,
+        label: "Product",
+      },
+    }));
+    return { data: queued.product as unknown as T, ok: true };
+  } catch (error) {
+    return {
+      message: error instanceof Error ? error.message : "Product could not be saved to the offline queue.",
       ok: false,
     };
   }
