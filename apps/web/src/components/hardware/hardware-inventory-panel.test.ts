@@ -1,4 +1,3 @@
-import { HardwareInventoryMovementType } from "@trustfirst/database";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -17,7 +16,7 @@ function serverMovement(id: string, productName: string): HardwareMovementSummar
     productId: `product-${id}`,
     productName,
     quantity: 2,
-    type: HardwareInventoryMovementType.STOCK_IN,
+    type: "STOCK_IN",
   };
 }
 
