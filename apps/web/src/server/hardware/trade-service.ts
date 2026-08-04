@@ -1433,7 +1433,6 @@ export class HardwareTradeService {
       };
     });
     for (const item of returnItems) {
-      const original = originalItems.get(readString(asRecord(item.metadata).originalItemId) ?? "");
       const movements = await this.prisma.hardwareInventoryMovement.findMany({
         where: { locationId: input.locationId, productId: item.productId, tenantId: context.tenantId },
       });

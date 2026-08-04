@@ -5,7 +5,7 @@ import { Plus, Save, Trash2, WifiOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { calculateEstimateMoneyTotals } from "@/lib/hardware/estimate-money";
-import { resolveBillPayment, type BillPaymentChoice, type ResolvedBillPayment } from "@/lib/hardware/payment-choice";
+import { resolveBillPayment, type BillPaymentChoice, type ResolvedBillPayment } from "../../lib/hardware/payment-choice";
 import { queueReservedTradeDraft } from "@/lib/offline-data";
 import type { OfflineQueueScope } from "@/lib/offline-queue";
 import type {

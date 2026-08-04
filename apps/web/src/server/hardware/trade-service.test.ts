@@ -268,7 +268,7 @@ describe("HardwareTradeService", () => {
     expect(movements[0]?.data.type).toBe(HardwareInventoryMovementType.STOCK_OUT);
   });
 
-  it("does not create stock movement for stock-setup-pending products", async () => {
+  it("deducts stock for products previously marked stock-setup-pending", async () => {
     const movements: Array<{ data: { type: HardwareInventoryMovementType } }> = [];
     const now = new Date();
     const document = {
@@ -323,6 +323,9 @@ describe("HardwareTradeService", () => {
             hardwareTradeDocument: { update: async () => ({ ...document, status: HardwareTradeDocumentStatus.CONFIRMED }) },
             hardwareTradeTimelineEvent: { create: async () => ({}) },
           }),
+        hardwareInventoryMovement: {
+          findMany: async () => [{ quantity: 5, type: HardwareInventoryMovementType.STOCK_IN }],
+        },
         hardwareStockLocation: { findFirst: async () => ({ id: "loc_1" }) },
         hardwareTradeDocument: { findFirst: async () => document },
       } as unknown as Partial<PrismaClient>),
@@ -330,7 +333,8 @@ describe("HardwareTradeService", () => {
 
     await service.confirm({ tenantId: "tenant_1", userId: "user_1" }, "doc_3", { locationId: "loc_1" });
 
-    expect(movements).toHaveLength(0);
+    expect(movements).toHaveLength(1);
+    expect(movements[0]?.data.type).toBe(HardwareInventoryMovementType.STOCK_OUT);
   });
 
   it("posts supplier payable and only the entered partial payment when purchase is confirmed", async () => {

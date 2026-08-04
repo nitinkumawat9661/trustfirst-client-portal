@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import type { HardwarePartySummary, HardwareProductSummary } from "@/server/hardware";
-import { resolveBillPayment, type BillPaymentChoice } from "@/lib/hardware/payment-choice";
+import { resolveBillPayment, type BillPaymentChoice } from "../../lib/hardware/payment-choice";
 import { buildWhatsAppBillUrl } from "@/server/hardware/whatsapp";
 import { nextBillingLineAction } from "./billing-keyboard";
 import { canPostBillingLines, completedBillingLines } from "./billing-lines";
