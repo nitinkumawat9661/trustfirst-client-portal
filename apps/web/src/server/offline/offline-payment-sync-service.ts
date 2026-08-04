@@ -5,7 +5,7 @@ import {
   FinancialTransactionStatus,
   FinancialTransactionType,
   InvoiceStatus,
-  Prisma,
+  type Prisma,
   type PrismaClient,
 } from "@trustfirst/database";
 import { randomUUID } from "node:crypto";
@@ -103,8 +103,7 @@ export class OfflinePaymentSyncService {
       }
 
       const party = await lockParty(tx, device.tenantId, input.partyId, payload.role);
-      const existingPosting = await findExistingPosting(tx, device.tenantId, item.idempotencyKey);
-      if (existingPosting) {
+      if (await findExistingPosting(tx, device.tenantId, item.idempotencyKey)) {
         throw conflict("A financial posting exists without its offline sync receipt. Review it before retrying.");
       }
 
@@ -124,6 +123,7 @@ export class OfflinePaymentSyncService {
         offlineSyncQueueItemId: item.id,
         offlineSyncedAt: occurredAt.toISOString(),
       } as Prisma.InputJsonValue;
+      const metadataCarrier = { metadata: offlineMetadata };
       const allocationPayload = input.allocations.map((allocation) => {
         const target = targets.get(allocation.targetTransactionId);
         if (!target) throw conflict("Payment allocation target is no longer available.");
@@ -134,52 +134,40 @@ export class OfflinePaymentSyncService {
           targetTransactionId: target.id,
         };
       });
+      const commonPosting = {
+        createdById: device.userId,
+        externalReference: input.reference ?? null,
+        mode: input.mode,
+        notes: input.notes ?? null,
+        occurredAt,
+        partyId: input.partyId,
+        sourceId: item.id,
+        sourceNumber: null,
+        sourceType: "OfflineQueueItem",
+        tenantId: device.tenantId,
+        ...metadataCarrier,
+      };
 
       const payment = allocationTotal > 0
         ? payload.role === "supplier"
           ? await postSupplierPaymentWithAllocations(tx, {
+              ...commonPosting,
               allocations: allocationPayload,
               amountCents: allocationTotal,
-              createdById: device.userId,
-              externalReference: input.reference ?? null,
               idempotencyKey: `${item.idempotencyKey}:allocated`,
-              metadata: offlineMetadata,
-              mode: input.mode,
-              notes: input.notes ?? null,
-              occurredAt,
-              partyId: input.partyId,
-              sourceId: item.id,
-              sourceNumber: null,
-              sourceType: "OfflineQueueItem",
-              tenantId: device.tenantId,
             })
           : await postCustomerPaymentWithAllocations(tx, {
+              ...commonPosting,
               allocations: allocationPayload,
               amountCents: allocationTotal,
-              createdById: device.userId,
-              externalReference: input.reference ?? null,
               idempotencyKey: `${item.idempotencyKey}:allocated`,
-              metadata: offlineMetadata,
-              mode: input.mode,
-              notes: input.notes ?? null,
-              occurredAt,
-              partyId: input.partyId,
-              sourceId: item.id,
-              sourceNumber: null,
-              sourceType: "OfflineQueueItem",
-              tenantId: device.tenantId,
             })
         : null;
 
       if (payload.role === "customer") {
         for (const allocation of allocationPayload) {
           if (!allocation.invoiceId) continue;
-          await adjustInvoicePaidAmount(
-            tx,
-            device.tenantId,
-            allocation.invoiceId,
-            allocation.amountCents,
-          );
+          await adjustInvoicePaidAmount(tx, device.tenantId, allocation.invoiceId, allocation.amountCents);
           await tx.billingTimelineEvent.create({
             data: {
               actorId: device.userId,
@@ -201,34 +189,14 @@ export class OfflinePaymentSyncService {
       const advance = advanceCents > 0
         ? payload.role === "supplier"
           ? await postSupplierAdvance(tx, {
+              ...commonPosting,
               amountCents: advanceCents,
-              createdById: device.userId,
-              externalReference: input.reference ?? null,
               idempotencyKey: `${item.idempotencyKey}:advance`,
-              metadata: offlineMetadata,
-              mode: input.mode,
-              notes: input.notes ?? null,
-              occurredAt,
-              partyId: input.partyId,
-              sourceId: item.id,
-              sourceNumber: null,
-              sourceType: "OfflineQueueItem",
-              tenantId: device.tenantId,
             })
           : await postCustomerAdvance(tx, {
+              ...commonPosting,
               amountCents: advanceCents,
-              createdById: device.userId,
-              externalReference: input.reference ?? null,
               idempotencyKey: `${item.idempotencyKey}:advance`,
-              metadata: offlineMetadata,
-              mode: input.mode,
-              notes: input.notes ?? null,
-              occurredAt,
-              partyId: input.partyId,
-              sourceId: item.id,
-              sourceNumber: null,
-              sourceType: "OfflineQueueItem",
-              tenantId: device.tenantId,
             })
         : null;
 
@@ -328,19 +296,23 @@ async function lockAndValidateTargets(
 ) {
   if (input.allocations.length === 0) return new Map<string, LockedTargetRow>();
   const ids = [...new Set(input.allocations.map((allocation) => allocation.targetTransactionId))].sort();
-  const rows = await tx.$queryRaw<LockedTargetRow[]>(Prisma.sql`
-    SELECT
-      "id", "debitCents", "hardwareDocumentId", "invoiceId", "partyId", "partyType",
-      "sourceNumber", "status", "transactionNumber", "type"
-    FROM "FinancialTransaction"
-    WHERE "tenantId" = ${tenantId}
-      AND "id" IN (${Prisma.join(ids)})
-    ORDER BY "id"
-    FOR UPDATE
-  `);
+  const rows: LockedTargetRow[] = [];
+  for (const id of ids) {
+    const locked = await tx.$queryRaw<LockedTargetRow[]>`
+      SELECT
+        "id", "debitCents", "hardwareDocumentId", "invoiceId", "partyId", "partyType",
+        "sourceNumber", "status", "transactionNumber", "type"
+      FROM "FinancialTransaction"
+      WHERE "tenantId" = ${tenantId}
+        AND "id" = ${id}
+      FOR UPDATE
+    `;
+    if (locked[0]) rows.push(locked[0]);
+  }
   if (rows.length !== ids.length) {
     throw conflict("One or more payment targets no longer exist.");
   }
+
   const allocationSums = await tx.financialAllocation.groupBy({
     _sum: { amountCents: true },
     by: ["toTransactionId"],
