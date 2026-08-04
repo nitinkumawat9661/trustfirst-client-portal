@@ -23,7 +23,7 @@ function serverParty(id: string, name: string): HardwarePartySummary {
 
 function queuedParty(id: string, name: string): QueuedOfflinePartySummary {
   return {
-    ...serverParty(`offline-party:${id}`),
+    ...serverParty(`offline-party:${id}`, name),
     id: `offline-party:${id}`,
     name,
     offlineQueued: true,
