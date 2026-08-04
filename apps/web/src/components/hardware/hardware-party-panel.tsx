@@ -94,10 +94,10 @@ export function HardwarePartyPanel({
     reset();
     setFormOpen(false);
     if (isQueuedParty(result.data)) {
-      setVisibleParties((current) => mergePartyRows(
-        current.filter((party) => !isQueuedParty(party)),
-        [result.data],
-      ));
+      setVisibleParties((current) => [
+        result.data,
+        ...current.filter((party) => party.id !== result.data.id),
+      ]);
       return;
     }
     router.refresh();
