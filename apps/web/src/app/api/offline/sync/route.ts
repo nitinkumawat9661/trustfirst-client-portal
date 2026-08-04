@@ -5,6 +5,7 @@ import { authenticateOfflineDevice } from "../../../../server/offline/offline-de
 import { OfflinePartySyncService } from "../../../../server/offline/offline-party-sync-service";
 import { OfflineProductSyncService } from "../../../../server/offline/offline-product-sync-service";
 import { OfflineQuickPosSyncService } from "../../../../server/offline/offline-quick-pos-sync-service";
+import { OfflineStockSyncService } from "../../../../server/offline/offline-stock-sync-service";
 import { OfflineSyncService } from "../../../../server/offline/offline-sync-service";
 
 export async function POST(request: NextRequest) {
@@ -19,7 +20,9 @@ export async function POST(request: NextRequest) {
         ? await new OfflinePartySyncService(prisma).process(device, body.item)
         : action === "hardware.productDraft.create"
           ? await new OfflineProductSyncService(prisma).process(device, body.item)
-          : await new OfflineSyncService(prisma).process(device, body.item);
+          : action === "hardware.stockAdjustmentDraft.create"
+            ? await new OfflineStockSyncService(prisma).process(device, body.item)
+            : await new OfflineSyncService(prisma).process(device, body.item);
     return offlineResponse(result);
   } catch (error) {
     return offlineError(error);
