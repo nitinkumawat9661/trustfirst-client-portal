@@ -29,20 +29,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-
-      - name: Enable pnpm
-        run: corepack enable
+          cache: npm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Apply guarded changes
         run: node scripts/apply-post-bill-payment-flow.mjs
 
       - name: Format changed files
         run: |
-          pnpm exec prettier --write \
+          npx prettier --write \
             apps/web/src/app/'(platform)'/admin/hardware/purchases/new/page.tsx \
             apps/web/src/components/hardware/bill-payment-choice-regression.test.ts \
             apps/web/src/components/hardware/bill-payment-confirmation-dialog.tsx \
@@ -51,13 +48,13 @@ jobs:
             apps/web/src/components/hardware/quick-pos-form.tsx
 
       - name: Focused regression test
-        run: pnpm --filter @trustfirst/web test -- src/components/hardware/bill-payment-choice-regression.test.ts
+        run: npm run test --workspace @trustfirst/web -- src/components/hardware/bill-payment-choice-regression.test.ts
 
       - name: Web lint
-        run: pnpm --filter @trustfirst/web lint
+        run: npm run lint --workspace @trustfirst/web
 
       - name: Web typecheck
-        run: pnpm --filter @trustfirst/web typecheck
+        run: npm run typecheck --workspace @trustfirst/web
 
       - name: Diff safety
         run: git diff --check
