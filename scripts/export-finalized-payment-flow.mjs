@@ -1,5 +1,8 @@
-import "./finalize-post-bill-payment-flow.mjs";
 import { copyFileSync, mkdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+process.chdir(fileURLToPath(new URL("../", import.meta.url)));
+await import("./finalize-post-bill-payment-flow.mjs");
 
 const outputDir = "apps/web/public/internal-payment-flow";
 mkdirSync(outputDir, { recursive: true });
