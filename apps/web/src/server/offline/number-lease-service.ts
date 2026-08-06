@@ -69,7 +69,10 @@ export class OfflineNumberLeaseService {
       const existing = await this.findUsableLease(context.tenantId, deviceId, config.series, financialYear);
       if (existing) continue;
       await this.prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`${context.tenantId}:${config.series}:${financialYear}`}))`;
+        await tx.$queryRaw<Array<{ locked: number }>>`
+          SELECT 1::int AS "locked"
+          FROM pg_advisory_xact_lock(hashtext(${`${context.tenantId}:${config.series}:${financialYear}`}))
+        `;
         const concurrent = await findUsableLeaseWithClient(tx, context.tenantId, deviceId, config.series, financialYear);
         if (concurrent) return;
         if (config.format === "invoice") {
