@@ -7,7 +7,9 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
+import type { ResolvedBillPayment } from "@/lib/hardware/payment-choice";
 import type { HardwarePartySummary, HardwareProductSummary } from "@/server/hardware";
+import { BillPaymentConfirmationDialog } from "./bill-payment-confirmation-dialog";
 import { CreatableCombobox } from "./creatable-combobox";
 import { HardwareProductCombobox } from "./hardware-product-combobox";
 import { postHardwareJson } from "./hardware-api-client";
@@ -79,6 +81,9 @@ export function HardwareTradeForm({
   const [availableParties, setAvailableParties] = useState(parties);
   const [partyName, setPartyName] = useState("");
   const [serverError, setServerError] = useState<string | null>(null);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [pendingPurchase, setPendingPurchase] = useState<{ values: TradeFormValues } | null>(null);
+  const [saving, setSaving] = useState(false);
   const {
     control,
     formState: { errors, isSubmitting },
@@ -113,7 +118,9 @@ export function HardwareTradeForm({
       ? "Add at least one verified product before creating a document."
       : mode === "quotation" && locations.length === 0
         ? "Add at least one stock location before creating an Estimate Bill."
-        : null;
+        : mode === "purchase" && locations.length === 0
+          ? "Add at least one stock location before creating a Purchase Entry or Supplier Bill."
+          : null;
 
   function applyProduct(index: number, product: HardwareProductSummary) {
     const rateCents = mode === "purchase" ? product.purchaseCostCents : product.salesPriceCents;
@@ -161,14 +168,32 @@ export function HardwareTradeForm({
     return createOrSelectParty(partyName, mode === "purchase" ? "supplier" : "customer");
   }
 
-  async function onSubmit(values: TradeFormValues) {
+  async function submitTrade(values: TradeFormValues, purchasePayment?: ResolvedBillPayment) {
     setServerError(null);
-    try {
-      const partyId = await resolvePartyId(values);
-      if (mode === "quotation" && !values.locationId) {
-        setServerError("Select a stock location for this Estimate Bill.");
+    const financialPurchase =
+      mode === "purchase" && values.documentType !== "PURCHASE_ORDER";
+
+    if (mode === "quotation" && !values.locationId) {
+      setServerError("Select a stock location for this Estimate Bill.");
+      return;
+    }
+    if (financialPurchase && !values.locationId) {
+      setServerError("Select the stock location receiving this purchase.");
+      return;
+    }
+    if (financialPurchase && !purchasePayment) {
+      if (!values.partyId && !partyName.trim()) {
+        setServerError("Select or enter a supplier before confirming payment status.");
         return;
       }
+      setPendingPurchase({ values });
+      setPaymentDialogOpen(true);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const partyId = await resolvePartyId(values);
       if (!partyId) {
         setServerError(mode === "purchase" ? "Select a supplier." : "Enter or select a customer name.");
         return;
@@ -199,8 +224,8 @@ export function HardwareTradeForm({
           documentDate: values.documentDate,
           estimateBill: mode === "quotation",
           gstFilingEligible: mode !== "purchase" && values.items.some((item) => Number(item.gstRate) > 0),
-          paidAmountCents: mode === "purchase" ? Math.round(Number(values.paidAmount || 0) * 100) : undefined,
-          paymentMode: values.paymentMode,
+          paidAmountCents: mode === "purchase" ? purchasePayment?.paidAmountCents ?? 0 : undefined,
+          paymentMode: mode === "purchase" ? purchasePayment?.paymentMode ?? "Credit" : values.paymentMode,
           referenceNumber: values.referenceNumber || null,
           stockMovementOnConfirm: mode === "quotation",
           taxMode: values.taxMode,
@@ -212,6 +237,19 @@ export function HardwareTradeForm({
       if (!result.ok) {
         setServerError(result.message);
         return;
+      }
+
+      if (financialPurchase) {
+        const confirmation = await postHardwareJson<unknown>(
+          `/api/hardware/trade/${result.data.id}/confirm`,
+          { locationId: values.locationId },
+        );
+        if (!confirmation.ok) {
+          setServerError(
+            `${documentTitle(mode)} ${result.data.documentNumber} was saved as a draft, but final stock and supplier-ledger posting failed: ${confirmation.message}`,
+          );
+          return;
+        }
       }
 
       if (mode === "quotation") {
@@ -229,11 +267,13 @@ export function HardwareTradeForm({
       router.refresh();
     } catch (error) {
       setServerError(error instanceof Error ? error.message : "Unable to save this document.");
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
-    <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
+    <form className="space-y-5" onSubmit={handleSubmit((values) => submitTrade(values))}>
       {disabledReason ? (
         <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100" role="status">
           {disabledReason}
@@ -303,6 +343,14 @@ export function HardwareTradeForm({
               <option value="inter-state">Inter-state (IGST)</option>
             </select>
           </FormField>
+          {mode === "purchase" ? (
+            <FormField label="Stock location" required>
+              <select className={selectClassName} {...register("locationId")}>
+                <option value="">Select receiving location</option>
+                {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+              </select>
+            </FormField>
+          ) : null}
           {mode === "quotation" ? (
             <>
               <FormField label="Stock location" required>
@@ -317,7 +365,7 @@ export function HardwareTradeForm({
               </div>
             </>
           ) : null}
-          {mode !== "quotation" ? (
+          {mode === "sale" ? (
             <FormField label="Payment mode">
               <select className={selectClassName} {...register("paymentMode")}>
                 {["Cash", "UPI", "Bank Transfer", "Cheque", "Card", "Other", "Credit"].map((option) => <option key={option}>{option}</option>)}
@@ -325,9 +373,12 @@ export function HardwareTradeForm({
             </FormField>
           ) : null}
           {mode === "purchase" ? (
-            <FormField error={errors.paidAmount?.message} label="Paid amount (INR)">
-              <Input inputMode="decimal" min="0" step="0.01" type="number" {...register("paidAmount")} />
-            </FormField>
+            <div className="rounded-md border border-border bg-muted/50 p-3 text-sm xl:col-span-2">
+              <p className="font-medium">Payment is confirmed after the purchase details</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Paid, unpaid, or partial status will determine the supplier payment voucher and remaining payable.
+              </p>
+            </div>
           ) : null}
         </CardContent>
       </Card>
@@ -416,10 +467,43 @@ export function HardwareTradeForm({
       </Card>
       {serverError ? <p className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">{serverError}</p> : null}
       <div className="flex justify-end">
-        <Button disabled={Boolean(disabledReason) || isSubmitting} type="submit">
-          <Save className="size-4" />{isSubmitting ? "Saving..." : mode === "quotation" ? "Save and print Estimate Bill" : `Save ${mode}`}
+        <Button disabled={Boolean(disabledReason) || isSubmitting || saving} type="submit">
+          <Save className="size-4" />
+          {isSubmitting || saving
+            ? "Saving..."
+            : mode === "quotation"
+              ? "Save and print Estimate Bill"
+              : `Save ${mode}`}
         </Button>
       </div>
+
+      <BillPaymentConfirmationDialog
+        creditAllowed={Boolean(pendingPurchase && (pendingPurchase.values.partyId || partyName.trim()))}
+        defaultMode="Cash"
+        direction="payable"
+        onCancel={() => {
+          setPaymentDialogOpen(false);
+          setPendingPurchase(null);
+        }}
+        onConfirm={({ payment }) => {
+          const pending = pendingPurchase;
+          if (!pending) return;
+          setPaymentDialogOpen(false);
+          setPendingPurchase(null);
+          void submitTrade(pending.values, payment);
+        }}
+        open={paymentDialogOpen}
+        partyName={partyName}
+        paymentModes={[
+          { label: "Cash", value: "Cash" },
+          { label: "UPI", value: "UPI" },
+          { label: "Bank Transfer", value: "Bank Transfer" },
+          { label: "Cheque", value: "Cheque" },
+          { label: "Card", value: "Card" },
+          { label: "Other", value: "Other" },
+        ]}
+        totalCents={totals.totalCents}
+      />
     </form>
   );
 }
