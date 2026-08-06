@@ -16,6 +16,7 @@ export const CONFIGURED_HOSTS = {
   ],
   trustFirstPortal: [
     "client.trustfirstsolutions.in",
+    "trustfirst-client-portal.vercel.app",
   ],
 } as const;
 
@@ -38,6 +39,7 @@ const surfaceByHost: Readonly<Record<string, AppSurface>> = {
   "www.mangalamsanitary.in": "MANGALAM_PUBLIC",
   "app.mangalamsanitary.in": "MANGALAM_ERP",
   "client.trustfirstsolutions.in": "TRUSTFIRST_PORTAL",
+  "trustfirst-client-portal.vercel.app": "TRUSTFIRST_PORTAL",
 };
 
 const tenantByHost: Readonly<Record<string, string>> = {
