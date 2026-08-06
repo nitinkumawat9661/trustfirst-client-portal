@@ -9,13 +9,18 @@ function replaceExactlyOnce(path, before, after) {
   writeFileSync(path, source.replace(before, after));
 }
 
+const lockBefore = '        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`${context.tenantId}:${config.series}:${financialYear}`}))`;';
+const lockAfter = [
+  '        await tx.$queryRaw<Array<{ locked: number }>>`',
+  '          SELECT 1::int AS "locked"',
+  '          FROM pg_advisory_xact_lock(hashtext(${`${context.tenantId}:${config.series}:${financialYear}`}))',
+  '        `;',
+].join("\n");
+
 replaceExactlyOnce(
   "apps/web/src/server/offline/number-lease-service.ts",
-  "        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`${context.tenantId}:${config.series}:${financialYear}`}))`;",
-  `        await tx.$queryRaw<Array<{ locked: number }>>\`
-          SELECT 1::int AS "locked"
-          FROM pg_advisory_xact_lock(hashtext(\${\`${context.tenantId}:\${config.series}:\${financialYear}\`}))
-        \`;`,
+  lockBefore,
+  lockAfter,
 );
 
 replaceExactlyOnce(
