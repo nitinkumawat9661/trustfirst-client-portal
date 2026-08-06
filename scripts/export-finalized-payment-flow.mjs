@@ -15,6 +15,20 @@ writeFileSync(
   estimateSource.replace(malformedBoundary, "function isPlainEnter"),
 );
 
+const quickPosPath = "apps/web/src/components/hardware/quick-pos-form.tsx";
+const pendingPrintSource = "setPendingPostOptions({ printAfterPost: options.printAfterPost });";
+const quickPosSource = readFileSync(quickPosPath, "utf8");
+if (!quickPosSource.includes(pendingPrintSource)) {
+  throw new Error("Expected Quick POS pending print option was not generated.");
+}
+writeFileSync(
+  quickPosPath,
+  quickPosSource.replace(
+    pendingPrintSource,
+    "setPendingPostOptions(options.printAfterPost ? { printAfterPost: true } : {});",
+  ),
+);
+
 const outputDir = "apps/web/public/internal-payment-flow";
 mkdirSync(outputDir, { recursive: true });
 
