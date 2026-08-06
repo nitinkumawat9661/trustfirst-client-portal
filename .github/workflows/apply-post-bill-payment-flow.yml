@@ -6,13 +6,16 @@ on:
       - fix/post-bill-payment-accounting
     paths:
       - .github/workflows/apply-post-bill-payment-flow.yml
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 concurrency:
   group: apply-post-bill-payment-flow
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   apply:
