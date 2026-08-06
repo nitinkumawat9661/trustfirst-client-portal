@@ -12,21 +12,45 @@ test("offline device enrollment reserves numbers and stores the tenant snapshot"
 
   await page.getByRole("button", { name: /Open offline sync panel/i }).click();
 
-  const enrollmentResponse = page.waitForResponse((response) =>
+  const enrollmentResponsePromise = page.waitForResponse((response) =>
     response.url().includes("/api/offline/devices/enroll") && response.request().method() === "POST",
   );
-  const leaseResponse = page.waitForResponse((response) =>
+  const leaseResponsePromise = page.waitForResponse((response) =>
     response.url().includes("/api/offline/leases/reserve") && response.request().method() === "POST",
   );
-  const snapshotResponse = page.waitForResponse((response) =>
+  const snapshotResponsePromise = page.waitForResponse((response) =>
     response.url().includes("/api/offline/snapshot") && response.request().method() === "GET",
   );
 
   await page.getByRole("button", { name: "Setup offline device", exact: true }).click();
 
-  await expect((await enrollmentResponse).status()).toBe(201);
-  await expect((await leaseResponse).status()).toBe(200);
-  await expect((await snapshotResponse).status()).toBe(200);
+  const [enrollmentResponse, leaseResponse, snapshotResponse] = await Promise.all([
+    enrollmentResponsePromise,
+    leaseResponsePromise,
+    snapshotResponsePromise,
+  ]);
+  expect(enrollmentResponse.status()).toBe(201);
+  expect(leaseResponse.status()).toBe(200);
+  expect(snapshotResponse.status()).toBe(200);
+
+  const enrollmentPayload = await enrollmentResponse.json() as {
+    data?: { deviceId?: string; tenantId?: string; userId?: string };
+    ok?: boolean;
+  };
+  const leasePayload = await leaseResponse.json() as { data?: unknown[]; ok?: boolean };
+  const snapshotPayload = await snapshotResponse.json() as {
+    data?: { generatedAt?: string; schemaVersion?: number; tenantId?: string; userId?: string };
+    ok?: boolean;
+  };
+  expect(enrollmentPayload.ok).toBe(true);
+  expect(enrollmentPayload.data?.deviceId).toBeTruthy();
+  expect(leasePayload.ok).toBe(true);
+  expect(Array.isArray(leasePayload.data)).toBe(true);
+  expect(snapshotPayload.ok).toBe(true);
+  expect(snapshotPayload.data?.generatedAt).toBeTruthy();
+  expect(snapshotPayload.data?.tenantId).toBe(enrollmentPayload.data?.tenantId);
+  expect(snapshotPayload.data?.userId).toBe(enrollmentPayload.data?.userId);
+
   await expect(page.getByText(/Ready · \d+ products · \d+ parties · \d+ stock rows/)).toBeVisible({
     timeout: 45_000,
   });
