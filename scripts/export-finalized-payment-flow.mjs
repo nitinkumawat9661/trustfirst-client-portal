@@ -1,8 +1,19 @@
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 process.chdir(fileURLToPath(new URL("../", import.meta.url)));
 await import("./finalize-post-bill-payment-flow.mjs");
+
+const estimatePath = "apps/web/src/components/hardware/estimate-bill-form.tsx";
+const malformedBoundary = "function isPlainEnter    </div>\n  );\n}\n\nfunction isPlainEnter";
+const estimateSource = readFileSync(estimatePath, "utf8");
+if (!estimateSource.includes(malformedBoundary)) {
+  throw new Error("Expected Estimate Bill dialog boundary was not generated.");
+}
+writeFileSync(
+  estimatePath,
+  estimateSource.replace(malformedBoundary, "function isPlainEnter"),
+);
 
 const outputDir = "apps/web/public/internal-payment-flow";
 mkdirSync(outputDir, { recursive: true });
