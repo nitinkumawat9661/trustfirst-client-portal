@@ -1,2 +1,0 @@
-Finalize PR 69 payment accounting flow.
-Trigger: 2
