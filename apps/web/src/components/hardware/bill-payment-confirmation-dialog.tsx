@@ -106,7 +106,7 @@ export function BillPaymentConfirmationDialog({
             {direction === "receivable" ? "How was this bill paid?" : "How was this purchase paid?"}
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Confirm this before final posting. The bill, ledger entry, payment entry, stock movement and outstanding balance will be saved together.
+            Confirm this before final posting. The selected status controls the payment entry, party ledger and remaining balance.
           </p>
         </CardHeader>
         <CardContent className="space-y-5">
