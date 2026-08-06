@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - .github/pr69-payment-flow-trigger.txt
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -17,6 +20,7 @@ concurrency:
 
 jobs:
   finalize:
+    if: github.event_name == 'push' || github.event.pull_request.number == 69
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
