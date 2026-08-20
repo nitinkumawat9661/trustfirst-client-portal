@@ -6,7 +6,7 @@ import {
   resolveBillPayment,
   type BillPaymentChoice,
   type ResolvedBillPayment,
-} from "@/lib/hardware/payment-choice";
+} from "../../lib/hardware/payment-choice";
 
 type PaymentModeOption = {
   label: string;
