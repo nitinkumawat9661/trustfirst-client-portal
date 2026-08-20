@@ -1,4 +1,5 @@
 export * from "./hardware-repository";
+export * from "./bill-edit-service";
 export * from "./day-closing-schemas";
 export * from "./day-closing-service";
 export * from "./financial-schemas";

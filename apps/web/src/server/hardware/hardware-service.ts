@@ -218,7 +218,7 @@ export class HardwareService {
           where: { archivedAt: null, status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] } },
         },
         supplierHardwareDocuments: {
-          select: { paymentStatus: true, totalCents: true },
+          select: { metadata: true, paymentStatus: true, totalCents: true },
           where: { archivedAt: null, status: "CONFIRMED", type: "SUPPLIER_BILL" },
         },
       },
@@ -233,8 +233,13 @@ export class HardwareService {
       const calculatedBalance =
         role === "supplier"
           ? party.supplierHardwareDocuments
-              .filter((document) => document.paymentStatus !== "paid")
-              .reduce((total, document) => total + document.totalCents, 0)
+              .reduce(
+                (total, document) => total + Math.max(
+                  document.totalCents - (readNumber(asRecord(document.metadata).paidAmountCents) ?? 0),
+                  0,
+                ),
+                0,
+              )
           : party.invoices.reduce(
               (total, invoice) => total + Math.max(invoice.totalAmountCents - invoice.paidAmountCents, 0),
               0,

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@trustfirst/ui";
-import { Ban, Check, FileText, Pencil, Printer } from "lucide-react";
+import { Ban, Check, FileClock, FileText, Pencil, Printer } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -26,20 +26,8 @@ export function HardwareDocumentActions({
   const canCancelSale =
     (document.type === "SALES_ORDER" || isEstimate) &&
     document.status === "CONFIRMED";
-
-  function openEstimateEditor() {
-    const href = `/admin/hardware/quotations/${document.id}/edit`;
-    const editor = window.open(
-      href,
-      `trustfirst-estimate-edit-${document.id}`,
-      "popup=yes,width=1180,height=900,resizable=yes,scrollbars=yes",
-    );
-    if (!editor) {
-      router.push(href);
-      return;
-    }
-    editor.focus();
-  }
+  const canEditBill = ["SALES_ORDER", "SALES_QUOTATION", "PURCHASE_ENTRY", "SUPPLIER_BILL"].includes(document.type)
+    && document.status === "CONFIRMED";
 
   async function run(action: "confirm" | "invoice" | "cancel") {
     const cancellationReason =
@@ -131,11 +119,8 @@ export function HardwareDocumentActions({
             <Check className="size-4" />{isEstimate ? "Post Estimate Bill" : "Confirm"}
           </Button>
         ) : null}
-        {isEstimate && document.status === "CONFIRMED" ? (
-          <Button onClick={openEstimateEditor} size="sm" type="button" variant="outline">
-            <Pencil className="size-4" />Edit Estimate Bill
-          </Button>
-        ) : null}
+        {canEditBill ? <Button asChild size="sm" variant="outline"><Link href={`/admin/hardware/bills/${document.id}/edit`}><Pencil className="size-4" />Edit {isEstimate ? "Estimate Bill" : document.type === "SALES_ORDER" ? "Sales Bill" : "Purchase Bill"}</Link></Button> : null}
+        {["SALES_ORDER", "SALES_QUOTATION", "PURCHASE_ENTRY", "SUPPLIER_BILL"].includes(document.type) ? <Button asChild size="sm" variant="ghost"><Link href={`/admin/hardware/bills/${document.id}/audit`}><FileClock className="size-4" />Audit history</Link></Button> : null}
         {document.type === "SALES_ORDER" && document.status === "CONFIRMED" && !document.billingInvoiceId ? (
           <Button disabled={pending !== null} onClick={() => run("invoice")} size="sm" type="button" variant="outline">
             <FileText className="size-4" />Create invoice draft

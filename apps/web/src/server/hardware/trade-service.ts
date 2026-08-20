@@ -1693,10 +1693,15 @@ export class HardwareTradeService {
       outstandingSuppliersCents: documents
         .filter((document) =>
           document.type === HardwareTradeDocumentType.SUPPLIER_BILL &&
-          document.status === "CONFIRMED" &&
-          document.paymentStatus !== "paid",
+          document.status === "CONFIRMED",
         )
-        .reduce((total, document) => total + document.totalCents, 0),
+        .reduce(
+          (total, document) => total + Math.max(
+            document.totalCents - purchasePaymentAmountFromMetadata(document.metadata, document.totalCents),
+            0,
+          ),
+          0,
+        ),
       purchaseGstCents: documents
         .filter((document) =>
           (document.type === HardwareTradeDocumentType.PURCHASE_ENTRY ||

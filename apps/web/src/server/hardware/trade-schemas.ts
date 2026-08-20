@@ -54,6 +54,23 @@ export const hardwareEstimateUpdateSchema = hardwareTradeDocumentSchema.extend({
   { message: "Estimate edit accepts only Estimate Bills.", path: ["type"] },
 );
 
+export const hardwareBillUpdateSchema = hardwareTradeDocumentSchema.extend({
+  idempotencyKey: z.string().min(12).max(120),
+  invoiceDiscountCents: z.number().int().nonnegative().default(0),
+  locationId: z.string().min(1),
+  paidAmountCents: z.number().int().nonnegative(),
+  paymentMode: z.nativeEnum(PaymentMode).optional(),
+  reason: z.string().trim().min(3).max(1000),
+}).refine(
+  (value) => ([
+    HardwareTradeDocumentType.SALES_ORDER,
+    HardwareTradeDocumentType.SALES_QUOTATION,
+    HardwareTradeDocumentType.PURCHASE_ENTRY,
+    HardwareTradeDocumentType.SUPPLIER_BILL,
+  ] as HardwareTradeDocumentType[]).includes(value.type),
+  { message: "Only Sales, Purchase, Supplier, and Estimate Bills can be edited.", path: ["type"] },
+);
+
 export const hardwareTradeCancelSchema = z.object({
   confirm: z.literal(true),
   idempotencyKey: z.string().min(12).max(120),
@@ -105,6 +122,7 @@ export type HardwareTradeItemInput = z.infer<typeof hardwareTradeItemSchema>;
 export type HardwareTradeDocumentInput = z.infer<typeof hardwareTradeDocumentSchema>;
 export type HardwareTradeStatusInput = z.infer<typeof hardwareTradeStatusSchema>;
 export type HardwareEstimateUpdateInput = z.infer<typeof hardwareEstimateUpdateSchema>;
+export type HardwareBillUpdateInput = z.infer<typeof hardwareBillUpdateSchema>;
 export type HardwareTradeCancelInput = z.infer<typeof hardwareTradeCancelSchema>;
 export type HardwareSaleReturnInput = z.infer<typeof hardwareSaleReturnSchema>;
 export type HardwarePurchaseReturnInput = z.infer<typeof hardwarePurchaseReturnSchema>;

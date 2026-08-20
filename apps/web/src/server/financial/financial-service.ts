@@ -21,6 +21,7 @@ type BasePostingInput = {
   notes?: string | null;
   occurredAt?: Date;
   partyId?: string | null;
+  reversalOfId?: string | null;
   sourceNumber?: string | null;
   sourceType: string;
   sourceId: string;
@@ -352,6 +353,7 @@ export async function postFinancialReversal(
     metadata: { originalTransactionNumber: input.original.transactionNumber, reason: input.reason },
     partyType: input.original.partyType,
     prefix: "MS/REV",
+    reversalOfId: input.original.id,
     type: reversalType,
   });
 }
@@ -474,6 +476,7 @@ async function postFinancialTransaction(
       partyId: input.partyId ?? null,
       partyType: input.partyType,
       paymentMode: input.paymentMode,
+      reversalOfId: input.reversalOfId ?? null,
       sourceId: input.sourceId,
       sourceNumber: input.sourceNumber ?? null,
       sourceType: input.sourceType,
