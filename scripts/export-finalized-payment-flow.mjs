@@ -66,3 +66,5 @@ if (quickPosSource.includes(pendingPrintSource)) {
 } else if (!quickPosSource.includes("BillPaymentConfirmationDialog")) {
   throw new Error("Quick POS payment confirmation was not prepared.");
 }
+
+await import("./apply-billing-interaction-fixes.mjs");
