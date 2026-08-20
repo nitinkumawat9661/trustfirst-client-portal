@@ -158,3 +158,31 @@ update("apps/web/src/components/hardware/quick-pos-form.tsx", (input) => {
 
   return source;
 });
+
+const closedValueSyncEffect = `  useEffect(() => {
+    if (open) return;
+    setQuery(value);
+    setSearchQuery(value);
+    setSearchPending(false);
+  }, [open, value]);
+
+`;
+
+for (const path of [
+  "apps/web/src/components/hardware/hardware-product-combobox.tsx",
+  "apps/web/src/components/hardware/creatable-combobox.tsx",
+]) {
+  update(path, (source) => source.includes(closedValueSyncEffect)
+    ? source.replace(closedValueSyncEffect, "")
+    : source);
+}
+
+update("apps/web/src/components/hardware/bill-payment-confirmation-dialog.tsx", (input) => {
+  if (input.includes("eslint-disable-next-line react-hooks/set-state-in-effect")) return input;
+  return replaceExactlyOnce(
+    input,
+    "    setChoice(defaultChoice);",
+    "    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the confirmation draft when the dialog opens\n    setChoice(defaultChoice);",
+    "payment-dialog open reset lint annotation",
+  );
+});
