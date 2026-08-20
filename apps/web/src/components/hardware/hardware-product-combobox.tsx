@@ -2,7 +2,7 @@
 
 import { Button, Input } from "@trustfirst/ui";
 import { Plus, Search, Star } from "lucide-react";
-import { type Ref, useEffect, useMemo, useRef, useState } from "react";
+import { type Ref, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HardwareProductSummary } from "@/server/hardware";
 import {
   isStrongProductSearchMatch,
@@ -12,6 +12,7 @@ import {
 
 const MAX_RESULTS = 20;
 const MAX_RECENT = 20;
+const PRODUCT_SEARCH_DEBOUNCE_MS = 300;
 
 type ProductSearchMemory = {
   favorites: string[];
@@ -38,15 +39,27 @@ export function HardwareProductCombobox({
   value: string;
 }) {
   const [query, setQuery] = useState(value);
+  const [searchQuery, setSearchQuery] = useState(value);
+  const [searchPending, setSearchPending] = useState(false);
   const [brand, setBrand] = useState("ALL");
   const [category, setCategory] = useState("ALL");
   const [activeIndex, setActiveIndex] = useState(0);
   const [open, setOpen] = useState(false);
   const [memory, setMemory] = useState<ProductSearchMemory>(() => readMemory(storageKey));
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
   }, []);
+
+  useEffect(() => {
+    if (open) return;
+    setQuery(value);
+    setSearchQuery(value);
+    setSearchPending(false);
+  }, [open, value]);
 
   const duplicateCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -75,8 +88,9 @@ export function HardwareProductCombobox({
   }, [products]);
 
   const displayedQuery = open ? query : value;
-  const normalizedQuery = normalizeProductSearchText(displayedQuery);
-  const rankedResults = useMemo(() => {
+  const normalizedQuery = normalizeProductSearchText(searchQuery);
+  const rankProducts = useCallback((searchText: string) => {
+    const normalizedSearchText = normalizeProductSearchText(searchText);
     const recentRank = new Map(memory.recent.map((id, index) => [id, index]));
     const favoriteSet = new Set(memory.favorites);
     const filtered = products.filter((product) =>
@@ -84,7 +98,7 @@ export function HardwareProductCombobox({
       && (category === "ALL" || product.categoryName === category),
     );
 
-    if (!normalizedQuery) {
+    if (!normalizedSearchText) {
       return filtered
         .filter((product) => favoriteSet.has(product.id) || recentRank.has(product.id))
         .sort((left, right) => {
@@ -106,7 +120,7 @@ export function HardwareProductCombobox({
           label: product.name,
           salesPriceCents: product.salesPriceCents,
           sku: product.sku,
-        }, displayedQuery),
+        }, searchText),
       }))
       .filter((entry) => entry.score > 0)
       .sort((left, right) => {
@@ -118,13 +132,20 @@ export function HardwareProductCombobox({
         if (recentDifference) return recentDifference;
         return localeCompare(left.product.name, right.product.name);
       });
-  }, [brand, category, displayedQuery, memory.favorites, memory.recent, normalizedQuery, products]);
+  }, [brand, category, memory.favorites, memory.recent, products]);
 
+  const rankedResults = useMemo(
+    () => searchPending ? [] : rankProducts(searchQuery),
+    [rankProducts, searchPending, searchQuery],
+  );
   const results = rankedResults.map((entry) => entry.product);
   const topMatchScore = rankedResults[0]?.score ?? 0;
 
   function select(product: HardwareProductSummary) {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
     setQuery(product.name);
+    setSearchQuery(product.name);
+    setSearchPending(false);
     setActiveIndex(0);
     onQueryChange(product.name);
     onSelect(product);
@@ -148,7 +169,7 @@ export function HardwareProductCombobox({
 
   const exactName = products.some((product) => normalizeProductSearchText(product.name) === normalizedQuery);
   const strongMatch = isStrongProductSearchMatch(topMatchScore);
-  const showCreateAction = Boolean(onCreate && normalizedQuery) && !exactName && !strongMatch;
+  const showCreateAction = !searchPending && Boolean(onCreate && normalizedQuery) && !exactName && !strongMatch;
   const displayLabel = label.replace(/\s*\/\s*barcode/giu, "");
 
   return (
@@ -169,10 +190,27 @@ export function HardwareProductCombobox({
           setQuery(nextQuery);
           onQueryChange(nextQuery);
           setActiveIndex(0);
+          if (searchTimer.current) clearTimeout(searchTimer.current);
+
+          if (!normalizeProductSearchText(nextQuery)) {
+            setSearchQuery("");
+            setSearchPending(false);
+            setOpen(false);
+            return;
+          }
+
+          setSearchPending(true);
           setOpen(true);
+          searchTimer.current = setTimeout(() => {
+            setSearchQuery(nextQuery);
+            setSearchPending(false);
+          }, PRODUCT_SEARCH_DEBOUNCE_MS);
         }}
         onFocus={() => {
+          if (searchTimer.current) clearTimeout(searchTimer.current);
           setQuery(value);
+          setSearchQuery(value);
+          setSearchPending(false);
           setActiveIndex(0);
           setOpen(true);
         }}
@@ -201,9 +239,21 @@ export function HardwareProductCombobox({
           ) return;
           event.preventDefault();
           event.stopPropagation();
-          const product = results[activeIndex] ?? results[0];
-          if (product) select(product);
-          else if (showCreateAction) onCreate?.(query.trim());
+
+          const immediateRanked = searchPending ? rankProducts(query) : rankedResults;
+          const immediateResults = immediateRanked.map((entry) => entry.product);
+          const product = immediateResults[activeIndex] ?? immediateResults[0];
+          if (product) {
+            select(product);
+            return;
+          }
+
+          const immediateNormalized = normalizeProductSearchText(query);
+          const immediateExact = products.some(
+            (candidate) => normalizeProductSearchText(candidate.name) === immediateNormalized,
+          );
+          const immediateStrong = isStrongProductSearchMatch(immediateRanked[0]?.score ?? 0);
+          if (onCreate && immediateNormalized && !immediateExact && !immediateStrong) onCreate(query.trim());
         }}
       />
 
@@ -232,7 +282,7 @@ export function HardwareProductCombobox({
               <option value="ALL">All categories</option>
               {categories.map((name) => <option key={name} value={name}>{name}</option>)}
             </select>
-            {!normalizedQuery ? (
+            {!normalizedQuery && !searchPending ? (
               <div className="flex flex-wrap gap-1 sm:col-span-2">
                 {popularCategories.map((name) => (
                   <button
@@ -249,6 +299,10 @@ export function HardwareProductCombobox({
                   </button>
                 ))}
               </div>
+            ) : searchPending ? (
+              <p className="text-xs font-normal text-muted-foreground sm:col-span-2">
+                Finish typing — results will appear automatically.
+              </p>
             ) : (
               <p className="text-xs font-normal text-muted-foreground sm:col-span-2">
                 Closest matches appear first. Spelling mistakes, partial words, and words in any order are supported.
@@ -296,7 +350,7 @@ export function HardwareProductCombobox({
                 </div>
               );
             })}
-            {!results.length ? (
+            {!results.length && !searchPending ? (
               <p className="px-3 py-4 text-sm font-normal text-muted-foreground">
                 No matching product. Try another name, brand, category, SKU, model, size, or colour.
               </p>
@@ -315,7 +369,7 @@ export function HardwareProductCombobox({
             ) : null}
           </div>
           <p className="border-t border-border px-3 py-2 text-[11px] font-normal text-muted-foreground">
-            {normalizedQuery ? `${results.length} matching products • ` : ""}↑/↓ choose • Enter select • Esc close
+            {searchPending ? "Waiting for typing to finish • " : normalizedQuery ? `${results.length} matching products • ` : ""}↑/↓ choose • Enter select • Esc close
           </p>
         </div>
       ) : null}
