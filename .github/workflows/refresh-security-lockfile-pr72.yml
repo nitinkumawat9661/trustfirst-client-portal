@@ -1,4 +1,4 @@
-name: Refresh PR 72 Security Lockfile
+name: Apply PR 72 Guarded Repairs
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  refresh:
+  repair:
     if: github.event.pull_request.head.ref == 'fix/mangalam-save-lock-search-debounce'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -26,34 +26,23 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Apply patched transitive versions and regenerate lockfile
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm pkg set 'overrides.deepmerge-ts=8.0.0'
-          npm pkg set 'overrides.js-yaml=4.3.1'
-          npm pkg set 'overrides.nanoid=3.3.18'
-          echo '--- requested overrides ---'
-          npm pkg get overrides
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          npm ci --ignore-scripts
-          echo '--- resolved deepmerge-ts ---'
-          npm explain deepmerge-ts || true
-          echo '--- resolved js-yaml ---'
-          npm explain js-yaml || true
-          echo '--- resolved nanoid ---'
-          npm explain nanoid || true
-          npm audit --audit-level=high
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
 
-      - name: Commit only dependency security resolution
+      - name: Apply exact source repairs
+        run: node scripts/fix-pr72-lint.mjs
+
+      - name: Verify lint
+        run: npm run lint
+
+      - name: Commit repaired source
         shell: bash
         run: |
           set -euo pipefail
           git diff --check
-          git diff --exit-code -- apps/web packages || true
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add package.json package-lock.json
+          git add apps/web/src/components/hardware/hardware-product-combobox.tsx apps/web/src/components/hardware/bill-payment-confirmation-dialog.tsx
           git diff --cached --quiet && exit 0
-          git commit -m 'chore: patch newly disclosed npm audit findings'
+          git commit -m 'fix: make billing debounce lint-safe'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
