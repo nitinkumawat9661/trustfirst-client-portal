@@ -27,6 +27,20 @@ export function HardwareDocumentActions({
     (document.type === "SALES_ORDER" || isEstimate) &&
     document.status === "CONFIRMED";
 
+  function openEstimateEditor() {
+    const href = `/admin/hardware/quotations/${document.id}/edit`;
+    const editor = window.open(
+      href,
+      `trustfirst-estimate-edit-${document.id}`,
+      "popup=yes,width=1180,height=900,resizable=yes,scrollbars=yes",
+    );
+    if (!editor) {
+      router.push(href);
+      return;
+    }
+    editor.focus();
+  }
+
   async function run(action: "confirm" | "invoice" | "cancel") {
     const cancellationReason =
       action === "cancel"
@@ -118,8 +132,8 @@ export function HardwareDocumentActions({
           </Button>
         ) : null}
         {isEstimate && document.status === "CONFIRMED" ? (
-          <Button asChild size="sm" variant="outline">
-            <Link href={`/admin/hardware/quotations/${document.id}/edit`}><Pencil className="size-4" />Edit Estimate Bill</Link>
+          <Button onClick={openEstimateEditor} size="sm" type="button" variant="outline">
+            <Pencil className="size-4" />Edit Estimate Bill
           </Button>
         ) : null}
         {document.type === "SALES_ORDER" && document.status === "CONFIRMED" && !document.billingInvoiceId ? (
