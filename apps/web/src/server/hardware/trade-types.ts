@@ -50,6 +50,25 @@ export type HardwareEstimateEditData = {
   taxMode: "intra-state" | "inter-state";
 };
 
+export type HardwareBillEditData = HardwareEstimateEditData & {
+  alreadyPaidAmountCents: number;
+  invoiceDiscountCents: number;
+  invoiceNumber: string | null;
+  notes: string;
+  type: "SALES_ORDER" | "SALES_QUOTATION" | "PURCHASE_ENTRY" | "SUPPLIER_BILL";
+};
+
+export type HardwareBillAuditEntry = {
+  actorName: string;
+  after: Record<string, unknown>;
+  before: Record<string, unknown>;
+  id: string;
+  occurredAt: Date;
+  reason: string;
+  repostIds: string[];
+  reversalIds: string[];
+};
+
 export type HardwareReportSummary = {
   dailySalesCents: number;
   lowStockProducts: number;

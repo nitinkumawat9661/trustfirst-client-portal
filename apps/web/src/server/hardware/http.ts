@@ -9,6 +9,7 @@ import { HardwareService } from "./hardware-service";
 import { HardwareFinancialService } from "./financial-service";
 import { HardwareDayClosingService } from "./day-closing-service";
 import { HardwareTradeService } from "./trade-service";
+import { HardwareBillEditService } from "./bill-edit-service";
 
 export async function hardwareContext() {
   const user = await requireCurrentUser();
@@ -23,6 +24,14 @@ export async function hardwareTradeContext() {
   return {
     context: { tenantId: user.activeTenantId ?? "public", userId: user.id },
     service: new HardwareTradeService(getPrisma()),
+  };
+}
+
+export async function hardwareBillEditContext() {
+  const user = await requireCurrentUser();
+  return {
+    context: { tenantId: user.activeTenantId ?? "public", userId: user.id },
+    service: new HardwareBillEditService(getPrisma()),
   };
 }
 

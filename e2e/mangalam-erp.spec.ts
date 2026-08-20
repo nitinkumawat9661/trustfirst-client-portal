@@ -157,12 +157,26 @@ test("customer, supplier, sale, purchase, Estimate Bill and same-page printing w
 
   const documentId = new URL(page.url()).pathname.split("/").filter(Boolean).at(-1);
   expect(documentId).toBeTruthy();
-  await page.goto(`/admin/hardware/quotations/${documentId}/edit`);
+  await page.goto(`/admin/hardware/bills/${documentId}/edit`);
   await expect(page.getByRole("heading", { name: /Edit HSQ-/, level: 1 })).toBeVisible();
+  await expect(page.getByTestId("locked-document-number")).toContainText(/^HSQ-/);
   await page.getByLabel("Qty", { exact: true }).first().fill("2");
-  await page.getByRole("button", { name: "Update and print Estimate Bill" }).click();
+  await page.getByLabel("Required correction reason").fill("Corrected quantity after customer review");
+  await page.getByTestId("save-bill-edit").click();
   await page.waitForURL(new RegExp(`/admin/hardware/print/${documentId}`));
   await expect(page.getByText(/Estimate Bill/i).first()).toBeVisible();
+
+  await page.goto(`/admin/hardware/bills/${documentId}/audit`);
+  await expect(page.getByRole("heading", { name: /^HSQ-/, level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Corrected quantity after customer review", level: 3 })).toBeVisible();
+  await expect(page.getByText("Reversal records")).toBeVisible();
+  await expect(page.getByText("Corrected repost records")).toBeVisible();
+
+  await page.goto("/admin/hardware/sales");
+  await expect(page.getByRole("link", { name: "Edit Sales Bill" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Audit history" }).first()).toBeVisible();
+  await page.goto("/admin/hardware/purchases");
+  await expect(page.getByRole("link", { name: "Edit Purchase Bill" }).first()).toBeVisible();
 
   await page.goto("/admin/hardware/sales/new");
   const rememberedProduct = page.getByRole("textbox", { name: "Product name / SKU", exact: true }).first();

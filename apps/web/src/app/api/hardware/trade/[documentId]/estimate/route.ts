@@ -1,24 +1,13 @@
-import type { NextRequest } from "next/server";
-import { applyAutomaticEstimateRoundOff } from "@/lib/hardware/estimate-money";
-import {
-  hardwareError,
-  hardwareEstimateUpdateSchema,
-  hardwareResponse,
-  hardwareTradeContext,
-  parseHardwareJson,
-} from "@/server/hardware";
+import { AppError } from "@/server/domain/errors";
+import { hardwareError } from "@/server/hardware";
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ documentId: string }> },
-) {
+export async function PATCH() {
   try {
-    const { documentId } = await params;
-    const { context, service } = await hardwareTradeContext();
-    const input = await parseHardwareJson(request, hardwareEstimateUpdateSchema);
-    return hardwareResponse(
-      await service.updateEstimate(context, documentId, applyAutomaticEstimateRoundOff(input)),
-    );
+    throw new AppError({
+      code: "VALIDATION_ERROR",
+      message: "Use the audited bill editor to update an Estimate Bill.",
+      status: 410,
+    });
   } catch (error) {
     return hardwareError(error);
   }

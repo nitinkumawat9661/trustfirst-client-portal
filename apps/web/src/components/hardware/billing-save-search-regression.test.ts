@@ -14,13 +14,11 @@ describe("billing save interaction regression", () => {
     expect(source).toContain("inFlightMutations.delete(requestKey)");
   });
 
-  it("opens Estimate edits in a script-created closable window", () => {
+  it("routes every supported bill type through the audited editor", () => {
     const actions = readSibling("hardware-document-actions.tsx");
-    const api = readSibling("hardware-api-client.ts");
-    expect(actions).toContain("window.open(");
-    expect(actions).toContain("trustfirst-estimate-edit-");
-    expect(api).toContain("window.close()");
-    expect(api).toContain("window.opener.location.reload()");
+    expect(actions).toContain('["SALES_ORDER", "SALES_QUOTATION", "PURCHASE_ENTRY", "SUPPLIER_BILL"]');
+    expect(actions).toContain("/admin/hardware/bills/${document.id}/edit");
+    expect(actions).toContain("/admin/hardware/bills/${document.id}/audit");
   });
 });
 
