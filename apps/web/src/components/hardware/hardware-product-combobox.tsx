@@ -2,7 +2,7 @@
 
 import { Button, Input } from "@trustfirst/ui";
 import { Plus, Search, Star } from "lucide-react";
-import { type Ref, useEffect, useMemo, useRef, useState } from "react";
+import { type Ref, useEffect, useMemo, useState } from "react";
 import type { HardwareProductSummary } from "@/server/hardware";
 import {
   isStrongProductSearchMatch,
@@ -12,6 +12,7 @@ import {
 
 const MAX_RESULTS = 20;
 const MAX_RECENT = 20;
+const SEARCH_DEBOUNCE_MS = 250;
 
 type ProductSearchMemory = {
   favorites: string[];
@@ -38,15 +39,12 @@ export function HardwareProductCombobox({
   value: string;
 }) {
   const [query, setQuery] = useState(value);
+  const [settledQuery, setSettledQuery] = useState(value);
   const [brand, setBrand] = useState("ALL");
   const [category, setCategory] = useState("ALL");
   const [activeIndex, setActiveIndex] = useState(0);
   const [open, setOpen] = useState(false);
   const [memory, setMemory] = useState<ProductSearchMemory>(() => readMemory(storageKey));
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-  }, []);
 
   const duplicateCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -75,7 +73,21 @@ export function HardwareProductCombobox({
   }, [products]);
 
   const displayedQuery = open ? query : value;
-  const normalizedQuery = normalizeProductSearchText(displayedQuery);
+  const normalizedTypedQuery = normalizeProductSearchText(displayedQuery);
+  const normalizedSettledQuery = normalizeProductSearchText(settledQuery);
+  const querySettling = open && normalizedTypedQuery !== normalizedSettledQuery;
+
+  useEffect(() => {
+    if (!open) return;
+    const nextQuery = normalizedTypedQuery ? displayedQuery : "";
+    const delay = normalizedTypedQuery ? SEARCH_DEBOUNCE_MS : 0;
+    const timer = window.setTimeout(() => {
+      setSettledQuery(nextQuery);
+      setActiveIndex(0);
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [displayedQuery, normalizedTypedQuery, open]);
+
   const rankedResults = useMemo(() => {
     const recentRank = new Map(memory.recent.map((id, index) => [id, index]));
     const favoriteSet = new Set(memory.favorites);
@@ -84,17 +96,7 @@ export function HardwareProductCombobox({
       && (category === "ALL" || product.categoryName === category),
     );
 
-    if (!normalizedQuery) {
-      return filtered
-        .filter((product) => favoriteSet.has(product.id) || recentRank.has(product.id))
-        .sort((left, right) => {
-          const favoriteDifference = Number(favoriteSet.has(right.id)) - Number(favoriteSet.has(left.id));
-          if (favoriteDifference) return favoriteDifference;
-          return (recentRank.get(left.id) ?? 999) - (recentRank.get(right.id) ?? 999);
-        })
-        .slice(0, MAX_RESULTS)
-        .map((product) => ({ product, score: 0 }));
-    }
+    if (!normalizedSettledQuery) return [];
 
     return filtered
       .map((product) => ({
@@ -106,7 +108,7 @@ export function HardwareProductCombobox({
           label: product.name,
           salesPriceCents: product.salesPriceCents,
           sku: product.sku,
-        }, displayedQuery),
+        }, settledQuery),
       }))
       .filter((entry) => entry.score > 0)
       .sort((left, right) => {
@@ -118,13 +120,14 @@ export function HardwareProductCombobox({
         if (recentDifference) return recentDifference;
         return localeCompare(left.product.name, right.product.name);
       });
-  }, [brand, category, displayedQuery, memory.favorites, memory.recent, normalizedQuery, products]);
+  }, [brand, category, memory.favorites, memory.recent, normalizedSettledQuery, products, settledQuery]);
 
-  const results = rankedResults.map((entry) => entry.product);
-  const topMatchScore = rankedResults[0]?.score ?? 0;
+  const results = querySettling ? [] : rankedResults.map((entry) => entry.product);
+  const topMatchScore = querySettling ? 0 : rankedResults[0]?.score ?? 0;
 
   function select(product: HardwareProductSummary) {
     setQuery(product.name);
+    setSettledQuery(product.name);
     setActiveIndex(0);
     onQueryChange(product.name);
     onSelect(product);
@@ -146,9 +149,9 @@ export function HardwareProductCombobox({
     writeMemory(storageKey, nextMemory);
   }
 
-  const exactName = products.some((product) => normalizeProductSearchText(product.name) === normalizedQuery);
+  const exactName = products.some((product) => normalizeProductSearchText(product.name) === normalizedSettledQuery);
   const strongMatch = isStrongProductSearchMatch(topMatchScore);
-  const showCreateAction = Boolean(onCreate && normalizedQuery) && !exactName && !strongMatch;
+  const showCreateAction = Boolean(onCreate && normalizedSettledQuery) && !querySettling && !exactName && !strongMatch;
   const displayLabel = label.replace(/\s*\/\s*barcode/giu, "");
 
   return (
@@ -161,9 +164,7 @@ export function HardwareProductCombobox({
         className="pl-9"
         placeholder="Type product, brand, category, SKU, model, size or colour"
         value={displayedQuery}
-        onBlur={() => {
-          closeTimer.current = setTimeout(() => setOpen(false), 160);
-        }}
+        onBlur={() => setOpen(false)}
         onChange={(event) => {
           const nextQuery = event.target.value;
           setQuery(nextQuery);
@@ -173,6 +174,7 @@ export function HardwareProductCombobox({
         }}
         onFocus={() => {
           setQuery(value);
+          setSettledQuery(value);
           setActiveIndex(0);
           setOpen(true);
         }}
@@ -201,6 +203,29 @@ export function HardwareProductCombobox({
           ) return;
           event.preventDefault();
           event.stopPropagation();
+          if (querySettling) {
+            const immediateProduct = products
+              .filter((product) =>
+                (brand === "ALL" || product.brandName === brand)
+                && (category === "ALL" || product.categoryName === category),
+              )
+              .map((product) => ({
+                product,
+                score: rankProductSearchEntry({
+                  brandName: product.brandName,
+                  categoryName: product.categoryName,
+                  keywords: [product.hsnCode ?? "", product.unitCode ?? ""],
+                  label: product.name,
+                  salesPriceCents: product.salesPriceCents,
+                  sku: product.sku,
+                }, query),
+              }))
+              .filter((entry) => entry.score > 0)
+              .sort((left, right) => right.score - left.score)[0]?.product;
+            if (immediateProduct) select(immediateProduct);
+            else setSettledQuery(query);
+            return;
+          }
           const product = results[activeIndex] ?? results[0];
           if (product) select(product);
           else if (showCreateAction) onCreate?.(query.trim());
@@ -232,7 +257,7 @@ export function HardwareProductCombobox({
               <option value="ALL">All categories</option>
               {categories.map((name) => <option key={name} value={name}>{name}</option>)}
             </select>
-            {!normalizedQuery ? (
+            {!normalizedTypedQuery ? (
               <div className="flex flex-wrap gap-1 sm:col-span-2">
                 {popularCategories.map((name) => (
                   <button
@@ -251,12 +276,17 @@ export function HardwareProductCombobox({
               </div>
             ) : (
               <p className="text-xs font-normal text-muted-foreground sm:col-span-2">
-                Closest matches appear first. Spelling mistakes, partial words, and words in any order are supported.
+                Search starts after a short typing pause. Old results clear immediately while you continue typing.
               </p>
             )}
           </div>
 
           <div className="max-h-96 overflow-y-auto p-1">
+            {querySettling ? (
+              <p className="px-3 py-4 text-sm font-normal text-muted-foreground">
+                Finish typing…
+              </p>
+            ) : null}
             {results.map((product, index) => {
               const favorite = memory.favorites.includes(product.id);
               const variants = duplicateCounts.get(normalizeProductSearchText(product.name)) ?? 1;
@@ -296,9 +326,14 @@ export function HardwareProductCombobox({
                 </div>
               );
             })}
-            {!results.length ? (
+            {!querySettling && normalizedSettledQuery && !results.length ? (
               <p className="px-3 py-4 text-sm font-normal text-muted-foreground">
                 No matching product. Try another name, brand, category, SKU, model, size, or colour.
+              </p>
+            ) : null}
+            {!querySettling && !normalizedSettledQuery ? (
+              <p className="px-3 py-4 text-sm font-normal text-muted-foreground">
+                Type the complete product search to see results.
               </p>
             ) : null}
             {showCreateAction ? (
@@ -315,7 +350,11 @@ export function HardwareProductCombobox({
             ) : null}
           </div>
           <p className="border-t border-border px-3 py-2 text-[11px] font-normal text-muted-foreground">
-            {normalizedQuery ? `${results.length} matching products • ` : ""}↑/↓ choose • Enter select • Esc close
+            {querySettling
+              ? "Waiting for typing to stop • Enter searches now"
+              : normalizedSettledQuery
+                ? `${results.length} matching products • ↑/↓ choose • Enter select • Esc close`
+                : "Type product search • Esc close"}
           </p>
         </div>
       ) : null}

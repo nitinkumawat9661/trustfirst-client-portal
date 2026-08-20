@@ -66,6 +66,10 @@ test("customer, supplier, sale, purchase, Estimate Bill and same-page printing w
   await purchaseProduct.fill("cement portland 50");
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Save purchase" }).click();
+  const purchasePaymentDialog = page.getByRole("dialog");
+  await expect(purchasePaymentDialog.getByRole("heading", { name: "How was this purchase paid?" })).toBeVisible();
+  await purchasePaymentDialog.getByRole("button", { name: /Unpaid \/ credit/ }).click();
+  await purchasePaymentDialog.getByRole("button", { name: "Confirm and save accounting" }).click();
   await page.waitForURL(/\/admin\/hardware\/purchases\?created=1/);
 
   await page.goto("/admin/hardware/purchases/new");
