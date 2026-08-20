@@ -78,20 +78,15 @@ export function HardwareProductCombobox({
   const querySettling = open && normalizedTypedQuery !== normalizedSettledQuery;
 
   useEffect(() => {
-    if (!open) {
-      setSettledQuery(value);
-      return;
-    }
-    if (!normalizedTypedQuery) {
-      setSettledQuery("");
-      return;
-    }
+    if (!open) return;
+    const nextQuery = normalizedTypedQuery ? displayedQuery : "";
+    const delay = normalizedTypedQuery ? SEARCH_DEBOUNCE_MS : 0;
     const timer = window.setTimeout(() => {
-      setSettledQuery(displayedQuery);
+      setSettledQuery(nextQuery);
       setActiveIndex(0);
-    }, SEARCH_DEBOUNCE_MS);
+    }, delay);
     return () => window.clearTimeout(timer);
-  }, [displayedQuery, normalizedTypedQuery, open, value]);
+  }, [displayedQuery, normalizedTypedQuery, open]);
 
   const rankedResults = useMemo(() => {
     const recentRank = new Map(memory.recent.map((id, index) => [id, index]));

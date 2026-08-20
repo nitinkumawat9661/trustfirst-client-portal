@@ -48,6 +48,7 @@ export function BillPaymentConfirmationDialog({
 
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the confirmation draft when the dialog opens
     setChoice(defaultChoice);
     setMode(defaultMode);
     setPartialAmount("");
