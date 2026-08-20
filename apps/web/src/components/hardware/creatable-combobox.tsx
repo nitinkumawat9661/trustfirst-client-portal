@@ -2,7 +2,7 @@
 
 import { Button, Input } from "@trustfirst/ui";
 import { Plus, Search, Star } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProductSearchMetadata } from "./product-search-metadata-bridge";
 
 export type CreatableComboboxOption = {
@@ -17,6 +17,7 @@ type SearchWindow = Window & {
 
 const FAVORITES_KEY = "trustfirst.hardware.product-favorites";
 const RECENTS_KEY = "trustfirst.hardware.product-recents";
+const COMBOBOX_SEARCH_DEBOUNCE_MS = 300;
 
 export function CreatableCombobox({
   createLabel = "Create",
@@ -40,6 +41,8 @@ export function CreatableCombobox({
   value: string;
 }) {
   const [query, setQuery] = useState(value);
+  const [searchQuery, setSearchQuery] = useState(value);
+  const [searchPending, setSearchPending] = useState(false);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [brandFilter, setBrandFilter] = useState("");
@@ -47,6 +50,7 @@ export function CreatableCombobox({
   const [metadataRevision, setMetadataRevision] = useState(0);
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() => readStoredIds(FAVORITES_KEY));
   const [recentIds, setRecentIds] = useState<string[]>(() => readStoredIds(RECENTS_KEY));
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     function metadataReady() {
@@ -56,6 +60,17 @@ export function CreatableCombobox({
     return () => window.removeEventListener("hardware-product-search-metadata-ready", metadataReady);
   }, []);
 
+  useEffect(() => () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+  }, []);
+
+  useEffect(() => {
+    if (open) return;
+    setQuery(value);
+    setSearchQuery(value);
+    setSearchPending(false);
+  }, [open, value]);
+
   const metadata = useMemo(() => {
     void metadataRevision;
     if (typeof window === "undefined") return {} as Record<string, ProductSearchMetadata>;
@@ -63,12 +78,13 @@ export function CreatableCombobox({
   }, [metadataRevision]);
   const isProductSearch = options.some((option) => Boolean(metadata[option.id]));
   const displayedQuery = open ? query : value;
-  const normalizedQuery = normalize(displayedQuery);
+  const normalizedQuery = normalize(searchQuery);
 
   const brands = useMemo(() => uniqueSorted(options.map((option) => metadata[option.id]?.brandName ?? null)), [metadata, options]);
   const categories = useMemo(() => uniqueSorted(options.map((option) => metadata[option.id]?.categoryName ?? null)), [metadata, options]);
 
-  const matches = useMemo(() => {
+  const findMatches = useCallback((searchText: string) => {
+    const normalizedSearchText = normalize(searchText);
     const filtered = options.filter((option) => {
       const product = metadata[option.id];
       if (brandFilter && product?.brandName !== brandFilter) return false;
@@ -76,7 +92,7 @@ export function CreatableCombobox({
       return true;
     });
 
-    if (!normalizedQuery) {
+    if (!normalizedSearchText) {
       if (!isProductSearch) return [];
       const priority = [...favoriteIds, ...recentIds].filter((id, index, values) => values.indexOf(id) === index);
       const byId = new Map(filtered.map((option) => [option.id, option]));
@@ -88,19 +104,27 @@ export function CreatableCombobox({
     }
 
     return filtered
-      .map((option) => ({ option, score: rankOption(option, normalizedQuery, metadata[option.id]) }))
+      .map((option) => ({ option, score: rankOption(option, normalizedSearchText, metadata[option.id]) }))
       .filter((entry) => entry.score > 0)
       .sort((left, right) => right.score - left.score || left.option.label.localeCompare(right.option.label))
       .map((entry) => entry.option);
-  }, [brandFilter, categoryFilter, favoriteIds, isProductSearch, metadata, normalizedQuery, options, recentIds]);
+  }, [brandFilter, categoryFilter, favoriteIds, isProductSearch, metadata, options, recentIds]);
+
+  const matches = useMemo(
+    () => searchPending ? [] : findMatches(searchQuery),
+    [findMatches, searchPending, searchQuery],
+  );
 
   const exactMatch = options.some((option) => normalize(option.label) === normalizedQuery);
-  const showPanel = open && (isProductSearch || Boolean(normalizedQuery));
+  const showPanel = open && (searchPending || isProductSearch || Boolean(normalizedQuery));
 
   function select(id: string) {
     const option = options.find((candidate) => candidate.id === id);
     if (!option) return;
+    if (searchTimer.current) clearTimeout(searchTimer.current);
     setQuery(option.label);
+    setSearchQuery(option.label);
+    setSearchPending(false);
     setOpen(false);
     setActiveIndex(0);
     onSelect(option.id);
@@ -132,14 +156,32 @@ export function CreatableCombobox({
         value={displayedQuery}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         onChange={(event) => {
-          setQuery(event.target.value);
-          setOpen(true);
+          const nextQuery = event.target.value;
+          setQuery(nextQuery);
           setActiveIndex(0);
           onSelect("");
-          onQueryChange?.(event.target.value);
+          onQueryChange?.(nextQuery);
+          if (searchTimer.current) clearTimeout(searchTimer.current);
+
+          if (!normalize(nextQuery)) {
+            setSearchQuery("");
+            setSearchPending(false);
+            setOpen(false);
+            return;
+          }
+
+          setSearchPending(true);
+          setOpen(true);
+          searchTimer.current = setTimeout(() => {
+            setSearchQuery(nextQuery);
+            setSearchPending(false);
+          }, COMBOBOX_SEARCH_DEBOUNCE_MS);
         }}
         onFocus={() => {
+          if (searchTimer.current) clearTimeout(searchTimer.current);
           setQuery(value);
+          setSearchQuery(value);
+          setSearchPending(false);
           setOpen(true);
           setActiveIndex(0);
         }}
@@ -161,9 +203,17 @@ export function CreatableCombobox({
           }
           if (event.key !== "Enter") return;
           event.preventDefault();
-          const selected = matches[activeIndex] ?? matches[0];
-          if (selected) select(selected.id);
-          else if (onCreate && normalizedQuery && !exactMatch) onCreate(query.trim());
+
+          const immediateMatches = searchPending ? findMatches(query) : matches;
+          const selected = immediateMatches[activeIndex] ?? immediateMatches[0];
+          if (selected) {
+            select(selected.id);
+            return;
+          }
+
+          const immediateNormalized = normalize(query);
+          const immediateExact = options.some((option) => normalize(option.label) === immediateNormalized);
+          if (onCreate && immediateNormalized && !immediateExact) onCreate(query.trim());
         }}
       />
       {showPanel ? (
@@ -180,7 +230,7 @@ export function CreatableCombobox({
                   {categories.map((category) => <option key={category} value={category}>{category}</option>)}
                 </select>
               </div>
-              {!normalizedQuery ? <p className="text-xs text-muted-foreground">Favorites and recently billed products appear first. Search by name, SKU, model, brand, category, size, colour, or price—even with spelling mistakes.</p> : null}
+              {!normalizedQuery && !searchPending ? <p className="text-xs text-muted-foreground">Favorites and recently billed products appear first. Search by name, SKU, model, brand, category, size, colour, or price—even with spelling mistakes.</p> : null}
               {categories.slice(0, 6).length ? (
                 <div className="flex flex-wrap gap-1">
                   {categories.slice(0, 6).map((category) => (
@@ -192,7 +242,10 @@ export function CreatableCombobox({
               ) : null}
             </div>
           ) : null}
-          {matches.map((option, index) => {
+          {searchPending ? (
+            <p className="px-2 py-3 text-sm text-muted-foreground">Finish typing — search will run automatically.</p>
+          ) : null}
+          {!searchPending ? matches.map((option, index) => {
             const product = metadata[option.id];
             const favorite = favoriteIds.includes(option.id);
             return (
@@ -219,9 +272,9 @@ export function CreatableCombobox({
                 ) : null}
               </div>
             );
-          })}
-          {!matches.length ? <p className="px-2 py-3 text-sm text-muted-foreground">No matching product found.</p> : null}
-          {onCreate && normalizedQuery && !exactMatch ? (
+          }) : null}
+          {!searchPending && !matches.length ? <p className="px-2 py-3 text-sm text-muted-foreground">No matching result found.</p> : null}
+          {onCreate && !searchPending && normalizedQuery && !exactMatch ? (
             <Button className="mt-1 w-full justify-start" onMouseDown={(event) => event.preventDefault()} onClick={() => onCreate(query.trim())} size="sm" type="button" variant="ghost">
               <Plus className="size-4" />{createLabel} &quot;{query.trim()}&quot;
             </Button>

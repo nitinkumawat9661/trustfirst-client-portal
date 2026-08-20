@@ -48,11 +48,32 @@ test("customer, supplier, sale, purchase, Estimate Bill and same-page printing w
   await saleGst.press("Enter");
   await expect(page.getByText("Item 2", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
+
   const postBillButton = page.getByRole("button", { name: "Post bill", exact: true });
-  await expect(postBillButton).toBeDisabled();
-  await page.getByTestId("quick-pos-payment-status").selectOption("unpaid");
   await expect(postBillButton).toBeEnabled();
   await postBillButton.click();
+  const paymentDialog = page.getByRole("dialog");
+  await expect(paymentDialog.getByRole("heading", { name: "How was this bill paid?" })).toBeVisible();
+  await paymentDialog.getByRole("button", { name: /Unpaid \/ credit/ }).click();
+
+  let salePostRequests = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().includes("/api/hardware/pos/sale")) {
+      salePostRequests += 1;
+    }
+  });
+  const saleResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === "POST" && response.url().includes("/api/hardware/pos/sale"),
+  );
+  const confirmSaleButton = paymentDialog.getByRole("button", { name: "Confirm and save accounting", exact: true });
+  await confirmSaleButton.evaluate((button) => {
+    (button as HTMLButtonElement).click();
+    (button as HTMLButtonElement).click();
+    (button as HTMLButtonElement).click();
+  });
+  const saleResponse = await saleResponsePromise;
+  expect(saleResponse.ok()).toBe(true);
+  await expect.poll(() => salePostRequests).toBe(1);
   await expect(page.getByText("After issue")).toBeVisible();
 
   await page.goto("/admin/hardware/purchases/new");
@@ -156,9 +177,31 @@ test("customer, supplier, sale, purchase, Estimate Bill and same-page printing w
   await page.goto(`/admin/hardware/quotations/${documentId}/edit`);
   await expect(page.getByRole("heading", { name: /Edit HSQ-/, level: 1 })).toBeVisible();
   await page.getByLabel("Qty", { exact: true }).first().fill("2");
-  await page.getByRole("button", { name: "Update and print Estimate Bill" }).click();
-  await page.waitForURL(new RegExp(`/admin/hardware/print/${documentId}`));
-  await expect(page.getByText(/Estimate Bill/i).first()).toBeVisible();
+
+  let estimateUpdateRequests = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "PATCH"
+      && request.url().includes(`/api/hardware/trade/${documentId}/estimate`)
+    ) {
+      estimateUpdateRequests += 1;
+    }
+  });
+  const estimateUpdateResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === "PATCH"
+    && response.url().includes(`/api/hardware/trade/${documentId}/estimate`),
+  );
+  const saveChangesButton = page.getByRole("button", { name: "Save changes", exact: true });
+  await saveChangesButton.evaluate((button) => {
+    (button as HTMLButtonElement).click();
+    (button as HTMLButtonElement).click();
+    (button as HTMLButtonElement).click();
+  });
+  const estimateUpdateResponse = await estimateUpdateResponsePromise;
+  expect(estimateUpdateResponse.ok()).toBe(true);
+  await expect.poll(() => estimateUpdateRequests).toBe(1);
+  await page.waitForURL(/\/admin\/hardware\/quotations\?updated=1$/);
+  await expect(page.getByRole("heading", { name: "Estimate Bills", level: 1 })).toBeVisible();
 
   await page.goto("/admin/hardware/sales/new");
   const rememberedProduct = page.getByRole("textbox", { name: "Product name / SKU", exact: true }).first();
