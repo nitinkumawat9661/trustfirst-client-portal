@@ -1,0 +1,51 @@
+name: Refresh PR 72 Security Lockfile
+
+on:
+  pull_request:
+    types: [synchronize]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.event.pull_request.head.ref == 'fix/mangalam-save-lock-search-debounce'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply patched transitive versions and regenerate lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pkg set 'overrides.deepmerge-ts=8.0.0'
+          npm pkg set 'overrides.js-yaml=4.3.1'
+          npm pkg set 'overrides.nanoid=3.3.18'
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts
+          npm audit --audit-level=high
+
+      - name: Commit only dependency security resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff --exit-code -- apps/web packages || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json
+          git diff --cached --quiet && exit 0
+          git commit -m 'chore: patch newly disclosed npm audit findings'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
