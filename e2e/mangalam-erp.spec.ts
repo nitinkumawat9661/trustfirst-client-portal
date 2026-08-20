@@ -168,7 +168,7 @@ test("customer, supplier, sale, purchase, Estimate Bill and same-page printing w
 
   await page.goto(`/admin/hardware/bills/${documentId}/audit`);
   await expect(page.getByRole("heading", { name: /^HSQ-/, level: 1 })).toBeVisible();
-  await expect(page.getByText("Corrected quantity after customer review")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Corrected quantity after customer review", level: 3 })).toBeVisible();
   await expect(page.getByText("Reversal records")).toBeVisible();
   await expect(page.getByText("Corrected repost records")).toBeVisible();
 
