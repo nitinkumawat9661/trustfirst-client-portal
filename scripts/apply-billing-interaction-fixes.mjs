@@ -97,8 +97,15 @@ update("apps/web/src/components/hardware/quick-pos-form.tsx", (input) => {
   if (!source.includes("const postLockRef = useRef(false);")) {
     source = replaceExactlyOnce(
       source,
-      "  const [saving, setSaving] = useState(false);",
-      "  const [saving, setSaving] = useState(false);\n  const postLockRef = useRef(false);",
+      `  const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
+  const [printStatus, setPrintStatus] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [posted, setPosted] = useState<PostedSale | null>(null);`,
+      `  const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
+  const [printStatus, setPrintStatus] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const postLockRef = useRef(false);
+  const [posted, setPosted] = useState<PostedSale | null>(null);`,
       "Quick POS synchronous post lock state",
     );
   }
