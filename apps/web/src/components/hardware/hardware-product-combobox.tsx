@@ -204,8 +204,26 @@ export function HardwareProductCombobox({
           event.preventDefault();
           event.stopPropagation();
           if (querySettling) {
-            setSettledQuery(query);
-            setActiveIndex(0);
+            const immediateProduct = products
+              .filter((product) =>
+                (brand === "ALL" || product.brandName === brand)
+                && (category === "ALL" || product.categoryName === category),
+              )
+              .map((product) => ({
+                product,
+                score: rankProductSearchEntry({
+                  brandName: product.brandName,
+                  categoryName: product.categoryName,
+                  keywords: [product.hsnCode ?? "", product.unitCode ?? ""],
+                  label: product.name,
+                  salesPriceCents: product.salesPriceCents,
+                  sku: product.sku,
+                }, query),
+              }))
+              .filter((entry) => entry.score > 0)
+              .sort((left, right) => right.score - left.score)[0]?.product;
+            if (immediateProduct) select(immediateProduct);
+            else setSettledQuery(query);
             return;
           }
           const product = results[activeIndex] ?? results[0];
