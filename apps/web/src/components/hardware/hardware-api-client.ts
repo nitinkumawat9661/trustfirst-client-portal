@@ -26,6 +26,8 @@ export type HardwareApiResult<T> =
   | { data: T; ok: true }
   | { message: string; ok: false };
 
+const inFlightMutations = new Map<string, Promise<HardwareApiResult<unknown>>>();
+
 export async function postHardwareJson<T>(
   endpoint: string,
   body?: unknown,
@@ -108,6 +110,26 @@ async function sendHardwareJson<T>(
   method: "PATCH" | "POST",
   body?: unknown,
 ): Promise<HardwareApiResult<T>> {
+  const requestKey = hardwareMutationKey(endpoint, method, body);
+  const existing = inFlightMutations.get(requestKey);
+  if (existing) return existing as Promise<HardwareApiResult<T>>;
+
+  const request = executeHardwareJson<T>(endpoint, method, body);
+  inFlightMutations.set(requestKey, request as Promise<HardwareApiResult<unknown>>);
+  try {
+    return await request;
+  } finally {
+    if (inFlightMutations.get(requestKey) === request) {
+      inFlightMutations.delete(requestKey);
+    }
+  }
+}
+
+async function executeHardwareJson<T>(
+  endpoint: string,
+  method: "PATCH" | "POST",
+  body?: unknown,
+): Promise<HardwareApiResult<T>> {
   const offlineCustomerBlock = blockOfflineCustomerCreation<T>(endpoint, method);
   if (offlineCustomerBlock) return offlineCustomerBlock;
 
@@ -133,6 +155,7 @@ async function sendHardwareJson<T>(
         ok: false,
       };
     }
+    closeSuccessfulEstimateEditor(endpoint, method);
     return { data: result.data as T, ok: true };
   } catch {
     return {
@@ -140,6 +163,37 @@ async function sendHardwareJson<T>(
       ok: false,
     };
   }
+}
+
+function hardwareMutationKey(endpoint: string, method: "PATCH" | "POST", body: unknown) {
+  let serializedBody = "";
+  try {
+    serializedBody = body === undefined ? "" : JSON.stringify(body);
+  } catch {
+    serializedBody = String(body);
+  }
+  return `${method}:${endpoint}:${serializedBody}`;
+}
+
+function closeSuccessfulEstimateEditor(endpoint: string, method: "PATCH" | "POST") {
+  if (
+    typeof window === "undefined" ||
+    method !== "PATCH" ||
+    !/^\/api\/hardware\/trade\/[^/]+\/estimate$/u.test(endpoint) ||
+    !window.opener ||
+    window.opener.closed
+  ) {
+    return;
+  }
+
+  try {
+    if (window.opener.location.origin === window.location.origin) {
+      window.opener.location.reload();
+    }
+  } catch {
+    // The saved edit still closes even if the opener cannot be refreshed.
+  }
+  window.close();
 }
 
 function blockOfflineCustomerCreation<T>(
