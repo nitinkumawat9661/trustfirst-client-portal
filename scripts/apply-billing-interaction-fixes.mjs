@@ -178,11 +178,16 @@ for (const path of [
 }
 
 update("apps/web/src/components/hardware/bill-payment-confirmation-dialog.tsx", (input) => {
-  if (input.includes("eslint-disable-next-line react-hooks/set-state-in-effect")) return input;
-  return replaceExactlyOnce(
-    input,
+  let source = input.replace(
+    'from "@/lib/hardware/payment-choice";',
+    'from "../../lib/hardware/payment-choice";',
+  );
+  if (source.includes("eslint-disable-next-line react-hooks/set-state-in-effect")) return source;
+  source = replaceExactlyOnce(
+    source,
     "    setChoice(defaultChoice);",
     "    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the confirmation draft when the dialog opens\n    setChoice(defaultChoice);",
     "payment-dialog open reset lint annotation",
   );
+  return source;
 });
