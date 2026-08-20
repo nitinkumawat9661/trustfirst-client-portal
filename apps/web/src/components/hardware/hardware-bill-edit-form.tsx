@@ -3,8 +3,9 @@
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@trustfirst/ui";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import type { HardwareBillEditData, HardwarePartySummary, HardwareProductSummary } from "@/server/hardware";
+import { nextBillingLineAction } from "./billing-keyboard";
 import { patchHardwareJson } from "./hardware-api-client";
 import { HardwareProductCombobox } from "./hardware-product-combobox";
 
@@ -40,10 +41,65 @@ export function HardwareBillEditForm({
   const [lines, setLines] = useState<EditLine[]>(bill.items);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const productInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const quantityInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const discountInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const gstInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const totals = useMemo(() => calculateTotals(lines, roundOff, purchase ? "0" : invoiceDiscount), [invoiceDiscount, lines, purchase, roundOff]);
 
   function updateLine(index: number, patch: Partial<EditLine>) {
     setLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, ...patch } : line));
+  }
+
+  function applyProduct(index: number, product: HardwareProductSummary) {
+    updateLine(index, {
+      gstRate: product.gstRateBps ? product.gstRateBps / 100 : 0,
+      hsnCode: product.hsnCode ?? "",
+      productId: product.id,
+      productName: product.name,
+      unitCode: product.unitCode ?? "",
+      unitRateCents: purchase ? product.purchaseCostCents : product.salesPriceCents,
+    });
+    window.requestAnimationFrame(() => {
+      const input = quantityInputRefs.current[index];
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  function focusProduct(index: number) {
+    window.setTimeout(() => productInputRefs.current[index]?.focus(), 0);
+  }
+
+  function advanceFromQuantity(index: number, event: KeyboardEvent<HTMLInputElement>) {
+    if (!isPlainEnter(event)) return;
+    event.preventDefault();
+    const line = lines[index];
+    if (!line?.productId) {
+      productInputRefs.current[index]?.focus();
+      return;
+    }
+    const discountInput = discountInputRefs.current[index];
+    discountInput?.focus();
+    discountInput?.select();
+  }
+
+  function advanceFromDiscount(index: number, event: KeyboardEvent<HTMLInputElement>) {
+    if (!isPlainEnter(event)) return;
+    event.preventDefault();
+    const gstInput = gstInputRefs.current[index];
+    gstInput?.focus();
+    gstInput?.select();
+  }
+
+  function advanceFromGst(index: number, event: KeyboardEvent<HTMLInputElement>) {
+    if (!isPlainEnter(event)) return;
+    event.preventDefault();
+    const action = nextBillingLineAction(index, lines.length);
+    if (action.append) {
+      setLines((current) => [...current, emptyLine()]);
+    }
+    focusProduct(action.nextIndex);
   }
 
   async function save() {
@@ -128,17 +184,33 @@ export function HardwareBillEditForm({
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0"><CardTitle>Line items</CardTitle><Button onClick={() => setLines((current) => [...current, emptyLine()])} size="sm" type="button" variant="outline"><Plus className="size-4" />Add line</Button></CardHeader>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle>Line items</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">Press Enter to move through product, quantity, discount, GST, and then directly to the next item, matching new bill entry.</p>
+          </div>
+          <Button onClick={() => setLines((current) => [...current, emptyLine()])} size="sm" type="button" variant="outline"><Plus className="size-4" />Add line</Button>
+        </CardHeader>
         <CardContent className="space-y-3">
           {lines.map((line, index) => (
             <fieldset className="grid gap-3 rounded-md border border-border p-3 lg:grid-cols-12" key={`${index}-${line.productId}`}>
               <legend className="px-1 text-xs font-semibold text-muted-foreground">Item {index + 1}</legend>
-              <div className="lg:col-span-4"><HardwareProductCombobox label="Product" onQueryChange={(query) => updateLine(index, { productId: "", productName: query })} onSelect={(product) => updateLine(index, { gstRate: product.gstRateBps ? product.gstRateBps / 100 : 0, hsnCode: product.hsnCode ?? "", productId: product.id, productName: product.name, unitCode: product.unitCode ?? "", unitRateCents: purchase ? product.purchaseCostCents : product.salesPriceCents })} products={products} storageKey={`trustfirst.hardware.bill-edit.${purchase ? "purchase" : "sale"}`} value={line.productName} /></div>
-              <Field className="lg:col-span-1" label="Qty"><Input min="1" onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} step="1" type="number" value={line.quantity} /></Field>
+              <div className="lg:col-span-4">
+                <HardwareProductCombobox
+                  inputRef={(node) => { productInputRefs.current[index] = node; }}
+                  label="Product"
+                  onQueryChange={(query) => updateLine(index, { productId: "", productName: query })}
+                  onSelect={(product) => applyProduct(index, product)}
+                  products={products}
+                  storageKey={`trustfirst.hardware.bill-edit.${purchase ? "purchase" : "sale"}`}
+                  value={line.productName}
+                />
+              </div>
+              <Field className="lg:col-span-1" label="Qty"><Input ref={(node) => { quantityInputRefs.current[index] = node; }} min="1" onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} onKeyDown={(event) => advanceFromQuantity(index, event)} step="1" type="number" value={line.quantity} /></Field>
               <Field className="lg:col-span-1" label="Unit"><Input onChange={(event) => updateLine(index, { unitCode: event.target.value })} value={line.unitCode} /></Field>
               <Field className="lg:col-span-2" label="Rate"><Input min="0" onChange={(event) => updateLine(index, { unitRateCents: Math.round(Number(event.target.value) * 100) })} step="0.01" type="number" value={line.unitRateCents / 100} /></Field>
-              <Field className="lg:col-span-1" label="Disc. %"><Input max="100" min="0" onChange={(event) => updateLine(index, { discountPercent: Number(event.target.value) })} step="0.01" type="number" value={line.discountPercent} /></Field>
-              <Field className="lg:col-span-1" label="GST %"><Input max="100" min="0" onChange={(event) => updateLine(index, { gstRate: Number(event.target.value) })} step="0.01" type="number" value={line.gstRate} /></Field>
+              <Field className="lg:col-span-1" label="Disc. %"><Input ref={(node) => { discountInputRefs.current[index] = node; }} max="100" min="0" onChange={(event) => updateLine(index, { discountPercent: Number(event.target.value) })} onKeyDown={(event) => advanceFromDiscount(index, event)} step="0.01" type="number" value={line.discountPercent} /></Field>
+              <Field className="lg:col-span-1" label="GST %"><Input ref={(node) => { gstInputRefs.current[index] = node; }} max="100" min="0" onChange={(event) => updateLine(index, { gstRate: Number(event.target.value) })} onKeyDown={(event) => advanceFromGst(index, event)} step="0.01" type="number" value={line.gstRate} /></Field>
               <Field className="lg:col-span-1" label="HSN"><Input onChange={(event) => updateLine(index, { hsnCode: event.target.value })} value={line.hsnCode} /></Field>
               <div className="flex items-end lg:col-span-1"><Button aria-label={`Remove item ${index + 1}`} className="w-full" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))} type="button" variant="ghost"><Trash2 className="size-4" /></Button></div>
             </fieldset>
@@ -157,6 +229,7 @@ function Field({ children, className = "", label }: { children: React.ReactNode;
 function Total({ label, value }: { label: string; value: number }) { return <div className="flex justify-between"><dt className="text-muted-foreground">{label}</dt><dd>{money(value)}</dd></div>; }
 function emptyLine(): EditLine { return { discountPercent: 0, gstRate: 0, hsnCode: "", productId: "", productName: "", quantity: 1, unitCode: "", unitRateCents: 0 }; }
 function calculateTotals(lines: EditLine[], roundOff: string, invoiceDiscount: string) { const base = lines.reduce((sum, line) => { const gross = line.quantity * line.unitRateCents; const discount = Math.round(gross * line.discountPercent / 100); const taxable = Math.max(gross - discount, 0); return { discountCents: sum.discountCents + discount, subtotalCents: sum.subtotalCents + gross, taxCents: sum.taxCents + Math.round(taxable * line.gstRate / 100), taxableCents: sum.taxableCents + taxable }; }, { discountCents: 0, subtotalCents: 0, taxCents: 0, taxableCents: 0 }); const invoiceDiscountCents = Math.max(Math.round(Number(invoiceDiscount || 0) * 100), 0); const roundOffCents = Math.round(Number(roundOff || 0) * 100); return { ...base, discountCents: base.discountCents + invoiceDiscountCents, roundOffCents, totalCents: Math.max(base.taxableCents + base.taxCents + roundOffCents - invoiceDiscountCents, 0) }; }
+function isPlainEnter(event: KeyboardEvent<HTMLElement>) { return event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey; }
 function normalizePaymentMode(value: string) { const normalized = value.toUpperCase().replaceAll(" ", "_"); return paymentModes.includes(normalized as typeof paymentModes[number]) ? normalized as typeof paymentModes[number] : "CASH"; }
 function displayName(type: HardwareBillEditData["type"]) { if (type === "SALES_QUOTATION") return "Estimate Bill"; if (type === "PURCHASE_ENTRY" || type === "SUPPLIER_BILL") return "Purchase Bill"; return "Sales Bill"; }
 function humanize(value: string) { return value.toLowerCase().replaceAll("_", " ").replace(/^./u, (character) => character.toUpperCase()); }
