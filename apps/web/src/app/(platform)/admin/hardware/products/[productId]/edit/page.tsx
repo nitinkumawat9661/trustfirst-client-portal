@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { HardwarePageHeader } from "@/components/hardware/hardware-page-header";
 import { HardwareProductForm } from "@/components/hardware/hardware-product-form";
 import { requireCurrentUser } from "@/server/auth/session";
-import { HardwareService, stockForProduct } from "@/server/hardware";
+import { HardwareService, hardwareInventoryMovementChronology, stockForProduct } from "@/server/hardware";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,7 @@ export default async function EditHardwareProductPage({
     service.listCategories(context),
     service.listLocations(context),
     prisma.hardwareInventoryMovement.findMany({
+      orderBy: hardwareInventoryMovementChronology,
       select: { locationId: true, quantity: true, type: true },
       where: { productId, tenantId: context.tenantId },
     }),

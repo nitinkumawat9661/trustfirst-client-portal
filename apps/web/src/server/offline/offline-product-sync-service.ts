@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { QueuedMutation } from "../../lib/offline-queue";
 import { AppError } from "../domain/errors";
+import { hardwareInventoryMovementChronology } from "../hardware/hardware-repository";
 import { quickHardwareProductSchema, type QuickHardwareProductInput } from "../hardware/schemas";
 import type { HardwareProductSummary } from "../hardware/types";
 import type { AuthenticatedOfflineDevice } from "./offline-device-auth";
@@ -105,6 +106,7 @@ export class OfflineProductSyncService {
           throw conflict("A server product with the same name, SKU, or barcode already exists. Review the offline conflict instead of merging it automatically.");
         }
         const movements = await tx.hardwareInventoryMovement.findMany({
+          orderBy: hardwareInventoryMovementChronology,
           select: { quantity: true, type: true },
           where: { productId: duplicate.id, tenantId: device.tenantId },
         });
