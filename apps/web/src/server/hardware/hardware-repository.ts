@@ -12,6 +12,12 @@ const productInclude = {
   unit: { select: { code: true } },
 };
 
+export const hardwareInventoryMovementChronology = [
+  { occurredAt: "asc" },
+  { createdAt: "asc" },
+  { id: "asc" },
+] satisfies Prisma.HardwareInventoryMovementOrderByWithRelationInput[];
+
 export class PrismaHardwareRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -169,6 +175,7 @@ export class PrismaHardwareRepository {
 
   movementsForProduct(tenantId: string, productId: string) {
     return this.prisma.hardwareInventoryMovement.findMany({
+      orderBy: hardwareInventoryMovementChronology,
       where: { productId, tenantId },
     });
   }
@@ -179,7 +186,7 @@ export class PrismaHardwareRepository {
         location: { select: { name: true } },
         product: { select: { name: true } },
       },
-      orderBy: { occurredAt: "desc" },
+      orderBy: hardwareInventoryMovementChronology,
       where: { tenantId },
     });
   }

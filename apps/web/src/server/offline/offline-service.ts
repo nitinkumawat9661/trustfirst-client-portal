@@ -15,6 +15,7 @@ import {
   type OfflineSnapshotStock,
 } from "../../lib/offline-data/types";
 import { AppError } from "../domain/errors";
+import { hardwareInventoryMovementChronology } from "../hardware/hardware-repository";
 import { HardwareService, stockForProduct } from "../hardware/hardware-service";
 import { HardwareTradeService } from "../hardware/trade-service";
 import { PermissionResolverService } from "../permissions/permission-service";
@@ -131,7 +132,7 @@ export class OfflineService {
       canInventory ? hardware.listLocations(context) : Promise.resolve([]),
       canInventory
         ? this.prisma.hardwareInventoryMovement.findMany({
-            orderBy: { occurredAt: "asc" },
+            orderBy: hardwareInventoryMovementChronology,
             select: { locationId: true, productId: true, quantity: true, type: true },
             where: { tenantId: context.tenantId },
           })

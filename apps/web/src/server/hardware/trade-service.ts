@@ -28,6 +28,7 @@ import {
 import { MANGALAM_TENANT_SLUG } from "../domain/host-routing";
 import { PermissionResolverService } from "../permissions";
 import { currentIndiaBusinessDay } from "./business-time";
+import { hardwareInventoryMovementChronology } from "./hardware-repository";
 import { stockForProduct } from "./hardware-service";
 import { calculateTradeTotals } from "./trade-calculations";
 import { movementTypeForDocument, PrismaHardwareTradeRepository } from "./trade-repository";
@@ -412,6 +413,7 @@ export class HardwareTradeService {
     }
     for (const [productId, required] of requiredByProduct) {
       const movements = await this.prisma.hardwareInventoryMovement.findMany({
+        orderBy: hardwareInventoryMovementChronology,
         where: { locationId: input.locationId, productId, tenantId: context.tenantId },
       });
       const available = stockForProduct(movements) + (reversibleAtNextLocation.get(productId) ?? 0);
@@ -664,6 +666,7 @@ export class HardwareTradeService {
     const trackedItems = normalizedItems;
     for (const item of trackedItems) {
       const movements = await this.prisma.hardwareInventoryMovement.findMany({
+        orderBy: hardwareInventoryMovementChronology,
         where: { locationId: input.locationId, productId: item.productId, tenantId: context.tenantId },
       });
       if (item.quantity > stockForProduct(movements)) {
@@ -1434,6 +1437,7 @@ export class HardwareTradeService {
     });
     for (const item of returnItems) {
       const movements = await this.prisma.hardwareInventoryMovement.findMany({
+        orderBy: hardwareInventoryMovementChronology,
         where: { locationId: input.locationId, productId: item.productId, tenantId: context.tenantId },
       });
       if (item.quantity > stockForProduct(movements)) {
@@ -1659,7 +1663,10 @@ export class HardwareTradeService {
     const [documents, products, movements, invoices] = await Promise.all([
       this.prisma.hardwareTradeDocument.findMany({ where: { tenantId: context.tenantId } }),
       this.prisma.hardwareProduct.findMany({ where: { archivedAt: null, tenantId: context.tenantId } }),
-      this.prisma.hardwareInventoryMovement.findMany({ where: { tenantId: context.tenantId } }),
+      this.prisma.hardwareInventoryMovement.findMany({
+        orderBy: hardwareInventoryMovementChronology,
+        where: { tenantId: context.tenantId },
+      }),
       this.prisma.invoice.findMany({ where: { tenantId: context.tenantId } }),
     ]);
     return {
@@ -1842,6 +1849,7 @@ export class HardwareTradeService {
     if (!stockOutTypes.has(document.type)) return;
     for (const item of document.items) {
       const movements = await this.prisma.hardwareInventoryMovement.findMany({
+        orderBy: hardwareInventoryMovementChronology,
         where: { locationId, productId: item.productId, tenantId },
       });
       if (item.quantity > stockForProduct(movements)) {

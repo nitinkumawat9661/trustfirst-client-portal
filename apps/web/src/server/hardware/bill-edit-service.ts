@@ -24,6 +24,8 @@ import {
 } from "../financial/financial-service";
 import { PermissionResolverService } from "../permissions";
 import { AppError } from "../domain/errors";
+import { hardwareInventoryMovementChronology } from "./hardware-repository";
+import { stockForProduct } from "./hardware-service";
 import { calculateTradeTotals } from "./trade-calculations";
 import type { HardwareBillUpdateInput } from "./trade-schemas";
 import type { HardwareBillAuditEntry, HardwareBillEditData } from "./trade-types";
@@ -510,8 +512,11 @@ async function assertStockWillRemainNonNegative(
     const separator = key.indexOf(":");
     const locationId = key.slice(0, separator);
     const productId = key.slice(separator + 1);
-    const movements = await tx.hardwareInventoryMovement.findMany({ where: { locationId, productId, tenantId } });
-    const current = movements.reduce((stock, movement) => stock + (movement.type === HardwareInventoryMovementType.STOCK_IN ? movement.quantity : -movement.quantity), 0);
+    const movements = await tx.hardwareInventoryMovement.findMany({
+      orderBy: hardwareInventoryMovementChronology,
+      where: { locationId, productId, tenantId },
+    });
+    const current = stockForProduct(movements);
     const reverseDelta = previous
       .filter((movement) => movement.locationId === locationId && movement.productId === productId)
       .reduce((delta, movement) => delta + (movement.type === HardwareInventoryMovementType.STOCK_OUT ? movement.quantity : -movement.quantity), 0);

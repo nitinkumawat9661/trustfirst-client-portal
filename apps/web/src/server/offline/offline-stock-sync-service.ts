@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { QueuedMutation } from "../../lib/offline-queue";
 import { AppError } from "../domain/errors";
+import { hardwareInventoryMovementChronology } from "../hardware/hardware-repository";
 import { hardwareMovementSchema, type HardwareMovementInput } from "../hardware/schemas";
 import type { AuthenticatedOfflineDevice } from "./offline-device-auth";
 
@@ -85,6 +86,7 @@ export class OfflineStockSyncService {
       const product = await lockProduct(tx, device.tenantId, input.productId);
       const location = await validateLinks(tx, device.tenantId, input);
       const movements = await tx.hardwareInventoryMovement.findMany({
+        orderBy: hardwareInventoryMovementChronology,
         select: { quantity: true, type: true },
         where: { productId: input.productId, tenantId: device.tenantId },
       });

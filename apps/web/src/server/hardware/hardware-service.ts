@@ -193,7 +193,7 @@ export class HardwareService {
 
   async listMovements(context: ActorContext): Promise<HardwareMovementSummary[]> {
     await this.enforce(context, "hardware.inventory.read");
-    return (await this.repository.allMovements(context.tenantId)).map((movement) => ({
+    return (await this.repository.allMovements(context.tenantId)).slice().reverse().map((movement) => ({
       id: movement.id,
       locationName: movement.location.name,
       occurredAt: movement.occurredAt,
