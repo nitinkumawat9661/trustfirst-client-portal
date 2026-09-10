@@ -23,6 +23,7 @@ const supportedTradeTypes = [
 ] as const;
 
 const tradeSyncPayloadSchema = z.object({
+  allowNegativeStock: z.boolean().default(false),
   confirm: z.boolean().default(true),
   documentNumber: z.string().trim().min(1).max(80),
   input: hardwareTradeDocumentSchema.refine(
@@ -130,7 +131,10 @@ export class OfflineSyncService {
     });
     let finalDocument = created;
     if (payload.confirm) {
-      const statusInput = hardwareTradeStatusSchema.parse({ locationId: payload.locationId ?? undefined });
+      const statusInput = hardwareTradeStatusSchema.parse({
+        allowNegativeStock: payload.allowNegativeStock,
+        locationId: payload.locationId ?? undefined,
+      });
       finalDocument = await new HardwareTradeService(this.prisma).confirm(
         { tenantId: device.tenantId, userId: device.userId },
         created.id,

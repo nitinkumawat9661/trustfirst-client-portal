@@ -130,6 +130,35 @@ export class PrismaHardwareRepository {
     });
   }
 
+  archiveProduct(input: { actorId: string; productId: string; sku: string; tenantId: string }) {
+    return this.prisma.$transaction(async (tx) => {
+      const product = await tx.hardwareProduct.update({
+        data: { archivedAt: new Date() },
+        where: { id: input.productId, tenantId: input.tenantId },
+      });
+      await tx.hardwareTimelineEvent.create({
+        data: {
+          actorId: input.actorId,
+          productId: product.id,
+          summary: `Deleted product ${input.sku} from the active catalogue`,
+          tenantId: input.tenantId,
+          verb: HardwareTimelineVerb.PRODUCT_UPDATED,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          action: AuditAction.HARDWARE_CATALOG_UPDATED,
+          actorId: input.actorId,
+          metadata: { catalogAction: "product_archived", sku: input.sku },
+          targetId: product.id,
+          targetType: "HardwareProduct",
+          tenantId: input.tenantId,
+        },
+      });
+      return product;
+    });
+  }
+
   recordMovement(input: {
     actorId: string;
     data: Prisma.HardwareInventoryMovementUncheckedCreateInput;

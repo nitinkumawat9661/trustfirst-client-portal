@@ -295,6 +295,19 @@ export class HardwareService {
     });
   }
 
+  async archiveProduct(context: ActorContext, productId: string) {
+    await this.enforce(context, "hardware.catalog.manage");
+    const product = await this.repository.findProductById(context.tenantId, productId);
+    if (!product || product.archivedAt) throw validation("Product was not found or is already deleted.");
+    await this.repository.archiveProduct({
+      actorId: context.userId,
+      productId: product.id,
+      sku: product.sku,
+      tenantId: context.tenantId,
+    });
+    return { id: product.id };
+  }
+
   async quickCreateProduct(context: ActorContext, input: QuickHardwareProductInput) {
     await this.enforce(context, "hardware.catalog.manage");
     validateGstTaxConfig(input.gstRateBps === undefined ? undefined : { rateBps: input.gstRateBps });

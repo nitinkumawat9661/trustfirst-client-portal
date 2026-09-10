@@ -75,7 +75,7 @@ function estimateDocument(status: HardwareTradeDocumentStatus) {
 }
 
 describe("Estimate Bill final-sale lifecycle", () => {
-  it("confirms an Estimate as stock-out even when stale metadata still says stock setup pending", async () => {
+  it("requires an explicit override before confirming an Estimate with insufficient stock", async () => {
     let document = estimateDocument(HardwareTradeDocumentStatus.DRAFT);
     const movements: Array<Record<string, unknown>> = [];
     const financialTransactions: Array<Record<string, unknown>> = [];
@@ -122,22 +122,27 @@ describe("Estimate Bill final-sale lifecycle", () => {
           },
           hardwareTradeTimelineEvent: { create: async () => ({}) },
         }),
-      hardwareInventoryMovement: {
-        findMany: async () => [{ quantity: 10, type: HardwareInventoryMovementType.STOCK_IN }],
-      },
+      hardwareInventoryMovement: { findMany: async () => [] },
       hardwareStockLocation: { findFirst: async () => ({ id: "location_original" }) },
       hardwareTradeDocument: { findFirst: async () => document },
       tenantMembership: { findUnique: async () => membership() },
     } as unknown as PrismaClient);
 
-    const result = await service.confirm(context, document.id, { locationId: "location_original" });
+    await expect(
+      service.confirm(context, document.id, { locationId: "location_original" }),
+    ).rejects.toMatchObject({ details: { reason: "INSUFFICIENT_STOCK" } });
+
+    const result = await service.confirm(context, document.id, {
+      allowNegativeStock: true,
+      locationId: "location_original",
+    });
 
     expect(result.status).toBe(HardwareTradeDocumentStatus.CONFIRMED);
     expect(result.paymentStatus).toBe("partial");
     expect(movements).toHaveLength(1);
     expect(movements[0]).toMatchObject({
       locationId: "location_original",
-      metadata: { stockMovementVersion: "initial" },
+      metadata: { stockMovementVersion: "initial", stockShortageOverride: true },
       type: HardwareInventoryMovementType.STOCK_OUT,
     });
     expect(financialTransactions.map((entry) => entry.type)).toEqual([

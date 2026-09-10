@@ -7,8 +7,9 @@ import {
 import type { NextRequest } from "next/server";
 import { requireCurrentUser } from "@/server/auth/session";
 import { AppError } from "@/server/domain/errors";
-import { hardwareError, hardwareProductSchema, hardwareResponse, parseHardwareJson } from "@/server/hardware";
+import { hardwareContext, hardwareError, hardwareProductSchema, hardwareResponse, parseHardwareJson } from "@/server/hardware";
 import { PermissionResolverService } from "@/server/permissions";
+import { assertCsrfSafeRequest } from "@/server/security";
 
 export async function PATCH(
   request: NextRequest,
@@ -109,6 +110,20 @@ export async function PATCH(
     });
 
     return hardwareResponse(product);
+  } catch (error) {
+    return hardwareError(error);
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ productId: string }> },
+) {
+  try {
+    assertCsrfSafeRequest(request);
+    const { productId } = await params;
+    const { context, service } = await hardwareContext();
+    return hardwareResponse(await service.archiveProduct(context, productId));
   } catch (error) {
     return hardwareError(error);
   }

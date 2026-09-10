@@ -5,10 +5,13 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@trustf
 import { ArrowLeft, Save, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { z } from "zod";
 import { patchHardwareJson, postHardwareProductJson, postHardwareStockJson } from "./hardware-api-client";
+import { publishBackgroundProductSave } from "./background-product-save";
+
+const productsPath = "/admin/hardware/products";
 
 const moneyPattern = /^\d+(\.\d{1,2})?$/u;
 const optionalMoney = z.string().refine((value) => value === "" || moneyPattern.test(value), {
@@ -115,7 +118,11 @@ export function HardwareProductForm({
   const selectedStockLocation = locations.find((location) => location.id === selectedStockLocationId);
   const canSubmit = currentName.trim().length >= 2 && moneyPattern.test(currentSalePrice) && Number(currentSalePrice) > 0;
 
-  async function onSubmit(values: ProductFormValues) {
+  useEffect(() => {
+    router.prefetch(productsPath);
+  }, [router]);
+
+  function onSubmit(values: ProductFormValues) {
     setServerError(null);
     if (isEditing && typeof navigator !== "undefined" && !navigator.onLine) {
       setServerError("Editing an existing product requires an internet connection so server changes cannot be overwritten silently.");
@@ -157,46 +164,81 @@ export function HardwareProductForm({
           ...(stockLevel !== null ? { stockLevel: { locationId: values.stockLocationId, quantity: stockLevel } } : {}),
           ...(values.unitId ? { unitId: values.unitId } : {}),
         };
-    const result = isEditing && product
-      ? await patchHardwareJson<SavedProductResult>(`/api/hardware/products/${product.id}`, payload)
-      : await postHardwareProductJson<SavedProductResult>(payload, {
-          brandName: brands.find((brand) => brand.id === values.brandId)?.name ?? null,
-          categoryName: categories.find((category) => category.id === values.categoryId)?.name ?? null,
-          unitCode: units.find((unit) => unit.id === values.unitId)?.code ?? null,
+    const returnHref = isEditing && product
+      ? `${productsPath}/${product.id}/edit`
+      : `${productsPath}/new`;
+    publishBackgroundProductSave({
+      message: `${values.name.trim()} is saving in the background...`,
+      returnHref,
+      state: "pending",
+    });
+
+    const persistence = (async () => {
+      try {
+        const result = isEditing && product
+          ? await patchHardwareJson<SavedProductResult>(`/api/hardware/products/${product.id}`, payload)
+          : await postHardwareProductJson<SavedProductResult>(payload, {
+              brandName: brands.find((brand) => brand.id === values.brandId)?.name ?? null,
+              categoryName: categories.find((category) => category.id === values.categoryId)?.name ?? null,
+              unitCode: units.find((unit) => unit.id === values.unitId)?.code ?? null,
+            });
+        if (!result.ok) {
+          publishBackgroundProductSave({ message: result.message, returnHref, state: "error" });
+          return;
+        }
+        if (stockChanged && !result.data.offlineQueued) {
+          if (!result.data.id) {
+            publishBackgroundProductSave({
+              message: "Product details were saved, but stock identity was not returned. Open the product and set stock from Inventory.",
+              returnHref,
+              state: "error",
+            });
+            return;
+          }
+          const stockResult = await postHardwareStockJson(
+            {
+              locationId: values.stockLocationId,
+              notes: "Stock level set from product section",
+              productId: result.data.id,
+              quantity: stockLevel as number,
+              referenceId: result.data.id,
+              referenceType: "product_form",
+              type: "ADJUSTMENT",
+            },
+            initialStock,
+            {
+              locationName: selectedStockLocation?.name ?? null,
+              productName: values.name.trim(),
+            },
+          );
+          if (!stockResult.ok) {
+            publishBackgroundProductSave({
+              message: `Product details were saved, but stock was not updated: ${stockResult.message}`,
+              returnHref: `${productsPath}/${result.data.id}/edit`,
+              state: "error",
+            });
+            if (window.location.pathname === productsPath) router.refresh();
+            return;
+          }
+        }
+        publishBackgroundProductSave({
+          message: result.data.offlineQueued
+            ? `${values.name.trim()} is queued safely and will sync automatically.`
+            : `${values.name.trim()} saved successfully.`,
+          state: "success",
         });
-    if (!result.ok) {
-      setServerError(result.message);
-      return;
-    }
-    if (stockChanged && !result.data.offlineQueued) {
-      if (!result.data.id) {
-        setServerError("Product was saved, but its stock identity was not returned. Refresh and set stock from Inventory.");
-        return;
+        if (window.location.pathname === productsPath) router.refresh();
+      } catch (error) {
+        publishBackgroundProductSave({
+          message: error instanceof Error ? error.message : "Product could not be saved.",
+          returnHref,
+          state: "error",
+        });
       }
-      const stockResult = await postHardwareStockJson(
-        {
-          locationId: values.stockLocationId,
-          notes: "Stock level set from product section",
-          productId: result.data.id,
-          quantity: stockLevel as number,
-          referenceId: result.data.id,
-          referenceType: "product_form",
-          type: "ADJUSTMENT",
-        },
-        initialStock,
-        {
-          locationName: selectedStockLocation?.name ?? null,
-          productName: values.name.trim(),
-        },
-      );
-      if (!stockResult.ok) {
-        setServerError(`Product details were saved, but stock level was not updated: ${stockResult.message}`);
-        return;
-      }
-    }
-    const status = result.data.offlineQueued ? "queued" : isEditing ? "updated" : "created";
-    router.push(`/admin/hardware/products?${status}=1`);
-    router.refresh();
+    })();
+
+    router.push(`${productsPath}?saving=1`);
+    void persistence;
   }
 
   return (
@@ -278,7 +320,7 @@ export function HardwareProductForm({
       {serverError ? <p className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">{serverError}</p> : null}
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <Button asChild type="button" variant="outline">
-          <Link href="/admin/hardware/products"><ArrowLeft className="size-4" />Cancel</Link>
+          <Link href={productsPath}><ArrowLeft className="size-4" />Cancel</Link>
         </Button>
         <Button disabled={isSubmitting || !canSubmit} type="submit">
           <Save className="size-4" />{isSubmitting ? "Saving..." : isEditing ? "Update product" : "Save product"}

@@ -20,6 +20,26 @@ describe("billing save interaction regression", () => {
     expect(actions).toContain("/admin/hardware/bills/${document.id}/edit");
     expect(actions).toContain("/admin/hardware/bills/${document.id}/audit");
   });
+
+  it("keeps draft Estimates editable and supports an explicit stock override", () => {
+    const actions = readSibling("hardware-document-actions.tsx");
+    const editor = readSibling("hardware-bill-edit-form.tsx");
+    expect(actions).toContain('(isEstimate && document.status === "DRAFT")');
+    expect(actions).toContain("confirmEstimateStockOverride");
+    expect(editor).toContain("Save, post and print Estimate Bill");
+    expect(editor).toContain("allowNegativeStock: true");
+  });
+
+  it("closes the product form while persistence continues and keeps table controls accessible", () => {
+    const form = readSibling("hardware-product-form.tsx");
+    const table = readSibling("hardware-product-table.tsx");
+    expect(form).toContain("is saving in the background");
+    expect(form).toContain("router.push(`${productsPath}?saving=1`)");
+    expect(form).toContain("void persistence");
+    expect(table).toContain('data-testid="sticky-horizontal-scrollbar"');
+    expect(table).toContain("deleteHardwareJson");
+    expect(table).toContain("Existing bills and stock history will remain safe");
+  });
 });
 
 describe("billing product search regression", () => {

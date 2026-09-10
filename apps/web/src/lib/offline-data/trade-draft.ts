@@ -9,6 +9,7 @@ import { IndexedDbOfflineDataStorage } from "./storage";
 import type { OfflineNumberSeries } from "./types";
 
 export type QueueReservedTradeDraftInput = {
+  allowNegativeStock?: boolean;
   confirm?: boolean;
   input: Record<string, unknown>;
   locationId?: string | null;
@@ -35,6 +36,7 @@ export async function queueReservedTradeDraft(
   });
   try {
     const queueItem = await queueHardwareTradeDraft(queue, {
+      allowNegativeStock: input.allowNegativeStock ?? false,
       confirm: input.confirm ?? true,
       documentNumber: reserved.formattedNumber,
       input: input.input,

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { HardwareTradeSummary } from "@/server/hardware";
 import { postHardwareJson } from "./hardware-api-client";
+import { confirmEstimateStockOverride, isInsufficientStockResult } from "./estimate-stock-override";
 
 type LocationOption = { id: string; name: string };
 
@@ -27,7 +28,7 @@ export function HardwareDocumentActions({
     (document.type === "SALES_ORDER" || isEstimate) &&
     document.status === "CONFIRMED";
   const canEditBill = ["SALES_ORDER", "SALES_QUOTATION", "PURCHASE_ENTRY", "SUPPLIER_BILL"].includes(document.type)
-    && document.status === "CONFIRMED";
+    && (document.status === "CONFIRMED" || (isEstimate && document.status === "DRAFT"));
 
   async function run(action: "confirm" | "invoice" | "cancel") {
     const cancellationReason =
@@ -62,7 +63,7 @@ export function HardwareDocumentActions({
         : action === "invoice"
           ? `/api/hardware/trade/${document.id}/invoice-draft`
           : `/api/hardware/trade/${document.id}/cancel`;
-    const result = await postHardwareJson<unknown>(
+    let result = await postHardwareJson<unknown>(
       endpoint,
       action === "confirm"
         ? (isStockDocument ? { locationId } : {})
@@ -75,12 +76,26 @@ export function HardwareDocumentActions({
             }
           : undefined,
     );
+    let stockOverrideUsed = false;
+    if (action === "confirm" && isEstimate && !result.ok && isInsufficientStockResult(result)) {
+      if (!confirmEstimateStockOverride(result)) {
+        setPending(null);
+        setError("Estimate Bill remains a draft. Update stock, or confirm again and choose OK to proceed without stock.");
+        return;
+      }
+      result = await postHardwareJson<unknown>(endpoint, { allowNegativeStock: true, locationId });
+      stockOverrideUsed = true;
+    }
     setPending(null);
     if (!result.ok) {
       setError(result.message);
       return;
     }
-    router.refresh();
+    if (stockOverrideUsed) {
+      router.push(`/admin/hardware/print/${document.id}`);
+    } else {
+      router.refresh();
+    }
   }
 
   return (

@@ -19,7 +19,7 @@ export default async function HardwareProductsPage() {
         actionHref="/admin/hardware/products/new"
         actionIcon={Plus}
         actionLabel="Add single product"
-        description="Add products one by one, import them in bulk, edit products, and audit same-name variants without deleting catalogue history."
+        description="Add, edit, or remove active products while preserving existing bill, stock, and audit history."
         eyebrow="Catalog"
         secondaryActionHref="/admin/hardware/products/import"
         secondaryActionIcon={Upload}

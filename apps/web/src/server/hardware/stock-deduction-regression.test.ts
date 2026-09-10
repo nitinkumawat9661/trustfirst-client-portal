@@ -11,7 +11,9 @@ describe("hardware sale stock deduction source", () => {
   });
 
   it("keeps server stock availability validation before sale posting", () => {
-    expect(source).toContain("Confirmed sale, Estimate Bill, or return cannot deduct more stock than available.");
+    expect(source).toContain("Available stock is lower than the document quantity.");
+    expect(source).toContain('{ reason: "INSUFFICIENT_STOCK", shortages }');
+    expect(source).toContain("isEstimateSale && input.allowNegativeStock");
     expect(source).toContain("type: movementTypeForDocument(document.type)");
   });
 });
