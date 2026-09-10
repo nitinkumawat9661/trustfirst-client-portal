@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import type { HardwareBillEditData, HardwarePartySummary, HardwareProductSummary } from "@/server/hardware";
 import { nextBillingLineAction } from "./billing-keyboard";
-import { patchHardwareJson } from "./hardware-api-client";
+import { patchHardwareJson, postHardwareJson } from "./hardware-api-client";
+import { confirmEstimateStockOverride, isInsufficientStockResult } from "./estimate-stock-override";
 import { HardwareProductCombobox } from "./hardware-product-combobox";
 
 type EditLine = HardwareBillEditData["items"][number];
@@ -26,6 +27,7 @@ export function HardwareBillEditForm({
 }) {
   const router = useRouter();
   const purchase = bill.type === "PURCHASE_ENTRY" || bill.type === "SUPPLIER_BILL";
+  const draftEstimate = bill.type === "SALES_QUOTATION" && bill.status === "DRAFT";
   const [partyId, setPartyId] = useState(bill.customerId);
   const [documentDate, setDocumentDate] = useState(bill.documentDate);
   const [customerAddress, setCustomerAddress] = useState(bill.customerAddress);
@@ -106,7 +108,7 @@ export function HardwareBillEditForm({
     setError(null);
     if (!locationId) return setError("Select a stock location.");
     if (purchase && !partyId) return setError("Select a supplier.");
-    if (reason.trim().length < 3) return setError("Enter a reason for this correction (at least 3 characters).");
+    if (!draftEstimate && reason.trim().length < 3) return setError("Enter a reason for this correction (at least 3 characters).");
     if (!lines.length || lines.some((line) => !line.productId || line.quantity <= 0 || line.unitRateCents < 0)) {
       return setError("Every line needs a product, positive quantity, and valid rate.");
     }
@@ -115,7 +117,9 @@ export function HardwareBillEditForm({
 
     setSaving(true);
     const idempotencyKey = `bill-edit-${bill.id}-${Date.now()}`;
-    const result = await patchHardwareJson<{ id: string }>(`/api/hardware/trade/${bill.id}/bill`, {
+    const correctionReason = reason.trim() || "Estimate draft updated";
+    const payload = {
+      allowNegativeStock: false,
       currency: "INR",
       ...(purchase ? { supplierId: partyId } : { customerId: partyId || undefined }),
       idempotencyKey,
@@ -142,12 +146,46 @@ export function HardwareBillEditForm({
       },
       paidAmountCents,
       paymentMode: paidAmountCents > 0 ? paymentMode : undefined,
-      reason: reason.trim(),
+      reason: correctionReason,
       roundOffCents: Math.round(Number(roundOff || 0) * 100),
       type: bill.type,
-    });
+    };
+    let result = await patchHardwareJson<{ id: string }>(`/api/hardware/trade/${bill.id}/bill`, payload);
+    if (!result.ok && bill.type === "SALES_QUOTATION" && isInsufficientStockResult(result)) {
+      if (!confirmEstimateStockOverride(result)) {
+        setSaving(false);
+        return setError("Estimate Bill was not changed. Update stock, or save again and choose OK to proceed without stock.");
+      }
+      result = await patchHardwareJson<{ id: string }>(
+        `/api/hardware/trade/${bill.id}/bill`,
+        { ...payload, allowNegativeStock: true },
+      );
+    }
+    if (!result.ok) {
+      setSaving(false);
+      return setError(result.message);
+    }
+    if (draftEstimate) {
+      let confirmation = await postHardwareJson<{ id: string }>(
+        `/api/hardware/trade/${bill.id}/confirm`,
+        { locationId },
+      );
+      if (!confirmation.ok && isInsufficientStockResult(confirmation)) {
+        if (!confirmEstimateStockOverride(confirmation)) {
+          setSaving(false);
+          return setError("Estimate changes are saved as a draft. Update stock, or save again and choose OK to proceed and print.");
+        }
+        confirmation = await postHardwareJson<{ id: string }>(
+          `/api/hardware/trade/${bill.id}/confirm`,
+          { allowNegativeStock: true, locationId },
+        );
+      }
+      if (!confirmation.ok) {
+        setSaving(false);
+        return setError(`Estimate changes are saved as a draft, but posting failed: ${confirmation.message}`);
+      }
+    }
     setSaving(false);
-    if (!result.ok) return setError(result.message);
     router.push(`/admin/hardware/print/${bill.id}`);
     router.refresh();
   }
@@ -155,7 +193,7 @@ export function HardwareBillEditForm({
   return (
     <div className="space-y-5">
       <Card>
-        <CardHeader><CardTitle>{displayName(bill.type)} correction</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{draftEstimate ? "Edit Estimate Bill draft" : `${displayName(bill.type)} correction`}</CardTitle></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Field label="Document number (locked)">
             <div className="flex h-10 items-center rounded-md border border-input bg-muted px-3 font-medium" data-testid="locked-document-number">{bill.documentNumber}</div>
@@ -218,9 +256,9 @@ export function HardwareBillEditForm({
         </CardContent>
       </Card>
 
-      <Card><CardContent className="grid gap-4 pt-5 md:grid-cols-2"><div className="space-y-4">{!purchase ? <Field label="Invoice discount (INR)"><Input min="0" onChange={(event) => setInvoiceDiscount(event.target.value)} step="0.01" type="number" value={invoiceDiscount} /></Field> : null}<Field label="Round-off (INR)"><Input onChange={(event) => setRoundOff(event.target.value)} step="0.01" type="number" value={roundOff} /></Field><Field label="Required correction reason"><textarea className="min-h-24 rounded-md border border-input bg-background p-3 text-sm" onChange={(event) => setReason(event.target.value)} placeholder="Why is this confirmed bill being corrected?" value={reason} /></Field></div><dl className="space-y-2 text-sm"><Total label="Subtotal" value={totals.subtotalCents} /><Total label="Discount" value={-totals.discountCents} /><Total label="GST" value={totals.taxCents} /><Total label="Round-off" value={totals.roundOffCents} /><div className="flex justify-between border-t border-border pt-2 text-base font-semibold"><dt>Corrected total</dt><dd>{money(totals.totalCents)}</dd></div>{totals.totalCents < bill.alreadyPaidAmountCents ? <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-900">A {purchase ? "supplier" : "customer"} credit of {money(bill.alreadyPaidAmountCents - totals.totalCents)} will be posted automatically.</p> : null}</dl></CardContent></Card>
+      <Card><CardContent className="grid gap-4 pt-5 md:grid-cols-2"><div className="space-y-4">{!purchase ? <Field label="Invoice discount (INR)"><Input min="0" onChange={(event) => setInvoiceDiscount(event.target.value)} step="0.01" type="number" value={invoiceDiscount} /></Field> : null}<Field label="Round-off (INR)"><Input onChange={(event) => setRoundOff(event.target.value)} step="0.01" type="number" value={roundOff} /></Field><Field label={draftEstimate ? "Edit note (optional)" : "Required correction reason"}><textarea className="min-h-24 rounded-md border border-input bg-background p-3 text-sm" onChange={(event) => setReason(event.target.value)} placeholder={draftEstimate ? "Optional note for this draft edit" : "Why is this confirmed bill being corrected?"} value={reason} /></Field></div><dl className="space-y-2 text-sm"><Total label="Subtotal" value={totals.subtotalCents} /><Total label="Discount" value={-totals.discountCents} /><Total label="GST" value={totals.taxCents} /><Total label="Round-off" value={totals.roundOffCents} /><div className="flex justify-between border-t border-border pt-2 text-base font-semibold"><dt>Corrected total</dt><dd>{money(totals.totalCents)}</dd></div>{totals.totalCents < bill.alreadyPaidAmountCents ? <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-900">A {purchase ? "supplier" : "customer"} credit of {money(bill.alreadyPaidAmountCents - totals.totalCents)} will be posted automatically.</p> : null}</dl></CardContent></Card>
       {error ? <p className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p> : null}
-      <div className="flex justify-end"><Button data-testid="save-bill-edit" disabled={saving} onClick={save} type="button"><Save className="size-4" />{saving ? "Saving correction..." : "Save correction"}</Button></div>
+      <div className="flex justify-end"><Button data-testid="save-bill-edit" disabled={saving} onClick={save} type="button"><Save className="size-4" />{saving ? "Saving..." : draftEstimate ? "Save, post and print Estimate Bill" : "Save correction"}</Button></div>
     </div>
   );
 }

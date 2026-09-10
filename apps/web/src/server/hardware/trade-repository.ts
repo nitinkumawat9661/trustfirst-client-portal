@@ -156,6 +156,7 @@ export class PrismaHardwareTradeRepository {
       tx: Prisma.TransactionClient,
       document: HardwareTradeDocumentWithRelations,
     ) => Promise<void>;
+    confirmationMetadata?: Prisma.InputJsonObject | undefined;
     documentId: string;
     movements: Prisma.HardwareInventoryMovementUncheckedCreateInput[];
     paymentStatus?: string | undefined;
@@ -181,7 +182,7 @@ export class PrismaHardwareTradeRepository {
         data: {
           actorId: input.actorId,
           documentId: input.documentId,
-          metadata: { movements: input.movements.length },
+          metadata: { movements: input.movements.length, ...input.confirmationMetadata },
           summary: `Confirmed ${document.documentNumber}`,
           tenantId: input.tenantId,
           verb: document.type === HardwareTradeDocumentType.SALE_RETURN || document.type === HardwareTradeDocumentType.PURCHASE_RETURN
@@ -193,7 +194,7 @@ export class PrismaHardwareTradeRepository {
         data: {
           action: AuditAction.HARDWARE_STOCK_MOVED,
           actorId: input.actorId,
-          metadata: { movements: input.movements.length, tradeAction: "confirmed" },
+          metadata: { movements: input.movements.length, tradeAction: "confirmed", ...input.confirmationMetadata },
           targetId: document.id,
           targetType: "HardwareTradeDocument",
           tenantId: input.tenantId,

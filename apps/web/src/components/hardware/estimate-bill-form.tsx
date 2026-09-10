@@ -17,6 +17,7 @@ import { nextBillingLineAction } from "./billing-keyboard";
 import { canPostBillingLines, completedBillingLines } from "./billing-lines";
 import { CreatableCombobox } from "./creatable-combobox";
 import { patchHardwareJson, postHardwareJson } from "./hardware-api-client";
+import { confirmEstimateStockOverride, isInsufficientStockResult } from "./estimate-stock-override";
 import { HardwareProductCombobox } from "./hardware-product-combobox";
 import { normalizeProductSearchText } from "./product-search";
 
@@ -246,11 +247,12 @@ export function EstimateBillForm({
     };
   }
 
-  async function queueOfflineEstimate(tradeInput: Record<string, unknown>) {
+  async function queueOfflineEstimate(tradeInput: Record<string, unknown>, allowNegativeStock: boolean) {
     if (!offlineScope) {
       throw new Error("Offline setup is unavailable for this session. Reopen the Estimate Bill from the installed ERP app while online.");
     }
     const queued = await queueReservedTradeDraft(offlineScope, {
+      allowNegativeStock,
       confirm: true,
       input: tradeInput,
       locationId,
@@ -285,7 +287,11 @@ export function EstimateBillForm({
       const resolvedCustomerId = await resolveCustomer(!offlineNow);
       const tradeInput = buildTradeInput(resolvedCustomerId, resolvedPayment);
       if (offlineNow) {
-        await queueOfflineEstimate(tradeInput);
+        const proceed = window.confirm(
+          "Offline mode me live stock verify nahi ho sakta. Estimate Bill ko stock warning override ke saath save aur print karna hai?\n\nOK: proceed and print\nCancel: stock update/check karein",
+        );
+        if (!proceed) return;
+        await queueOfflineEstimate(tradeInput, true);
         return;
       }
 
@@ -303,10 +309,21 @@ export function EstimateBillForm({
       if (!result.ok) throw new Error(result.message);
 
       if (!initialDocument) {
-        const confirmed = await postHardwareJson<{ id: string }>(
+        let confirmed = await postHardwareJson<{ id: string }>(
           `/api/hardware/trade/${result.data.id}/confirm`,
           { locationId },
         );
+        if (!confirmed.ok && isInsufficientStockResult(confirmed)) {
+          if (!confirmEstimateStockOverride(confirmed)) {
+            throw new Error(
+              `Estimate Bill draft is saved. Stock was not posted; update stock or save again and choose OK to proceed without stock.`,
+            );
+          }
+          confirmed = await postHardwareJson<{ id: string }>(
+            `/api/hardware/trade/${result.data.id}/confirm`,
+            { allowNegativeStock: true, locationId },
+          );
+        }
         if (!confirmed.ok) throw new Error(confirmed.message);
       }
 

@@ -299,6 +299,38 @@ describe("HardwareService", () => {
     ).rejects.toThrow("GST rate");
   });
 
+  it("deletes a product from the active catalogue by archiving it with audit history", async () => {
+    const writes: Array<{ kind: string; value: Record<string, unknown> }> = [];
+    const service = new HardwareService(prismaMock({
+      $transaction: async (callback: (tx: {
+        auditEvent: { create: (input: { data: Record<string, unknown> }) => Promise<unknown> };
+        hardwareProduct: { update: (input: { data: Record<string, unknown> }) => Promise<Record<string, unknown>> };
+        hardwareTimelineEvent: { create: (input: { data: Record<string, unknown> }) => Promise<unknown> };
+      }) => Promise<unknown>) => callback({
+        auditEvent: { create: async ({ data }) => { writes.push({ kind: "audit", value: data }); return data; } },
+        hardwareProduct: {
+          update: async ({ data }) => {
+            writes.push({ kind: "product", value: data });
+            return { id: "product_1", sku: "SKU-1", tenantId: "tenant_1", ...data };
+          },
+        },
+        hardwareTimelineEvent: { create: async ({ data }) => { writes.push({ kind: "timeline", value: data }); return data; } },
+      }),
+      hardwareProduct: {
+        findFirst: async () => ({ archivedAt: null, id: "product_1", sku: "SKU-1" }),
+      },
+    } as unknown as Partial<PrismaClient>));
+
+    await expect(service.archiveProduct(
+      { tenantId: "tenant_1", userId: "user_1" },
+      "product_1",
+    )).resolves.toEqual({ id: "product_1" });
+    expect(writes.find((write) => write.kind === "product")?.value.archivedAt).toBeInstanceOf(Date);
+    expect(writes.find((write) => write.kind === "audit")?.value.metadata).toMatchObject({
+      catalogAction: "product_archived",
+    });
+  });
+
   it("quick-creates a pending product without fake inventory movement", async () => {
     const movements: unknown[] = [];
     const service = new HardwareService(

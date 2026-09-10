@@ -43,6 +43,7 @@ export const hardwarePurchaseDocumentSchema = hardwareTradeDocumentSchema.refine
 );
 
 export const hardwareTradeStatusSchema = z.object({
+  allowNegativeStock: z.boolean().optional(),
   locationId: z.string().optional(),
 });
 
@@ -55,6 +56,7 @@ export const hardwareEstimateUpdateSchema = hardwareTradeDocumentSchema.extend({
 );
 
 export const hardwareBillUpdateSchema = hardwareTradeDocumentSchema.extend({
+  allowNegativeStock: z.boolean().optional(),
   idempotencyKey: z.string().min(12).max(120),
   invoiceDiscountCents: z.number().int().nonnegative().default(0),
   locationId: z.string().min(1),

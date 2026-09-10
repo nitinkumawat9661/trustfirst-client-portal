@@ -171,14 +171,17 @@ export class HardwareTradeService {
     await this.enforce(context, managePermission(document.type));
     if (document.status !== "DRAFT") throw validation("Only draft hardware documents can be confirmed.");
     const nonStockDocument = document.type === HardwareTradeDocumentType.PURCHASE_ORDER;
+    const isEstimateSale = document.type === HardwareTradeDocumentType.SALES_QUOTATION;
+    const stockShortageOverridden = isEstimateSale && input.allowNegativeStock;
     if (!nonStockDocument && !input.locationId) {
       throw validation("A stock location is required to confirm this document.");
     }
     if (input.locationId) {
       await this.ensureLocation(context.tenantId, input.locationId);
-      await this.ensureStockAvailable(context.tenantId, document, input.locationId);
+      if (!stockShortageOverridden) {
+        await this.ensureStockAvailable(context.tenantId, document, input.locationId);
+      }
     }
-    const isEstimateSale = document.type === HardwareTradeDocumentType.SALES_QUOTATION;
     const stockItems = document.items;
     const purchasePaidAmountCents = purchasePaymentAmountFromMetadata(document.metadata, document.totalCents);
     const estimatePaidAmountCents = isEstimateSale
@@ -203,6 +206,12 @@ export class HardwareTradeService {
                 estimateSaleVersion: version,
                 stockLocationId: input.locationId ?? null,
                 stockMovementVersion: version,
+                ...(stockShortageOverridden ? {
+                  stockShortageOverride: {
+                    actorId: context.userId,
+                    occurredAt: now.toISOString(),
+                  },
+                } : {}),
               } as Prisma.InputJsonValue,
             },
             where: { id: confirmedDocument.id, tenantId: context.tenantId },
@@ -280,15 +289,19 @@ export class HardwareTradeService {
           });
         }
       },
+      confirmationMetadata: stockShortageOverridden
+        ? { stockShortageOverride: true }
+        : undefined,
       documentId,
       movements: nonStockDocument ? [] : stockItems.map((item) =>
         stripUndefined({
           customerId: document.customerId,
           locationId: input.locationId,
-           metadata: {
-             tradeDocumentId: document.id,
-             ...(estimateVersion ? { stockMovementVersion: estimateVersion } : {}),
-           } as Prisma.InputJsonValue,
+          metadata: {
+            tradeDocumentId: document.id,
+            ...(estimateVersion ? { stockMovementVersion: estimateVersion } : {}),
+            ...(stockShortageOverridden ? { stockShortageOverride: true } : {}),
+          } as Prisma.InputJsonValue,
           productId: item.productId,
           quantity: item.quantity,
           referenceId: document.id,
@@ -1847,14 +1860,30 @@ export class HardwareTradeService {
       HardwareTradeDocumentType.PURCHASE_RETURN,
     ]);
     if (!stockOutTypes.has(document.type)) return;
+    const requiredByProduct = new Map<string, { productName: string; required: number }>();
     for (const item of document.items) {
+      const current = requiredByProduct.get(item.productId);
+      requiredByProduct.set(item.productId, {
+        productName: item.description,
+        required: (current?.required ?? 0) + item.quantity,
+      });
+    }
+    const shortages: Array<{ available: number; productId: string; productName: string; required: number }> = [];
+    for (const [productId, required] of requiredByProduct) {
       const movements = await this.prisma.hardwareInventoryMovement.findMany({
         orderBy: hardwareInventoryMovementChronology,
-        where: { locationId, productId: item.productId, tenantId },
+        where: { locationId, productId, tenantId },
       });
-      if (item.quantity > stockForProduct(movements)) {
-        throw validation("Confirmed sale, Estimate Bill, or return cannot deduct more stock than available.");
+      const available = stockForProduct(movements);
+      if (required.required > available) {
+        shortages.push({ available, productId, productName: required.productName, required: required.required });
       }
+    }
+    if (shortages.length) {
+      throw validation(
+        "Available stock is lower than the document quantity.",
+        { reason: "INSUFFICIENT_STOCK", shortages },
+      );
     }
   }
 
@@ -2127,6 +2156,6 @@ const smallNumberWords = [
 
 const tensWords = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
 
-function validation(message: string) {
-  return new AppError({ code: "VALIDATION_ERROR", message, status: 422 });
+function validation(message: string, details?: unknown) {
+  return new AppError({ code: "VALIDATION_ERROR", details, message, status: 422 });
 }

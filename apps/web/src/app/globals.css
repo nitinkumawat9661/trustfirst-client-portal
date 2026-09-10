@@ -60,6 +60,27 @@ body {
   color: #17120a;
 }
 
+.hardware-horizontal-scrollbar {
+  scrollbar-color: var(--primary) var(--muted);
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+}
+
+.hardware-horizontal-scrollbar::-webkit-scrollbar {
+  height: 14px;
+}
+
+.hardware-horizontal-scrollbar::-webkit-scrollbar-track {
+  background: var(--muted);
+  border-radius: 9999px;
+}
+
+.hardware-horizontal-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border: 3px solid var(--muted);
+  border-radius: 9999px;
+}
+
 @media print {
   @page {
     margin: 0;

@@ -65,14 +65,18 @@ export class HardwareBillEditService {
     const document = await this.documentForEdit(context, documentId);
     const purchase = purchaseTypes.has(document.type);
     await this.enforce(context, purchase ? "hardware.purchase.manage" : "hardware.sales.manage");
-    if (document.status !== HardwareTradeDocumentStatus.CONFIRMED) {
-      throw validation("Only confirmed bills can be corrected through the audited editor.");
+    if (!isEditableBillState(document)) {
+      throw validation("Only confirmed bills and Estimate Bill drafts can be edited.");
     }
     const effects = await this.loadEffects(this.prisma, context.tenantId, document);
     const metadata = asRecord(document.metadata);
     const movement = effects.stockMovements.at(-1);
+    const effectPaidAmountCents = paidEffectAmount(effects.financialTransactions);
+    const paidAmountCents = document.status === HardwareTradeDocumentStatus.DRAFT
+      ? readNumber(metadata.paidAmountCents) ?? 0
+      : effectPaidAmountCents;
     return {
-      alreadyPaidAmountCents: paidEffectAmount(effects.financialTransactions),
+      alreadyPaidAmountCents: effectPaidAmountCents,
       customerAddress: readString(metadata.customerAddress) ?? "",
       customerId: purchase ? document.supplierId ?? "" : document.customerId ?? "",
       customerName: purchase ? document.supplier?.name ?? "" : document.customer?.name ?? "",
@@ -98,7 +102,7 @@ export class HardwareBillEditService {
       }),
       locationId: readString(metadata.stockLocationId) ?? movement?.locationId ?? "",
       notes: readString(metadata.notes) ?? document.billingInvoice?.summary ?? "",
-      paidAmountCents: paidEffectAmount(effects.financialTransactions),
+      paidAmountCents,
       paymentMode: paymentModeForEffects(effects.financialTransactions) ?? readString(metadata.paymentMode) ?? "CASH",
       referenceNumber: readString(metadata.referenceNumber) ?? "",
       roundOffCents: document.roundOffCents,
@@ -149,8 +153,8 @@ export class HardwareBillEditService {
     if (existing.type !== input.type) throw validation("Bill type cannot be changed.");
     const purchase = purchaseTypes.has(existing.type);
     await this.enforce(context, purchase ? "hardware.purchase.manage" : "hardware.sales.manage");
-    if (existing.status !== HardwareTradeDocumentStatus.CONFIRMED) {
-      throw validation("Only confirmed bills can be corrected through the audited editor.");
+    if (!isEditableBillState(existing)) {
+      throw validation("Only confirmed bills and Estimate Bill drafts can be edited.");
     }
     if (readString(asRecord(existing.metadata).lastEditIdempotencyKey) === input.idempotencyKey) {
       return { documentNumber: existing.documentNumber, id: existing.id };
@@ -178,14 +182,77 @@ export class HardwareBillEditService {
       });
       if (!current) throw validation("Bill was not found.");
       if (current.type !== input.type) throw validation("Bill type cannot be changed.");
-      if (current.status !== HardwareTradeDocumentStatus.CONFIRMED) {
-        throw validation("Only confirmed bills can be corrected through the audited editor.");
+      if (!isEditableBillState(current)) {
+        throw validation("Only confirmed bills and Estimate Bill drafts can be edited.");
       }
       if (readString(asRecord(current.metadata).lastEditIdempotencyKey) === input.idempotencyKey) {
         return { documentNumber: current.documentNumber, id: current.id };
       }
+      if (current.status === HardwareTradeDocumentStatus.DRAFT) {
+        const draftMetadata = {
+          ...asRecord(current.metadata),
+          ...asRecord(input.metadata),
+          invoiceDiscountCents,
+          lastEditIdempotencyKey: input.idempotencyKey,
+          lastEditReason: input.reason,
+          paidAmountCents: input.paidAmountCents,
+          paymentMode: input.paymentMode ?? null,
+          stockLocationId: input.locationId,
+        } as Prisma.InputJsonValue;
+        await tx.hardwareTradeDocumentItem.deleteMany({
+          where: { documentId: current.id, tenantId: context.tenantId },
+        });
+        await tx.hardwareTradeDocument.update({
+          data: {
+            customerId: input.customerId ?? null,
+            discountCents: itemTotals.discountCents + invoiceDiscountCents,
+            items: { create: normalizedItems.map((item) => itemCreateData(context.tenantId, item, productMap)) },
+            metadata: draftMetadata,
+            paymentStatus: paymentStatusForAmount(input.paidAmountCents, totalCents),
+            roundOffCents: itemTotals.roundOffCents,
+            subtotalCents: itemTotals.subtotalCents,
+            taxCents: itemTotals.taxCents,
+            totalCents,
+          },
+          where: { id: current.id, tenantId: context.tenantId },
+        });
+        await tx.hardwareTradeTimelineEvent.create({
+          data: {
+            actorId: context.userId,
+            documentId: current.id,
+            metadata: { editIdempotencyKey: input.idempotencyKey, reason: input.reason },
+            summary: `Edited Estimate Bill draft ${current.documentNumber}`,
+            tenantId: context.tenantId,
+            verb: HardwareTradeTimelineVerb.UPDATED,
+          },
+        });
+        await tx.auditEvent.create({
+          data: {
+            action: AuditAction.HARDWARE_CATALOG_UPDATED,
+            actorId: context.userId,
+            metadata: { reason: input.reason, tradeAction: "estimate_draft_edited" },
+            targetId: current.id,
+            targetType: "HardwareTradeDocument",
+            tenantId: context.tenantId,
+          },
+        });
+        return { documentNumber: current.documentNumber, id: current.id };
+      }
+
       const effects = await this.loadEffects(tx, context.tenantId, current);
-      await assertStockWillRemainNonNegative(tx, context.tenantId, current.type, effects.stockMovements, input.locationId, normalizedItems);
+      const stockShortageOverridden =
+        current.type === HardwareTradeDocumentType.SALES_QUOTATION && input.allowNegativeStock;
+      if (!stockShortageOverridden) {
+        await assertStockWillRemainNonNegative(
+          tx,
+          context.tenantId,
+          current.type,
+          effects.stockMovements,
+          input.locationId,
+          normalizedItems,
+          productMap,
+        );
+      }
 
       const before = jsonSnapshot({
         document: current,
@@ -269,6 +336,13 @@ export class HardwareBillEditService {
         paymentMode: input.paymentMode ?? null,
         stockLocationId: input.locationId,
         stockMovementVersion: version,
+        ...(stockShortageOverridden ? {
+          stockShortageOverride: {
+            actorId: context.userId,
+            occurredAt: now.toISOString(),
+            reason: input.reason,
+          },
+        } : {}),
       } as Prisma.InputJsonValue;
 
       await tx.hardwareTradeDocumentItem.deleteMany({ where: { documentId: current.id, tenantId: context.tenantId } });
@@ -294,7 +368,12 @@ export class HardwareBillEditService {
           data: {
             customerId: purchase ? null : input.customerId ?? null,
             locationId: input.locationId,
-            metadata: { billEditVersion: version, stockMovementVersion: version, tradeDocumentId: current.id },
+            metadata: {
+              billEditVersion: version,
+              stockMovementVersion: version,
+              tradeDocumentId: current.id,
+              ...(stockShortageOverridden ? { stockShortageOverride: true } : {}),
+            },
             productId: item.productId,
             quantity: item.quantity,
             referenceId: current.id,
@@ -397,7 +476,7 @@ export class HardwareBillEditService {
         data: {
           actorId: context.userId,
           documentId: current.id,
-          metadata: { billEditVersion: version, reason: input.reason, repostIds, reversalIds },
+          metadata: { billEditVersion: version, reason: input.reason, repostIds, reversalIds, stockShortageOverridden },
           summary: `Edited ${displayName(current.type)} ${current.documentNumber}`,
           tenantId: context.tenantId,
           verb: HardwareTradeTimelineVerb.UPDATED,
@@ -407,7 +486,7 @@ export class HardwareBillEditService {
         data: {
           action: AuditAction.HARDWARE_STOCK_MOVED,
           actorId: context.userId,
-          metadata: { after, before, reason: input.reason, repostIds, reversalIds, tradeAction: "bill_edited" } as Prisma.InputJsonValue,
+          metadata: { after, before, reason: input.reason, repostIds, reversalIds, stockShortageOverridden, tradeAction: "bill_edited" } as Prisma.InputJsonValue,
           targetId: current.id,
           targetType: "HardwareTradeDocument",
           tenantId: context.tenantId,
@@ -504,10 +583,12 @@ async function assertStockWillRemainNonNegative(
   previous: Array<{ locationId: string; productId: string; quantity: number; type: HardwareInventoryMovementType }>,
   nextLocationId: string,
   nextItems: Array<{ productId: string; quantity: number }>,
+  products: Map<string, { name: string }>,
 ) {
   const purchase = purchaseTypes.has(type);
   const keys = new Set(previous.map((movement) => `${movement.locationId}:${movement.productId}`));
   nextItems.forEach((item) => keys.add(`${nextLocationId}:${item.productId}`));
+  const shortages: Array<{ available: number; productId: string; productName: string; required: number }> = [];
   for (const key of keys) {
     const separator = key.indexOf(":");
     const locationId = key.slice(0, separator);
@@ -523,8 +604,22 @@ async function assertStockWillRemainNonNegative(
     const repostQuantity = locationId === nextLocationId
       ? nextItems.filter((item) => item.productId === productId).reduce((sum, item) => sum + item.quantity, 0)
       : 0;
-    const finalStock = current + reverseDelta + (purchase ? repostQuantity : -repostQuantity);
-    if (finalStock < 0) throw validation("Edited bill would create negative stock at the selected location.");
+    const available = current + reverseDelta;
+    const finalStock = available + (purchase ? repostQuantity : -repostQuantity);
+    if (finalStock < 0) {
+      shortages.push({
+        available,
+        productId,
+        productName: products.get(productId)?.name ?? "Product",
+        required: repostQuantity,
+      });
+    }
+  }
+  if (shortages.length) {
+    throw validation(
+      "Edited bill would create negative stock at the selected location.",
+      { reason: "INSUFFICIENT_STOCK", shortages },
+    );
   }
 }
 
@@ -665,6 +760,19 @@ function displayName(type: HardwareTradeDocumentType) {
   return "Sales Bill";
 }
 
+function isEditableBillState(document: { status: HardwareTradeDocumentStatus; type: HardwareTradeDocumentType }) {
+  return document.status === HardwareTradeDocumentStatus.CONFIRMED || (
+    document.type === HardwareTradeDocumentType.SALES_QUOTATION &&
+    document.status === HardwareTradeDocumentStatus.DRAFT
+  );
+}
+
+function paymentStatusForAmount(paidAmountCents: number, totalCents: number) {
+  if (paidAmountCents <= 0) return "unpaid";
+  if (paidAmountCents >= totalCents) return "paid";
+  return "partial";
+}
+
 function jsonSnapshot(value: unknown): Record<string, unknown> {
   return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
 }
@@ -685,6 +793,6 @@ function readStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
-function validation(message: string) {
-  return new AppError({ code: "VALIDATION_ERROR", message, status: 422 });
+function validation(message: string, details?: unknown) {
+  return new AppError({ code: "VALIDATION_ERROR", details, message, status: 422 });
 }

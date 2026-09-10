@@ -18,13 +18,15 @@ import {
 
 type ApiEnvelope<T> = {
   data?: T;
-  error?: { message?: string };
+  error?: { code?: string; details?: unknown; message?: string };
   ok?: boolean;
 };
 
 export type HardwareApiResult<T> =
   | { data: T; ok: true }
-  | { message: string; ok: false };
+  | { code?: string | undefined; details?: unknown; message: string; ok: false };
+
+type HardwareMutationMethod = "DELETE" | "PATCH" | "POST";
 
 const inFlightMutations = new Map<string, Promise<HardwareApiResult<unknown>>>();
 
@@ -86,12 +88,18 @@ export async function patchHardwareJson<T>(
   return sendHardwareJson<T>(endpoint, "PATCH", body);
 }
 
+export async function deleteHardwareJson<T>(endpoint: string): Promise<HardwareApiResult<T>> {
+  return sendHardwareJson<T>(endpoint, "DELETE");
+}
+
 export async function getHardwareJson<T>(endpoint: string): Promise<HardwareApiResult<T>> {
   try {
     const response = await fetch(endpoint, { headers: { accept: "application/json" } });
     const result = await readEnvelope<T>(response);
     if (!response.ok || !result.ok) {
       return {
+        code: result.error?.code,
+        details: result.error?.details,
         message: result.error?.message ?? "The request could not be completed.",
         ok: false,
       };
@@ -107,7 +115,7 @@ export async function getHardwareJson<T>(endpoint: string): Promise<HardwareApiR
 
 async function sendHardwareJson<T>(
   endpoint: string,
-  method: "PATCH" | "POST",
+  method: HardwareMutationMethod,
   body?: unknown,
 ): Promise<HardwareApiResult<T>> {
   const requestKey = hardwareMutationKey(endpoint, method, body);
@@ -127,7 +135,7 @@ async function sendHardwareJson<T>(
 
 async function executeHardwareJson<T>(
   endpoint: string,
-  method: "PATCH" | "POST",
+  method: HardwareMutationMethod,
   body?: unknown,
 ): Promise<HardwareApiResult<T>> {
   const offlineCustomerBlock = blockOfflineCustomerCreation<T>(endpoint, method);
@@ -151,6 +159,8 @@ async function executeHardwareJson<T>(
     const result = await readEnvelope<T>(response);
     if (!response.ok || !result.ok) {
       return {
+        code: result.error?.code,
+        details: result.error?.details,
         message: result.error?.message ?? "The request could not be completed.",
         ok: false,
       };
@@ -165,7 +175,7 @@ async function executeHardwareJson<T>(
   }
 }
 
-function hardwareMutationKey(endpoint: string, method: "PATCH" | "POST", body: unknown) {
+function hardwareMutationKey(endpoint: string, method: HardwareMutationMethod, body: unknown) {
   let serializedBody = "";
   try {
     serializedBody = body === undefined ? "" : JSON.stringify(body);
@@ -175,7 +185,7 @@ function hardwareMutationKey(endpoint: string, method: "PATCH" | "POST", body: u
   return `${method}:${endpoint}:${serializedBody}`;
 }
 
-function closeSuccessfulEstimateEditor(endpoint: string, method: "PATCH" | "POST") {
+function closeSuccessfulEstimateEditor(endpoint: string, method: HardwareMutationMethod) {
   if (
     typeof window === "undefined" ||
     method !== "PATCH" ||
@@ -198,7 +208,7 @@ function closeSuccessfulEstimateEditor(endpoint: string, method: "PATCH" | "POST
 
 function blockOfflineCustomerCreation<T>(
   endpoint: string,
-  method: "PATCH" | "POST",
+  method: HardwareMutationMethod,
 ): HardwareApiResult<T> | null {
   if (
     typeof navigator === "undefined" ||
@@ -216,7 +226,7 @@ function blockOfflineCustomerCreation<T>(
 
 function blockOfflineQuickProductCreation<T>(
   endpoint: string,
-  method: "PATCH" | "POST",
+  method: HardwareMutationMethod,
 ): HardwareApiResult<T> | null {
   if (
     typeof navigator === "undefined" ||
@@ -376,7 +386,7 @@ async function queueOfflinePayment<T>(
 
 async function queueOfflineQuickPos<T>(
   endpoint: string,
-  method: "PATCH" | "POST",
+  method: HardwareMutationMethod,
   body: unknown,
 ): Promise<HardwareApiResult<T> | null> {
   if (
@@ -422,7 +432,7 @@ async function queueOfflineQuickPos<T>(
 
 async function queueOfflinePurchase<T>(
   endpoint: string,
-  method: "PATCH" | "POST",
+  method: HardwareMutationMethod,
   body: unknown,
 ): Promise<HardwareApiResult<T> | null> {
   if (

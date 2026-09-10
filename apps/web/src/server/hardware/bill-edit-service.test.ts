@@ -4,12 +4,15 @@ import { HardwareBillEditService, calculateBillPaymentCorrection } from "./bill-
 
 const context = { tenantId: "tenant_1", userId: "user_1" };
 
-function document(type: HardwareTradeDocumentType = HardwareTradeDocumentType.SALES_ORDER) {
+function document(
+  type: HardwareTradeDocumentType = HardwareTradeDocumentType.SALES_ORDER,
+  status: HardwareTradeDocumentStatus = HardwareTradeDocumentStatus.CONFIRMED,
+) {
   const now = new Date("2026-08-20T09:00:00.000Z");
   return {
     billingInvoice: null,
     billingInvoiceId: null,
-    confirmedAt: now,
+    confirmedAt: status === HardwareTradeDocumentStatus.CONFIRMED ? now : null,
     createdAt: now,
     currency: "INR",
     customer: { name: "Customer" },
@@ -33,7 +36,7 @@ function document(type: HardwareTradeDocumentType = HardwareTradeDocumentType.SA
     metadata: { stockLocationId: "location_1" },
     paymentStatus: "unpaid",
     roundOffCents: 0,
-    status: HardwareTradeDocumentStatus.CONFIRMED,
+    status,
     subtotalCents: 10_000,
     supplier: null,
     supplierId: null,
@@ -72,6 +75,72 @@ describe("HardwareBillEditService", () => {
       tenantMembership: { findUnique: async () => membership(["hardware.sales.manage"]) },
     } as unknown as PrismaClient);
     await expect(service.billForEdit(context, "bill_1")).resolves.toMatchObject({ documentNumber: "HSO-2026-0001" });
+  });
+
+  it("allows an Estimate Bill draft to load in the audited editor", async () => {
+    const service = new HardwareBillEditService({
+      financialTransaction: { findMany: async () => [] },
+      hardwareInventoryMovement: { findMany: async () => [] },
+      hardwareTradeDocument: {
+        findFirst: async () => document(
+          HardwareTradeDocumentType.SALES_QUOTATION,
+          HardwareTradeDocumentStatus.DRAFT,
+        ),
+      },
+      tenantMembership: { findUnique: async () => membership(["hardware.sales.manage"]) },
+    } as unknown as PrismaClient);
+
+    await expect(service.billForEdit(context, "bill_1")).resolves.toMatchObject({
+      documentNumber: "HSQ-2026-0001",
+      status: HardwareTradeDocumentStatus.DRAFT,
+    });
+  });
+
+  it("updates an Estimate draft without posting stock or financial effects", async () => {
+    const current = document(
+      HardwareTradeDocumentType.SALES_QUOTATION,
+      HardwareTradeDocumentStatus.DRAFT,
+    );
+    const documentUpdates: Array<Record<string, unknown>> = [];
+    const transactionClient = {
+      auditEvent: { create: async () => ({}) },
+      hardwareTradeDocument: {
+        findFirst: async () => current,
+        update: async ({ data }: { data: Record<string, unknown> }) => {
+          documentUpdates.push(data);
+          return { ...current, ...data };
+        },
+      },
+      hardwareTradeDocumentItem: { deleteMany: async () => ({ count: 1 }) },
+      hardwareTradeTimelineEvent: { create: async () => ({}) },
+    };
+    const service = new HardwareBillEditService({
+      $transaction: async (callback: (tx: typeof transactionClient) => Promise<unknown>) => callback(transactionClient),
+      clientOrganization: { findFirst: async () => ({ customFields: { hardwarePartyRoles: ["customer"] }, id: "customer_1" }) },
+      hardwareProduct: { findMany: async () => [{ id: "product_1", metadata: {}, name: "Tap", unit: { code: "PCS" } }] },
+      hardwareStockLocation: { findFirst: async () => ({ id: "location_1" }) },
+      hardwareTradeDocument: { findFirst: async () => current },
+      tenantMembership: { findUnique: async () => membership(["hardware.sales.manage"]) },
+    } as unknown as PrismaClient);
+
+    await expect(service.updateBill(context, current.id, {
+      currency: "INR",
+      customerId: "customer_1",
+      idempotencyKey: "estimate-draft-edit-1",
+      invoiceDiscountCents: 0,
+      items: [{ productId: "product_1", quantity: 3, unitAmountCents: 5000 }],
+      locationId: "location_1",
+      metadata: {},
+      paidAmountCents: 0,
+      reason: "Estimate draft updated",
+      roundOffCents: 0,
+      type: HardwareTradeDocumentType.SALES_QUOTATION,
+    })).resolves.toEqual({ documentNumber: "HSQ-2026-0001", id: "bill_1" });
+    expect(documentUpdates[0]).toMatchObject({
+      paymentStatus: "unpaid",
+      totalCents: 15_000,
+    });
+    expect(documentUpdates[0]).not.toHaveProperty("status");
   });
 
   it("rejects a user without the existing billing permission", async () => {
