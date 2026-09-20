@@ -68,41 +68,38 @@ jobs:
 
           echo "=== TARGET ==="
           test "$(readlink -f "$APP_DIR")" = "/var/www/celebration"
-          printf 'APP_DIR=%s\n' "$APP_DIR"
-          printf 'CURRENT=%s\n' "$(readlink -f "$APP_DIR/current")"
-
-          echo "=== CURRENT RELEASE SAFE INVENTORY ==="
           CURRENT="$(readlink -f "$APP_DIR/current")"
-          test -d "$CURRENT"
-          find "$CURRENT" -mindepth 1 -maxdepth 1 \
-            ! -name '.env*' \
-            ! -name 'node_modules' \
-            ! -name '.next' \
-            -printf '%f\n' 2>/dev/null | sort
+          printf 'APP_DIR=%s\n' "$APP_DIR"
+          printf 'CURRENT=%s\n' "$CURRENT"
 
-          echo "=== SHARED SAFE INVENTORY ==="
-          find "$APP_DIR/shared" -mindepth 1 -maxdepth 1 \
-            ! -name '.env*' \
-            -printf '%f\n' 2>/dev/null | sort || true
+          echo "=== NITIN PM2 SAFE MAP ==="
+          sudo -u nitin env PM2_HOME=/home/nitin/.pm2 pm2 jlist | node -e '
+            const fs = require("fs");
+            const list = JSON.parse(fs.readFileSync(0, "utf8"));
+            for (const item of list) {
+              const env = item.pm2_env || {};
+              const out = {
+                id: item.pm_id,
+                name: String(item.name || env.name || ""),
+                pid: item.pid || "",
+                status: String(env.status || ""),
+                cwd: String(env.pm_cwd || ""),
+                script: String(env.pm_exec_path || env.script || ""),
+                args: Array.isArray(env.args) ? env.args.join(" ") : String(env.args || ""),
+                interpreter: String(env.exec_interpreter || "")
+              };
+              console.log(JSON.stringify(out));
+            }
+          '
 
-          echo "=== PORT LISTENER AND ANCESTRY ==="
-          LISTENER_LINE="$(sudo ss -ltnp 2>/dev/null | grep -E "[:.]${PORT}[[:space:]]" | head -n 1 || true)"
-          printf '%s\n' "$LISTENER_LINE"
-          PID="$(printf '%s\n' "$LISTENER_LINE" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
-          if [ -n "$PID" ]; then
-            echo "LISTENER_PID=$PID"
-            CURRENT_PID="$PID"
-            i=0
-            while [ -n "$CURRENT_PID" ] && [ "$CURRENT_PID" -gt 1 ] 2>/dev/null && [ "$i" -lt 12 ]; do
-              sudo ps -o pid=,ppid=,user=,cmd= -p "$CURRENT_PID" 2>/dev/null || true
-              CURRENT_PID="$(sudo ps -o ppid= -p "$CURRENT_PID" 2>/dev/null | tr -d ' ' || true)"
-              i=$((i+1))
-            done
-          fi
+          echo "=== CURRENT RELEASE LINKS (NAMES ONLY) ==="
+          find "$CURRENT" -maxdepth 1 -type l -printf '%f -> %l\n' 2>/dev/null | sort || true
 
-          echo "=== SYSTEMD REFERENCES ==="
-          sudo grep -R -n -E '/var/www/celebration|3040|shopcelebration' /etc/systemd/system /lib/systemd/system 2>/dev/null | head -n 80 || true
-          sudo systemctl list-units --type=service --all --no-pager 2>/dev/null | grep -Ei 'celebration|next|node' || true
+          echo "=== SHARED ENTRY NAMES ==="
+          find "$APP_DIR/shared" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null | sort || true
+
+          echo "=== PORT LISTENER ==="
+          sudo ss -ltnp 2>/dev/null | grep -E "[:.]${PORT}[[:space:]]" || true
 
           echo "=== NGINX DOMAIN REFERENCES ==="
           sudo grep -R -n -E "server_name[[:space:]].*${DOMAIN}|proxy_pass[[:space:]].*127\\.0\\.0\\.1:${PORT}" /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true
