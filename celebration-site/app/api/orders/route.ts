@@ -4,6 +4,7 @@ import { publicEnv } from "../../../config/public-env"
 import { routes } from "../../../config/routes"
 import { validation } from "../../../config/validation"
 import { normalizeOrderInput, OrderValidationError, type CreateOrderInput } from "../../../lib/domain/order"
+import { getCatalogConfig } from "../../../lib/server/catalog"
 import { createOrder } from "../../../lib/server/orders"
 import { consumeRequestRateLimit } from "../../../lib/server/rate-limit"
 import { enforceSameOrigin, readJsonBody, RequestSecurityError } from "../../../lib/security/request"
@@ -16,7 +17,8 @@ export async function POST(request: Request) {
     if (!allowed) return NextResponse.json({ ok: false, error: "RATE_LIMITED" }, { status: 429 })
 
     const body = await readJsonBody<CreateOrderInput>(request)
-    const order = normalizeOrderInput(body, requireEnv("businessTimezone"))
+    const { catalog } = await getCatalogConfig()
+    const order = normalizeOrderInput(body, requireEnv("businessTimezone"), catalog)
     const created = await createOrder(order)
 
     return NextResponse.json({
