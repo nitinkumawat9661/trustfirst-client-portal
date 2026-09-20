@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
-import { validation } from "../../../../../config/validation"
-import { createCustomerSession, customerCookieOptions, CUSTOMER_COOKIE_NAME } from "../../../../../lib/security/customer-session"
-import { enforceSameOrigin, readJsonBody, RequestSecurityError } from "../../../../../lib/security/request"
-import { createCustomerAccount, CustomerAccountError } from "../../../../../lib/server/customer-accounts"
-import { consumeRequestRateLimit } from "../../../../../lib/server/rate-limit"
+import { validation } from "../../../../config/validation"
+import { createCustomerSession, customerCookieOptions, CUSTOMER_COOKIE_NAME } from "../../../../lib/security/customer-session"
+import { enforceSameOrigin, readJsonBody, RequestSecurityError } from "../../../../lib/security/request"
+import { createCustomerAccount, CustomerAccountError } from "../../../../lib/server/customer-accounts"
+import { consumeRequestRateLimit } from "../../../../lib/server/rate-limit"
 
 export async function POST(request: Request) {
   try {
