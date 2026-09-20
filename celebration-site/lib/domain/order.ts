@@ -1,7 +1,7 @@
 import { toMinorUnits } from "./payment"
 import { orderConfig } from "../../config/order"
 import { validation } from "../../config/validation"
-import { occasions, products, selectedPoints, tierById } from "./catalog"
+import { productById, selectedPoints, tierById, type CatalogConfig } from "./catalog"
 import { localIsoDate } from "../validation/date"
 import { isUuidV4 } from "../validation/identifiers"
 import { digitsOnly, sanitizeText } from "../validation/text"
@@ -64,18 +64,18 @@ function isRealIsoDate(value: string) {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
 }
 
-export function normalizeOrderInput(input: CreateOrderInput, timezone: string): NormalizedOrder {
+export function normalizeOrderInput(input: CreateOrderInput, timezone: string, catalog: CatalogConfig): NormalizedOrder {
   const tierId = sanitizeText(input.tierId, validation.tierIdMax)
-  const tier = tierById(tierId)
+  const tier = tierById(catalog, tierId)
   if (!tier) throw new OrderValidationError("INVALID_TIER")
 
   const rawIds = Array.isArray(input.selectedProductIds) ? input.selectedProductIds : []
   const ids = Array.from(new Set(rawIds.filter((value): value is string => typeof value === "string")))
-  const selectedProducts = ids.map((id) => products.find((product) => product.id === id)).filter(Boolean)
+  const selectedProducts = ids.map((id) => productById(catalog, id)).filter(Boolean)
   if (selectedProducts.length !== ids.length) throw new OrderValidationError("INVALID_PRODUCT")
   if (ids.length > tier.maxChoices) throw new OrderValidationError("TOO_MANY_PRODUCTS")
   if (selectedProducts.some((product) => product!.minTier > tier.price)) throw new OrderValidationError("PRODUCT_NOT_ELIGIBLE_FOR_TIER")
-  if (selectedPoints(ids) > tier.pointBudget) throw new OrderValidationError("PRODUCT_MIX_EXCEEDS_TIER")
+  if (selectedPoints(catalog, ids) > tier.pointBudget) throw new OrderValidationError("PRODUCT_MIX_EXCEEDS_TIER")
 
   const customerName = sanitizeText(input.customerName, validation.name.max)
   const phone = digitsOnly(input.phone)
@@ -103,7 +103,7 @@ export function normalizeOrderInput(input: CreateOrderInput, timezone: string): 
 
   if (missing) throw new OrderValidationError("MISSING_REQUIRED_FIELDS")
   if (paymentReference.length < validation.paymentReference.min) throw new OrderValidationError("INVALID_PAYMENT_REFERENCE")
-  if (!occasions.includes(occasion)) throw new OrderValidationError("INVALID_OCCASION")
+  if (!catalog.occasions.includes(occasion)) throw new OrderValidationError("INVALID_OCCASION")
   if (policyVersion !== orderConfig.policyVersion || input.policyAccepted !== true) throw new OrderValidationError("POLICY_VERSION_MISMATCH")
   if (!isUuidV4(idempotencyKey)) throw new OrderValidationError("INVALID_IDEMPOTENCY_KEY")
   if (!isRealIsoDate(requiredDate) || requiredDate < localIsoDate(timezone)) throw new OrderValidationError("INVALID_REQUIRED_DATE")
