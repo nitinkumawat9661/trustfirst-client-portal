@@ -18,6 +18,7 @@ export type AdminOrder = {
   pincode: string
   message: string
   selectedProductIds: string[]
+  selectedProductNames: string[]
   packingVideoKey: string | null
   shippingProvider: string | null
   shippingTrackingNumber: string | null
