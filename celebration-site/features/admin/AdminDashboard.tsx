@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react"
 import type { AdminOrderFilterId } from "../../config/admin-orders"
 import { uiContent } from "../../lib/domain/content"
+import { AdminCatalogManager } from "./AdminCatalogManager"
+import { AdminCustomRequests } from "./AdminCustomRequests"
 import { AdminOrderCard } from "./AdminOrderCard"
 import { AdminOrderToolbar } from "./AdminOrderToolbar"
 import { countAdminFilter, defaultAdminOrderFilter, filterAdminOrders, type AdminOrderSort } from "./orderFilters"
@@ -34,36 +36,42 @@ export function AdminDashboard() {
         <div className="adminActions"><button className="secondary" onClick={admin.load} disabled={admin.loading}>{copy.refresh}</button><button className="secondary" onClick={admin.logout}>{copy.logout}</button></div>
       </div>
 
-      <AdminOrderToolbar
-        search={search}
-        filter={filter}
-        sort={sort}
-        total={admin.orders.length}
-        visible={visibleOrders.length}
-        counts={counts}
-        onSearch={setSearch}
-        onFilter={setFilter}
-        onSort={setSort}
-      />
+      <AdminCatalogManager />
+      <AdminCustomRequests />
 
-      {admin.notice && <div className="successBox adminFeedback">{admin.notice}</div>}
-      {admin.error && <div className="errorBox adminFeedback">{admin.error}</div>}
-      {admin.loading && <div className="trackingState">{uiContent.admin.loadingIndicator}</div>}
+      <section className="adminOrdersSection">
+        <div className="adminSectionTitle"><div className="kicker">ORDERS</div><h2>Order operations</h2></div>
+        <AdminOrderToolbar
+          search={search}
+          filter={filter}
+          sort={sort}
+          total={admin.orders.length}
+          visible={visibleOrders.length}
+          counts={counts}
+          onSearch={setSearch}
+          onFilter={setFilter}
+          onSort={setSort}
+        />
 
-      {!admin.loading && visibleOrders.length === 0 && <div className="trackingState">{search ? copy.noMatchingOrders : copy.noOrders}</div>}
+        {admin.notice && <div className="successBox adminFeedback">{admin.notice}</div>}
+        {admin.error && <div className="errorBox adminFeedback">{admin.error}</div>}
+        {admin.loading && <div className="trackingState">{uiContent.admin.loadingIndicator}</div>}
 
-      <div className="adminOrderList">
-        {visibleOrders.map((order) => (
-          <AdminOrderCard
-            key={order.publicId}
-            order={order}
-            busy={admin.busy === order.publicId}
-            onStatus={(status) => admin.updateStatus(order, status)}
-            onShipping={(provider, trackingNumber) => admin.saveShipping(order, provider, trackingNumber)}
-            onVideo={(file) => admin.uploadVideo(order, file)}
-          />
-        ))}
-      </div>
+        {!admin.loading && visibleOrders.length === 0 && <div className="trackingState">{search ? copy.noMatchingOrders : copy.noOrders}</div>}
+
+        <div className="adminOrderList">
+          {visibleOrders.map((order) => (
+            <AdminOrderCard
+              key={order.publicId}
+              order={order}
+              busy={admin.busy === order.publicId}
+              onStatus={(status) => admin.updateStatus(order, status)}
+              onShipping={(provider, trackingNumber) => admin.saveShipping(order, provider, trackingNumber)}
+              onVideo={(file) => admin.uploadVideo(order, file)}
+            />
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
