@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { getCustomerSession } from "../../../../../lib/security/customer-session"
-import { findCustomerAccountById } from "../../../../../lib/server/customer-accounts"
+import { getCustomerSession } from "../../../../lib/security/customer-session"
+import { findCustomerAccountById } from "../../../../lib/server/customer-accounts"
 
 export const dynamic = "force-dynamic"
 
