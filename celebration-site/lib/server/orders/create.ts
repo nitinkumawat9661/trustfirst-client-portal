@@ -10,7 +10,7 @@ import { transaction } from "../db"
 import { createPublicOrderId } from "../order-id"
 import { appendOrderEvent } from "./events"
 
-async function insertOrder(client: PoolClient, input: NormalizedOrder) {
+async function insertOrder(client: PoolClient, input: NormalizedOrder, customerAccountId: string) {
   const internalId = randomUUID()
   const publicId = createPublicOrderId()
   const trackingToken = createTrackingToken(input.idempotencyKey)
@@ -25,9 +25,9 @@ async function insertOrder(client: PoolClient, input: NormalizedOrder) {
       required_date, occasion, customer_name, phone, receiver_name,
       address, city, state, pincode, gift_message,
       payment_reference, payment_reference_hash, payment_status,
-      status, policy_version
+      status, policy_version, customer_account_id
     ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25
     )
     ON CONFLICT (idempotency_key) DO NOTHING
     RETURNING id`,
@@ -55,20 +55,25 @@ async function insertOrder(client: PoolClient, input: NormalizedOrder) {
       paymentReferenceHash,
       orderConfig.initialPaymentStatus,
       orderConfig.initialStatus,
-      input.policyVersion
+      input.policyVersion,
+      customerAccountId
     ]
   )
 
   if (!inserted.rowCount) {
-    const existing = await client.query<{ public_id: string }>(`SELECT public_id FROM orders WHERE idempotency_key = $1`, [input.idempotencyKey])
+    const existing = await client.query<{ public_id: string; customer_account_id: string | null }>(
+      `SELECT public_id, customer_account_id FROM orders WHERE idempotency_key = $1`,
+      [input.idempotencyKey]
+    )
     if (!existing.rows[0]) throw new Error("IDEMPOTENCY_LOOKUP_FAILED")
+    if (existing.rows[0].customer_account_id !== customerAccountId) throw new Error("IDEMPOTENCY_OWNER_MISMATCH")
     return { publicId: existing.rows[0].public_id, trackingToken }
   }
 
-  await appendOrderEvent(client, internalId, orderEvents.created, { status: orderConfig.initialStatus })
+  await appendOrderEvent(client, internalId, orderEvents.created, { status: orderConfig.initialStatus, customerAccountId })
   return { publicId, trackingToken }
 }
 
-export function createOrder(input: NormalizedOrder) {
-  return transaction((client) => insertOrder(client, input))
+export function createOrder(input: NormalizedOrder, customerAccountId: string) {
+  return transaction((client) => insertOrder(client, input, customerAccountId))
 }
