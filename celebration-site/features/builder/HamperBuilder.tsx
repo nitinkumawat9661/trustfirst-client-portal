@@ -10,10 +10,12 @@ import { useOrderSubmit } from "../checkout/useOrderSubmit"
 import { useHamperBuilder } from "./useHamperBuilder"
 import { useCustomerAccount } from "../account/useCustomerAccount"
 import { CustomerAuthPanel } from "../account/CustomerAuthPanel"
+import { useStoreSettings } from "../shell/useStoreSettings"
 
 export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBuilder> }) {
   const order = useOrderSubmit()
   const customer = useCustomerAccount()
+  const storeSettings = useStoreSettings()
   const [showAuth, setShowAuth] = useState(false)
   const copy = uiContent.builder
   const submitArgs = {
@@ -29,20 +31,22 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
       setShowAuth(true)
       return
     }
-    await order.submit(submitArgs)
+    await order.submit({ ...submitArgs, checkout: { ...state.checkout, phone: customer.account.phone } })
   }
 
   async function authenticated(account: NonNullable<typeof customer.account>) {
+    const customerName = state.checkout.customerName.trim() || account.displayName
+    const checkout = { ...state.checkout, phone: account.phone, customerName }
     state.updateField("phone", account.phone)
-    if (!state.checkout.customerName.trim()) state.updateField("customerName", account.displayName)
+    state.updateField("customerName", customerName)
     setShowAuth(false)
-    await order.submit(submitArgs)
+    await order.submit({ ...submitArgs, checkout })
   }
 
   function openWhatsapp() {
     if (!order.created) return
-    const url = order.whatsappUrl(submitArgs, order.created.orderId, order.created.trackingPath)
-    if (url) window.open(url, "_blank", "noopener,noreferrer")
+    const url = order.whatsappUrl(submitArgs, order.created.orderId, order.created.trackingPath, storeSettings.whatsapp)
+    window.open(url, "_blank", "noopener,noreferrer")
   }
 
   return (
