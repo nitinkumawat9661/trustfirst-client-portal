@@ -43,15 +43,16 @@ export function enforceSameOrigin(request: Request) {
   if (originUrl.origin !== publicRequestOrigin(request)) throw new RequestSecurityError("CROSS_SITE_REQUEST_BLOCKED", 403)
 }
 
-export async function readJsonBody<T>(request: Request): Promise<T> {
+export async function readJsonBody<T>(request: Request, maxBytes = validation.maxRequestBytes): Promise<T> {
   const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase()
   if (contentType !== "application/json") throw new RequestSecurityError("INVALID_CONTENT_TYPE", 415)
 
+  const safeMaxBytes = Math.max(1, Math.floor(maxBytes))
   const length = Number(request.headers.get("content-length") || "0")
-  if (Number.isFinite(length) && length > validation.maxRequestBytes) throw new RequestSecurityError("REQUEST_TOO_LARGE", 413)
+  if (Number.isFinite(length) && length > safeMaxBytes) throw new RequestSecurityError("REQUEST_TOO_LARGE", 413)
 
   const text = await request.text()
-  if (Buffer.byteLength(text, "utf8") > validation.maxRequestBytes) throw new RequestSecurityError("REQUEST_TOO_LARGE", 413)
+  if (Buffer.byteLength(text, "utf8") > safeMaxBytes) throw new RequestSecurityError("REQUEST_TOO_LARGE", 413)
   try {
     return JSON.parse(text) as T
   } catch {
