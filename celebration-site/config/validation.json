@@ -1,5 +1,6 @@
 {
   "maxRequestBytes": 24000,
+  "catalogRequestMaxBytes": 524288,
   "name": {
     "min": 2,
     "max": 80
