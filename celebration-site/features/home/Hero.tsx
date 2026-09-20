@@ -1,11 +1,12 @@
 "use client"
 
-import { formatMoney, products, tiers } from "../../lib/domain/catalog"
+import { formatMoney, type GiftProduct, type Tier } from "../../lib/domain/catalog"
 import { storeContent, uiContent } from "../../lib/domain/content"
 
-export function Hero({ onBuild }: { onBuild: () => void }) {
-  const minPrice = Math.min(...tiers.map((tier) => tier.price))
-  const maxPrice = Math.max(...tiers.map((tier) => tier.price))
+export function Hero({ onBuild, tiers, products }: { onBuild: () => void; tiers: Tier[]; products: GiftProduct[] }) {
+  const prices = tiers.map((tier) => tier.price)
+  const minPrice = prices.length ? Math.min(...prices) : 0
+  const maxPrice = prices.length ? Math.max(...prices) : 0
   return (
     <header className="hero">
       <div className="wrap heroGrid">
