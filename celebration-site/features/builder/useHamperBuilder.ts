@@ -1,24 +1,25 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { canSelectProduct, catalogSettings, categories, normalizeSelection, occasions, productById, products, selectedPoints, tierById, tiers } from "../../lib/domain/catalog"
+import { useEffect, useMemo, useState } from "react"
+import { canSelectProduct, categoriesForCatalog, defaultCatalog, normalizeSelection, productById, selectedPoints, tierById, visibleProducts, visibleTiers, type CatalogConfig } from "../../lib/domain/catalog"
 import { storeContent } from "../../lib/domain/content"
 import type { CheckoutData } from "./types"
 import { validateCheckoutDetails } from "./validation"
 
-function configuredDefaultTier() {
-  const tier = tierById(catalogSettings.defaultTierId)
-  if (!tier) throw new Error("Configured default tier does not exist")
+function defaultTierFor(catalog: CatalogConfig) {
+  const tier = tierById(catalog, catalog.settings.defaultTierId) || visibleTiers(catalog)[0]
+  if (!tier) throw new Error("Configured catalog has no active tier")
   return tier
 }
 
-const defaultTier = configuredDefaultTier()
-
 export function useHamperBuilder() {
-  const [tierId, setTierId] = useState(defaultTier.id)
+  const initialTier = defaultTierFor(defaultCatalog)
+  const [catalog, setCatalog] = useState<CatalogConfig>(defaultCatalog)
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [tierId, setTierId] = useState(initialTier.id)
   const [selected, setSelected] = useState<string[]>([])
   const [step, setStep] = useState(1)
-  const [category, setCategory] = useState(catalogSettings.allCategory.id)
+  const [category, setCategory] = useState(defaultCatalog.settings.allCategory.id)
   const [search, setSearch] = useState("")
   const [accepted, setAccepted] = useState(false)
   const [detailsError, setDetailsError] = useState("")
@@ -31,18 +32,47 @@ export function useHamperBuilder() {
     state: storeContent.checkout.defaultState,
     pincode: "",
     requiredDate: "",
-    occasion: catalogSettings.defaultOccasion,
+    occasion: defaultCatalog.settings.defaultOccasion,
     message: "",
     paymentReference: ""
   })
 
-  const tier = tierById(tierId) || defaultTier
-  const selectedNames = selected.map((id) => productById(id)?.name).filter(Boolean) as string[]
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/catalog", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("catalog")
+        return response.json() as Promise<{ ok: boolean; catalog?: CatalogConfig }>
+      })
+      .then((payload) => {
+        if (cancelled || !payload.ok || !payload.catalog) return
+        const next = payload.catalog
+        const nextTier = tierById(next, tierId) || defaultTierFor(next)
+        setCatalog(next)
+        setTierId(nextTier.id)
+        setSelected((current) => normalizeSelection(next, nextTier, current))
+        setCategory(next.settings.allCategory.id)
+        setCheckout((current) => ({
+          ...current,
+          occasion: next.occasions.includes(current.occasion) ? current.occasion : next.settings.defaultOccasion
+        }))
+      })
+      .catch(() => undefined)
+      .finally(() => { if (!cancelled) setCatalogLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  const tiers = visibleTiers(catalog)
+  const products = visibleProducts(catalog)
+  const occasions = catalog.occasions
+  const categories = categoriesForCatalog(catalog)
+  const tier = tierById(catalog, tierId) || defaultTierFor(catalog)
+  const selectedNames = selected.map((id) => productById(catalog, id)?.name).filter(Boolean) as string[]
   const filteredProducts = useMemo(() => products.filter((item) => {
-    const byCategory = category === catalogSettings.allCategory.id || item.category === category
+    const byCategory = category === catalog.settings.allCategory.id || item.category === category
     const bySearch = !search.trim() || item.name.toLowerCase().includes(search.trim().toLowerCase())
     return byCategory && bySearch
-  }), [category, search])
+  }), [catalog.settings.allCategory.id, category, products, search])
 
   function updateField<K extends keyof CheckoutData>(key: K, value: CheckoutData[K]) {
     setCheckout((current) => ({ ...current, [key]: value }))
@@ -65,23 +95,25 @@ export function useHamperBuilder() {
   }
 
   function selectTier(id: string) {
-    const nextTier = tierById(id)
+    const nextTier = tierById(catalog, id)
     if (!nextTier) return
     setTierId(id)
-    setSelected((current) => normalizeSelection(nextTier, current))
+    setSelected((current) => normalizeSelection(catalog, nextTier, current))
   }
 
   function toggleProduct(productId: string) {
-    const product = productById(productId)
+    const product = productById(catalog, productId)
     if (!product) return
     if (selected.includes(productId)) {
       setSelected((current) => current.filter((id) => id !== productId))
       return
     }
-    if (canSelectProduct(tier, selected, product).ok) setSelected((current) => [...current, productId])
+    if (canSelectProduct(catalog, tier, selected, product).ok) setSelected((current) => [...current, productId])
   }
 
   return {
+    catalog,
+    catalogLoading,
     tier,
     tierId,
     tiers,
@@ -90,7 +122,7 @@ export function useHamperBuilder() {
     categories,
     selected,
     selectedNames,
-    pointsUsed: selectedPoints(selected),
+    pointsUsed: selectedPoints(catalog, selected),
     step,
     category,
     search,
