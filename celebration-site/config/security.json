@@ -1,5 +1,6 @@
 {
   "adminCookieName": "celebration_admin",
+  "customerCookieName": "celebration_customer",
   "minimumSecretLength": 32,
   "scrypt": {
     "minimumSaltBytes": 16,
