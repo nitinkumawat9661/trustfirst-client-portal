@@ -56,12 +56,20 @@ export function categoriesForCatalog(catalog: CatalogConfig): CategoryOption[] {
   ]
 }
 
-export function tierById(catalog: CatalogConfig, id: string) {
-  return visibleTiers(catalog).find((item) => item.id === id)
+export function tierById(catalog: CatalogConfig, id: string): Tier | undefined
+export function tierById(id: string): Tier | undefined
+export function tierById(catalogOrId: CatalogConfig | string, id?: string) {
+  const catalog = typeof catalogOrId === "string" ? defaultCatalog : catalogOrId
+  const targetId = typeof catalogOrId === "string" ? catalogOrId : (id || "")
+  return visibleTiers(catalog).find((item) => item.id === targetId)
 }
 
-export function productById(catalog: CatalogConfig, id: string) {
-  return visibleProducts(catalog).find((item) => item.id === id)
+export function productById(catalog: CatalogConfig, id: string): GiftProduct | undefined
+export function productById(id: string): GiftProduct | undefined
+export function productById(catalogOrId: CatalogConfig | string, id?: string) {
+  const catalog = typeof catalogOrId === "string" ? defaultCatalog : catalogOrId
+  const targetId = typeof catalogOrId === "string" ? catalogOrId : (id || "")
+  return visibleProducts(catalog).find((item) => item.id === targetId)
 }
 
 export function selectedPoints(catalog: CatalogConfig, ids: string[]) {
