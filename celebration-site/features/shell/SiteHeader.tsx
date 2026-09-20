@@ -1,9 +1,14 @@
+"use client"
+
 import Link from "next/link"
 import { routes } from "../../config/routes"
 import { storeContent, uiContent } from "../../lib/domain/content"
 import { supportWhatsappUrl } from "../../lib/domain/support"
+import { useStoreSettings } from "./useStoreSettings"
 
 export function SiteHeader({ onCreate, showAccount = true }: { onCreate?: () => void; showAccount?: boolean }) {
+  const settings = useStoreSettings()
+  const supportUrl = supportWhatsappUrl(settings.supportMessage, settings.whatsapp)
   return (
     <>
       <header className="nav">
@@ -23,9 +28,9 @@ export function SiteHeader({ onCreate, showAccount = true }: { onCreate?: () => 
             {onCreate ? <button className="primary navCta" onClick={onCreate}>{uiContent.nav.create}</button> : <Link className="secondary navStoreLink" href={routes.home}>{uiContent.nav.backToStore}</Link>}
           </div>
         </div>
-        {showAccount && <div className="assistBar"><div className="wrap assistBarInner"><span><b>Apne budget me dekh rahe ho?</b> Budget batao, hamper hum curate kar denge.</span><div><a href={`${routes.home}#custom-request`}>Budget request</a><a href={supportWhatsappUrl()} target="_blank" rel="noreferrer">WhatsApp</a></div></div></div>}
+        {showAccount && <div className="assistBar"><div className="wrap assistBarInner"><span><b>{settings.assistTitle}</b> {settings.assistBody}</span><div><a href={`${routes.home}#custom-request`}>Budget request</a><a href={supportUrl} target="_blank" rel="noreferrer">WhatsApp</a></div></div></div>}
       </header>
-      {showAccount && <a className="whatsappDock" href={supportWhatsappUrl()} target="_blank" rel="noreferrer" aria-label="Celebration WhatsApp support"><span>WA</span><b>Help chahiye?</b></a>}
+      {showAccount && <a className="whatsappDock" href={supportUrl} target="_blank" rel="noreferrer" aria-label="Celebration WhatsApp support"><span>WA</span><b>Help chahiye?</b></a>}
     </>
   )
 }
