@@ -1,10 +1,16 @@
 "use client"
 
-import { catalogSettings, categories, formatMoney, products } from "../../lib/domain/catalog"
+import { formatMoney, type CategoryOption, type GiftProduct } from "../../lib/domain/catalog"
 import { uiContent } from "../../lib/domain/content"
 
-export function ProductSection({ category, onCategory }: { category: string; onCategory: (value: string) => void }) {
-  const visible = products.filter((product) => category === catalogSettings.allCategory.id || product.category === category)
+export function ProductSection({ products, categories, allCategoryId, category, onCategory }: {
+  products: GiftProduct[]
+  categories: CategoryOption[]
+  allCategoryId: string
+  category: string
+  onCategory: (value: string) => void
+}) {
+  const visible = products.filter((product) => category === allCategoryId || product.category === category)
   return (
     <section className="productsSec" id="products">
       <div className="wrap">
@@ -13,7 +19,10 @@ export function ProductSection({ category, onCategory }: { category: string; onC
         <div className="products">
           {visible.map((product) => (
             <article className="product" key={product.id}>
-              <div className="prodTop"><div className="prodIcon">{product.icon}</div><div className="cat">{product.category}</div></div>
+              <div className="prodTop">
+                {product.imageUrl ? <img className="catalogProductImage" src={product.imageUrl} alt="" loading="lazy" /> : <div className="prodIcon">{product.icon || "🎁"}</div>}
+                <div className="cat">{product.category}</div>
+              </div>
               <h3>{product.name}</h3><p>{product.note}</p><div className="productUnlock">{uiContent.products.from} {formatMoney(product.minTier)}</div>
             </article>
           ))}
