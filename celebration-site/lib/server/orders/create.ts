@@ -21,13 +21,13 @@ async function insertOrder(client: PoolClient, input: NormalizedOrder, customerA
   const inserted = await client.query<{ id: string }>(
     `INSERT INTO orders (
       id, public_id, idempotency_key, tracking_token_hash, tracking_expires_at,
-      tier_id, tier_name, amount_paise, selected_product_ids,
+      tier_id, tier_name, amount_paise, selected_product_ids, selected_product_names,
       required_date, occasion, customer_name, phone, receiver_name,
       address, city, state, pincode, gift_message,
       payment_reference, payment_reference_hash, payment_status,
       status, policy_version, customer_account_id
     ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26
     )
     ON CONFLICT (idempotency_key) DO NOTHING
     RETURNING id`,
@@ -41,6 +41,7 @@ async function insertOrder(client: PoolClient, input: NormalizedOrder, customerA
       input.tierName,
       input.amountPaise,
       input.selectedProductIds,
+      input.selectedProductNames,
       input.requiredDate,
       input.occasion,
       input.customerName,
