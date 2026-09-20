@@ -125,8 +125,21 @@ export function normalizeCatalogConfig(input: unknown): CatalogConfig {
 export async function getCatalogConfig() {
   const result = await query<CatalogRow>("SELECT payload, version FROM catalog_config WHERE id = 'primary'")
   const row = result.rows[0]
-  if (!row) return { catalog: defaultCatalog, version: 0 }
-  return { catalog: normalizeCatalogConfig(row.payload), version: row.version }
+  if (row) return { catalog: normalizeCatalogConfig(row.payload), version: row.version }
+
+  const seed = normalizeCatalogConfig(defaultCatalog)
+  const inserted = await query<CatalogRow>(
+    `INSERT INTO catalog_config (id, payload, version, updated_at)
+     VALUES ('primary', $1::jsonb, 1, now())
+     ON CONFLICT (id) DO NOTHING
+     RETURNING payload, version`,
+    [JSON.stringify(seed)]
+  )
+  if (inserted.rows[0]) return { catalog: normalizeCatalogConfig(inserted.rows[0].payload), version: inserted.rows[0].version }
+
+  const concurrent = await query<CatalogRow>("SELECT payload, version FROM catalog_config WHERE id = 'primary'")
+  if (!concurrent.rows[0]) throw new Error("CATALOG_SEED_FAILED")
+  return { catalog: normalizeCatalogConfig(concurrent.rows[0].payload), version: concurrent.rows[0].version }
 }
 
 export async function saveCatalogConfig(input: unknown) {
