@@ -23,7 +23,8 @@ export async function GET() {
       }
       return {
         ...order,
-        productNames: order.selectedProductIds.map((id) => productById(catalogResult.catalog, id)?.name || id),
+        productNames: order.selectedProductNames.length ? order.selectedProductNames : order.selectedProductIds.map((id) => productById(catalogResult.catalog, id)?.name || id),
+        selectedProductNames: undefined,
         packingVideoKey: undefined,
         packingVideoUrl
       }
