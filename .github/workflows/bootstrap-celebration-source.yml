@@ -1,0 +1,152 @@
+name: Bootstrap Celebration Source
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/bootstrap-celebration-source.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: celebration-source-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  sync-source:
+    name: Import safe Celebration source snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      APP_ROOT: /var/www/celebration
+      REPO_DIR: celebration-site
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure verified SSH access
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in VPS_HOST VPS_PORT VPS_USER VPS_SSH_PRIVATE_KEY VPS_KNOWN_HOSTS; do
+            [ -n "${!name:-}" ] || { echo "Missing required value: $name" >&2; exit 1; }
+          done
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" | tr -d '\r' > "$HOME/.ssh/celebration_bootstrap"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/celebration_bootstrap" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/celebration_bootstrap" >/dev/null
+          ssh-keygen -F "$VPS_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
+
+      - name: Create safe source archive on VPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -p "$VPS_PORT" \
+            -i "$HOME/.ssh/celebration_bootstrap" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            bash -s -- "$APP_ROOT" <<'REMOTE'
+          set -euo pipefail
+          APP_ROOT="$1"
+          test "$(readlink -f "$APP_ROOT")" = "/var/www/celebration"
+          CURRENT="$(readlink -f "$APP_ROOT/current")"
+          case "$CURRENT" in
+            /var/www/celebration/releases/*) ;;
+            *) echo "Unsafe Celebration current target: $CURRENT" >&2; exit 1 ;;
+          esac
+          cd "$CURRENT"
+          required=(
+            app config content db features lib public scripts styles
+            package.json package-lock.json next.config.mjs tsconfig.json next-env.d.ts
+            README.md LAUNCH-18-SEPT.md
+          )
+          for item in "${required[@]}"; do
+            test -e "$item" || { echo "Missing required source item: $item" >&2; exit 1; }
+          done
+          tar -czf /tmp/celebration-safe-source.tar.gz "${required[@]}"
+          test -s /tmp/celebration-safe-source.tar.gz
+          REMOTE
+
+      - name: Download safe source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp \
+            -P "$VPS_PORT" \
+            -i "$HOME/.ssh/celebration_bootstrap" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST:/tmp/celebration-safe-source.tar.gz" \
+            /tmp/celebration-safe-source.tar.gz
+          ssh \
+            -p "$VPS_PORT" \
+            -i "$HOME/.ssh/celebration_bootstrap" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            "rm -f /tmp/celebration-safe-source.tar.gz"
+
+      - name: Replace repository Celebration snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$REPO_DIR"
+          mkdir -p "$REPO_DIR"
+          tar -xzf /tmp/celebration-safe-source.tar.gz -C "$REPO_DIR"
+          cat > "$REPO_DIR/.gitignore" <<'EOF'
+          .env
+          .env.*
+          !.env.example
+          node_modules/
+          .next/
+          *.log
+          tsconfig.tsbuildinfo
+          EOF
+
+          if find "$REPO_DIR" -type f \( -name '.env' -o -name '.env.*' \) -print -quit | grep -q .; then
+            echo "Refusing to commit environment files" >&2
+            exit 1
+          fi
+          if find "$REPO_DIR" -type d \( -name node_modules -o -name .next \) -print -quit | grep -q .; then
+            echo "Refusing to commit runtime/build directories" >&2
+            exit 1
+          fi
+          if grep -RIlE --exclude='package-lock.json' --exclude='*.md' \
+            '(BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|AWS_SECRET_ACCESS_KEY[[:space:]]*=|DATABASE_URL[[:space:]]*=[[:space:]]*[^$].*://[^ ]+@)' \
+            "$REPO_DIR" | grep -q .; then
+            echo "Potential secret detected in Celebration source snapshot" >&2
+            exit 1
+          fi
+
+      - name: Commit Celebration source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add "$REPO_DIR"
+          if git diff --cached --quiet; then
+            echo "Celebration source already matches VPS snapshot"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(celebration): sync current VPS source"
+          git push origin HEAD:main
