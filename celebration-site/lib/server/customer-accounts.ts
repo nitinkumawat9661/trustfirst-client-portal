@@ -5,6 +5,8 @@ import { hashCustomerPassword, isValidCustomerPassword, verifyCustomerPassword }
 import { query } from "./db"
 import type { OrderStatus } from "../domain/order-status"
 
+const DUMMY_PASSWORD_HASH = `${"00".repeat(16)}:${"00".repeat(64)}`
+
 export class CustomerAccountError extends Error {
   constructor(public readonly code: string, public readonly status = 422) {
     super(code)
@@ -123,9 +125,8 @@ export async function authenticateCustomerAccount(input: { phone: unknown; passw
     [phone]
   )
   const row = result.rows[0]
-  if (!row || row.status !== "active" || !verifyCustomerPassword(password, row.password_hash)) {
-    throw new CustomerAccountError("INVALID_CREDENTIALS", 401)
-  }
+  const passwordMatches = verifyCustomerPassword(password, row?.password_hash || DUMMY_PASSWORD_HASH)
+  if (!row || row.status !== "active" || !passwordMatches) throw new CustomerAccountError("INVALID_CREDENTIALS", 401)
   await query(`UPDATE customer_accounts SET last_login_at = now(), updated_at = now() WHERE id = $1`, [row.id])
   return publicAccount(row)
 }
