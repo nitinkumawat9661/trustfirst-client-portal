@@ -1,12 +1,13 @@
-import { occasions, type Tier } from "../../../lib/domain/catalog"
+import type { Tier } from "../../../lib/domain/catalog"
 import { uiContent } from "../../../lib/domain/content"
 import { OrderSummary } from "../components/OrderSummary"
 import type { CheckoutData } from "../types"
 
-export function DetailsStep({ tier, checkout, selectedNames, error, updateField, onBack, onNext }: {
+export function DetailsStep({ tier, checkout, selectedNames, occasions, error, updateField, onBack, onNext }: {
   tier: Tier
   checkout: CheckoutData
   selectedNames: string[]
+  occasions: string[]
   error: string
   updateField: <K extends keyof CheckoutData>(key: K, value: CheckoutData[K]) => void
   onBack: () => void
