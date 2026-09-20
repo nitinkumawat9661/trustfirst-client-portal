@@ -5,107 +5,89 @@
     "eyebrow": "✦ GIFTS • HAMPERS • MEMORIES",
     "heroTitleLine1": "Beautiful gifts.",
     "heroTitleLine2": "Happier people.",
-    "heroBody": "Thoughtful custom hampers for birthdays, anniversaries, festivals and everyday surprises. Budget चुनिए, पसंद के products चुनिए और delivery date बताइए—बाकी Celebration संभालेगा.",
+    "heroBody": "Birthday ho, anniversary ya bas kisi ko smile deni ho. Budget choose karo, unki pasand ke products select karo aur date batao. Baaki hamper Celebration sambhalega.",
     "footerLine": "Celebrating People, One Gift at a Time",
     "themeColor": "#7a1f24",
     "giftIcon": "🎁"
   },
   "trustStrip": [
     "✓ 100% PREPAID",
-    "COD उपलब्ध नहीं",
-    "📦 Dispatch से पहले complete packing video",
-    "🛡️ Wrong / damaged / defective item पर verified 100% refund या replacement"
+    "COD available nahi",
+    "📦 Dispatch se pehle complete packing video",
+    "🛡️ Verified wrong / damaged / defective issue par refund ya replacement protection"
   ],
   "showcaseItems": [
-    {
-      "icon": "🧸",
-      "label": "Teddy"
-    },
-    {
-      "icon": "🍫",
-      "label": "Chocolate"
-    },
-    {
-      "icon": "✨",
-      "label": "Perfume"
-    },
-    {
-      "icon": "☕",
-      "label": "Mug"
-    },
-    {
-      "icon": "🕯️",
-      "label": "Candle"
-    },
-    {
-      "icon": "💌",
-      "label": "Card"
-    }
+    { "icon": "🧸", "label": "Teddy" },
+    { "icon": "🍫", "label": "Chocolate" },
+    { "icon": "✨", "label": "Perfume" },
+    { "icon": "☕", "label": "Mug" },
+    { "icon": "🕯️", "label": "Candle" },
+    { "icon": "💌", "label": "Card" }
   ],
   "promiseCards": [
     {
       "icon": "💳",
       "title": "Payment verification",
-      "body": "UTR submit होने के बाद actual bank/UPI credit verify होगा."
+      "body": "UTR submit hone ke baad actual bank/UPI credit verify kiya jayega."
     },
     {
       "icon": "🎥",
       "title": "Packing video",
-      "body": "Dispatch से पहले finished hamper का complete packing video मिलेगा."
+      "body": "Dispatch se pehle finished hamper ka complete packing video milega."
     },
     {
       "icon": "🛡️",
       "title": "Issue protection",
-      "body": "Wrong, damaged या defective item पर verified refund/replacement protection."
+      "body": "Eligible wrong, damaged ya defective item par verified refund/replacement protection milegi."
     },
     {
       "icon": "📦",
       "title": "Clear order ID",
-      "body": "हर order को unique Celebration ID मिलेगा."
+      "body": "Har order ko unique Celebration ID milega, jisse tracking simple rahe."
     }
   ],
   "checkout": {
     "defaultState": "Rajasthan",
     "paymentSteps": [
-      "{amount} pay करें.",
-      "Payment success के बाद UTR / transaction reference डालें.",
-      "Order submit करें; bank credit verify होने के बाद processing शुरू होगी."
+      "{amount} UPI se pay karein.",
+      "Payment success ke baad UTR / transaction reference enter karein.",
+      "Order place karein. Bank credit verify hone ke baad processing start hogi."
     ],
-    "policyConsent": "मैं समझता/समझती हूँ कि COD available नहीं है और personalized/customized order का normal return नहीं है. Wrong, damaged या defective item के verified claim पर 100% refund या replacement protection मिलेगी. Dispatch से पहले complete packing video साझा किया जाएगा."
+    "policyConsent": "Main samajhta/samajhti hoon ki COD available nahi hai aur personalized/customized order par normal change-of-mind return apply nahi hota. Eligible wrong, damaged ya defective item ke verified claim par refund ya replacement protection milegi. Dispatch se pehle complete packing video share kiya jayega."
   },
   "policy": {
-    "title": "Clear rules before you pay.",
-    "lead": "Customer को payment से पहले साफ terms दिखाए जाते हैं. Final legal/business identity और operational timelines launch configuration से आएँगे.",
+    "title": "Payment se pehle rules clear rakhein.",
+    "lead": "Order place karne se pehle payment, customization, packing aur issue-protection ki important terms clearly dikhayi jaati hain.",
     "cards": [
       {
         "icon": "💳",
         "title": "Payment",
-        "body": "Orders prepaid हैं. COD available नहीं है. UPI reference/UTR submit करने के बाद bank credit verify होने पर ही payment confirmed माना जाएगा."
+        "body": "Orders prepaid hain. COD available nahi hai. UPI reference/UTR submit karne ke baad actual bank credit verify hone par hi payment confirmed maana jayega."
       },
       {
         "icon": "🎀",
         "title": "Customized orders",
-        "body": "Personalized/customized hamper customer instruction के अनुसार बनाया जाता है, इसलिए change-of-mind या सामान्य return लागू नहीं होगा."
+        "body": "Personalized/customized hamper aapki instructions ke hisaab se banaya jata hai, isliye normal change-of-mind return apply nahi hota."
       },
       {
         "icon": "🛡️",
         "title": "Wrong / damaged / defective",
-        "body": "Eligible verified issue में 100% refund या replacement protection उपलब्ध होगी. Claim review के लिए relevant evidence माँगा जा सकता है."
+        "body": "Eligible verified issue par refund ya replacement protection available hai. Claim review ke liye relevant evidence manga ja sakta hai."
       },
       {
         "icon": "🎥",
         "title": "Packing video",
-        "body": "Dispatch से पहले complete packed hamper का video share करने का process रखा गया है ताकि customer contents और presentation देख सके."
+        "body": "Dispatch se pehle packed hamper ka video share kiya jayega, taaki aap contents aur presentation dekh saken."
       },
       {
         "icon": "🔁",
         "title": "Product substitutions",
-        "body": "Stock, size या presentation constraint के कारण equivalent item की जरूरत पड़े तो major substitution customer confirmation के बिना नहीं किया जाएगा."
+        "body": "Stock, size ya presentation constraint ke kaaran major equivalent substitution chahiye ho to customer confirmation ke bina nahi kiya jayega."
       },
       {
         "icon": "📅",
         "title": "Required delivery date",
-        "body": "Customer की चुनी तारीख requirement के रूप में capture होगी. Final feasibility pincode, courier serviceability और preparation time confirm होने के बाद committed मानी जाएगी."
+        "body": "Aapki selected date requirement ke roop me capture hoti hai. Final feasibility pincode, courier serviceability aur preparation time confirm hone ke baad committed maani jayegi."
       }
     ]
   },
@@ -120,11 +102,11 @@
       "Defective item",
       "Missing item"
     ],
-    "title": "Report an order issue",
-    "body": "Wrong, damaged, defective या missing item के लिए issue submit करें. Team verification के बाद refund/replacement process शुरू होगा.",
-    "submit": "Submit issue",
-    "submitted": "Issue submitted. Our team will review it.",
-    "noteLabel": "What went wrong?",
+    "title": "Order me issue hai? Yahin report karein",
+    "body": "Wrong, damaged, defective ya missing item ke liye issue submit karein. Team verification ke baad eligible refund/replacement process start hoga.",
+    "submit": "Issue submit karein",
+    "submitted": "Issue submit ho gaya. Team review karegi.",
+    "noteLabel": "Kya problem hui?",
     "icon": "🛡️"
   }
 }
