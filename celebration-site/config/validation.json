@@ -28,6 +28,7 @@
   "trackingTokenTtlSeconds": 3888000,
   "adminSessionTtlSeconds": 43200,
   "packingVideoMaxBytes": 83886080,
+  "catalogImageMaxBytes": 5242880,
   "trackingToken": {
     "min": 32,
     "max": 200
@@ -37,6 +38,27 @@
   "policyVersionMax": 40,
   "publicOrderIdMax": 80,
   "adminPasswordInputMax": 256,
+  "catalog": {
+    "maxTiers": 50,
+    "maxProducts": 500,
+    "maxOccasions": 50,
+    "idMax": 60,
+    "nameMax": 100,
+    "sizeMax": 80,
+    "labelMax": 40,
+    "categoryMax": 80,
+    "noteMax": 240,
+    "imageUrlMax": 1000,
+    "maxPrice": 1000000,
+    "maxPoints": 10000,
+    "maxChoices": 100
+  },
+  "customRequest": {
+    "budgetMin": 0,
+    "budgetMax": 1000000,
+    "messageMin": 10,
+    "messageMax": 1200
+  },
   "shipping": {
     "providerMax": 80,
     "trackingMax": 120
@@ -50,6 +72,10 @@
     "createOrder": {
       "windowSeconds": 60,
       "max": 8
+    },
+    "customRequest": {
+      "windowSeconds": 900,
+      "max": 5
     },
     "trackOrder": {
       "windowSeconds": 60,
@@ -68,6 +94,10 @@
       "max": 60
     },
     "packingUpload": {
+      "windowSeconds": 60,
+      "max": 20
+    },
+    "catalogUpload": {
       "windowSeconds": 60,
       "max": 20
     },
