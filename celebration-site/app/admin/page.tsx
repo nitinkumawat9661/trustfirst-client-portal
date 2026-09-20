@@ -12,7 +12,7 @@ export default function AdminPage() {
   return (
     <main>
       <TrustStrip />
-      <SiteHeader />
+      <SiteHeader showAccount={false} />
       <section><div className="wrap adminWrap">{authenticated ? <AdminDashboard /> : <AdminLogin />}</div></section>
     </main>
   )
