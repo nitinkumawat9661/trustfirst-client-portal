@@ -18,6 +18,7 @@ export type OrderRecord = {
   pincode: string
   message: string
   selectedProductIds: string[]
+  selectedProductNames: string[]
   packingVideoKey: string | null
   shippingProvider: string | null
   shippingTrackingNumber: string | null
@@ -45,6 +46,7 @@ export type DbOrder = {
   pincode: string
   gift_message: string
   selected_product_ids: string[]
+  selected_product_names: string[]
   packing_video_key: string | null
   shipping_provider: string | null
   shipping_tracking_number: string | null
@@ -73,6 +75,7 @@ export function mapOrder(row: DbOrder): OrderRecord {
     pincode: row.pincode,
     message: row.gift_message,
     selectedProductIds: row.selected_product_ids,
+    selectedProductNames: row.selected_product_names || [],
     packingVideoKey: row.packing_video_key,
     shippingProvider: row.shipping_provider,
     shippingTrackingNumber: row.shipping_tracking_number,
@@ -141,4 +144,4 @@ export const TRACKING_ORDER_SELECT = `public_id, amount_paise, tier_name, requir
 
 export const ORDER_SELECT = `public_id, amount_paise, tier_name, required_date::text, occasion, status, payment_status, payment_reference,
   customer_name, phone, receiver_name, address, city, state, pincode, gift_message,
-  selected_product_ids, packing_video_key, shipping_provider, shipping_tracking_number, issue_type, issue_note, created_at, updated_at`
+  selected_product_ids, selected_product_names, packing_video_key, shipping_provider, shipping_tracking_number, issue_type, issue_note, created_at, updated_at`
