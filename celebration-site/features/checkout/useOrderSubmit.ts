@@ -2,9 +2,9 @@
 
 import { useRef, useState } from "react"
 import { orderConfig } from "../../config/order"
-import { publicEnv } from "../../config/public-env"
 import { errorMessages, storeContent, uiContent } from "../../lib/domain/content"
 import { formatMoney, type Tier } from "../../lib/domain/catalog"
+import { supportWhatsappUrl } from "../../lib/domain/support"
 import type { CheckoutData } from "../builder/types"
 import { routes } from "../../config/routes"
 import { validateCheckoutDetails, validatePaymentReference } from "../builder/validation"
@@ -79,9 +79,9 @@ export function useOrderSubmit() {
         const code = result.error || "UNKNOWN"
         throw new Error(errorMessages[code] || errorMessages.UNKNOWN)
       }
-      const order = { orderId: result.orderId, trackingToken: result.trackingToken, trackingPath: result.trackingPath }
-      setCreated(order)
-      return order
+      const createdOrder = { orderId: result.orderId, trackingToken: result.trackingToken, trackingPath: result.trackingPath }
+      setCreated(createdOrder)
+      return createdOrder
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : errorMessages.UNKNOWN)
       return null
@@ -90,8 +90,7 @@ export function useOrderSubmit() {
     }
   }
 
-  function whatsappUrl(args: SubmitArgs, orderId: string, trackingPath: string) {
-    if (!publicEnv.whatsapp) return ""
+  function whatsappUrl(args: SubmitArgs, orderId: string, trackingPath: string, supportNumber?: string) {
     const labels = uiContent.whatsapp
     const message = [
       `*${storeContent.brand.name} ${labels.titleSuffix}*`,
@@ -107,7 +106,7 @@ export function useOrderSubmit() {
       `${labels.giftMessage}: ${args.checkout.message || uiContent.common.none}`,
       `${labels.tracking}: ${window.location.origin}${trackingPath}`
     ].join("\n")
-    return `https://wa.me/${publicEnv.whatsapp}?text=${encodeURIComponent(message)}`
+    return supportWhatsappUrl(message, supportNumber)
   }
 
   return { submitting, error, created, submit, whatsappUrl }
