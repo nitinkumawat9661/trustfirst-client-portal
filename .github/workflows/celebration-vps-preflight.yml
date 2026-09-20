@@ -1,0 +1,131 @@
+name: Celebration VPS Preflight
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/celebration-vps-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TARGET_DOMAIN: shopcelebration.in
+  EXPECTED_PORT: "3040"
+
+jobs:
+  inspect:
+    name: Read-only Celebration VPS inspection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+
+    steps:
+      - name: Validate SSH configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in VPS_HOST VPS_PORT VPS_USER VPS_SSH_PRIVATE_KEY VPS_KNOWN_HOSTS; do
+            [ -n "${!name:-}" ] || { echo "Missing required value: $name" >&2; exit 1; }
+          done
+
+      - name: Configure verified SSH access
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" | tr -d '\r' > "$HOME/.ssh/celebration_preflight"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/celebration_preflight" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/celebration_preflight" >/dev/null
+          ssh-keygen -F "$VPS_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
+
+      - name: Inspect Celebration runtime without changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -p "$VPS_PORT" \
+            -i "$HOME/.ssh/celebration_preflight" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            bash -s -- "$TARGET_DOMAIN" "$EXPECTED_PORT" <<'REMOTE'
+          set -euo pipefail
+          DOMAIN="$1"
+          PORT="$2"
+
+          echo "=== USER ==="
+          id -un
+
+          echo "=== CELEBRATION PM2 CANDIDATES ==="
+          pm2 jlist | node -e '
+            const fs = require("fs");
+            const list = JSON.parse(fs.readFileSync(0, "utf8"));
+            const rows = list
+              .map((item) => {
+                const env = item.pm2_env || {};
+                return {
+                  name: String(item.name || env.name || ""),
+                  status: String(env.status || ""),
+                  cwd: String(env.pm_cwd || ""),
+                  script: String(env.pm_exec_path || env.script || ""),
+                  args: Array.isArray(env.args) ? env.args.join(" ") : String(env.args || "")
+                };
+              })
+              .filter((row) => /celebration/i.test(`${row.name} ${row.cwd} ${row.script} ${row.args}`));
+            if (!rows.length) {
+              console.log("NO_CELEBRATION_PM2_MATCH");
+              process.exit(0);
+            }
+            for (const row of rows) {
+              console.log(`NAME=${row.name}`);
+              console.log(`STATUS=${row.status}`);
+              console.log(`CWD=${row.cwd}`);
+              console.log(`SCRIPT=${row.script}`);
+              console.log(`ARGS=${row.args}`);
+              console.log("---");
+            }
+          '
+
+          echo "=== PORT ${PORT} ==="
+          ss -ltnp 2>/dev/null | grep -E "[:.]${PORT}[[:space:]]" || true
+
+          echo "=== /var/www CELEBRATION PATHS ==="
+          find /var/www -maxdepth 2 -type d -iname '*celebration*' -print 2>/dev/null | sort || true
+
+          echo "=== NGINX DOMAIN MAPPING ==="
+          if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+            sudo nginx -T 2>/dev/null | awk -v domain="$DOMAIN" '
+              BEGIN { keep=0; depth=0 }
+              /server[[:space:]]*\{/ { block=$0; depth=1; keep=0; next }
+              depth>0 {
+                block=block "\n" $0
+                opens=gsub(/\{/,"{"); closes=gsub(/\}/,"}"); depth+=opens-closes
+                if ($0 ~ "server_name" && $0 ~ domain) keep=1
+                if (depth<=0) {
+                  if (keep) {
+                    print block | "grep -E \\\"server_name|proxy_pass|listen|root\\\""
+                    close("grep -E \\\"server_name|proxy_pass|listen|root\\\"")
+                  }
+                  block=""; depth=0; keep=0
+                }
+              }
+            ' || true
+          else
+            grep -R -n -E "server_name[[:space:]].*${DOMAIN}|proxy_pass[[:space:]].*3040" /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true
+          fi
+
+          echo "=== LOOPBACK HEALTH ==="
+          curl --silent --show-error --fail --max-time 5 "http://127.0.0.1:${PORT}/api/health" || true
+          echo
+          REMOTE
