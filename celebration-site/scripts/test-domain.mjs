@@ -39,7 +39,6 @@ await compileTree(join(root, "lib", "validation"))
 await compileTree(join(root, "config"))
 await cp(join(root, "content"), join(out, "content"), { recursive: true })
 await cp(join(root, "config"), join(out, "config-json"), { recursive: true })
-// Compiled config modules expect their JSON siblings beside them.
 for (const entry of await readdir(join(root, "config"))) {
   if (entry.endsWith(".json")) await cp(join(root, "config", entry), join(out, "config", entry))
 }
@@ -48,16 +47,17 @@ const require = createRequire(import.meta.url)
 const catalog = require(join(out, "lib", "domain", "catalog.js"))
 const order = require(join(out, "lib", "domain", "order.js"))
 const orderConfig = require(join(out, "config", "order.js")).orderConfig
+const fixtureCatalog = catalog.defaultCatalog
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-const lowTier = catalog.tierById("t299")
-const premium = catalog.productById("premium-perfume")
+const lowTier = catalog.tierById(fixtureCatalog, "t299")
+const premium = catalog.productById(fixtureCatalog, "premium-perfume")
 assert(lowTier && premium, "Fixture data missing")
-assert(catalog.canSelectProduct(lowTier, [], premium).ok === false, "Low tier allowed premium product")
-assert(catalog.normalizeSelection(lowTier, ["custom-card", "chocolates", "premium-perfume"]).length <= lowTier.maxChoices, "Selection normalization failed")
+assert(catalog.canSelectProduct(fixtureCatalog, lowTier, [], premium).ok === false, "Low tier allowed premium product")
+assert(catalog.normalizeSelection(fixtureCatalog, lowTier, ["custom-card", "chocolates", "premium-perfume"]).length <= lowTier.maxChoices, "Selection normalization failed")
 
 const future = new Date(Date.now() + 7 * 86400000)
 const requiredDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(future)
@@ -79,12 +79,12 @@ const valid = {
   policyAccepted: true,
   idempotencyKey: "123e4567-e89b-42d3-a456-426614174000"
 }
-const normalized = order.normalizeOrderInput(valid, "Asia/Kolkata")
+const normalized = order.normalizeOrderInput(valid, "Asia/Kolkata", fixtureCatalog)
 assert(normalized.amountPaise === 49900, "Server amount was not derived from tier")
 assert(normalized.phone === "9876543210", "Phone normalization failed")
 
 const expectCode = (changes, code) => {
-  try { order.normalizeOrderInput({ ...valid, ...changes }, "Asia/Kolkata") }
+  try { order.normalizeOrderInput({ ...valid, ...changes }, "Asia/Kolkata", fixtureCatalog) }
   catch (error) { if (error?.code === code) return }
   throw new Error(`Expected ${code}`)
 }
