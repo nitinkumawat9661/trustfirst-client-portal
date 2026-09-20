@@ -38,7 +38,7 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
         <div className="builderCard">
           {state.step === 1 && <BudgetStep tierId={state.tierId} occasion={state.checkout.occasion} tiers={state.tiers} occasions={state.occasions} onTier={state.selectTier} onOccasion={(value) => state.updateField("occasion", value)} onNext={() => state.setStep(2)} />}
           {state.step === 2 && <ProductStep catalog={state.catalog} tier={state.tier} products={state.filteredProducts} categories={state.categories} category={state.category} search={state.search} selected={state.selected} pointsUsed={state.pointsUsed} onCategory={state.setCategory} onSearch={state.setSearch} onToggle={state.toggleProduct} onBack={() => state.setStep(1)} onNext={() => state.setStep(3)} />}
-          {state.step === 3 && <DetailsStep tier={state.tier} checkout={state.checkout} selectedNames={state.selectedNames} error={state.detailsError} updateField={state.updateField} onBack={() => state.goToStep(2)} onNext={state.goToPayment} />}
+          {state.step === 3 && <DetailsStep tier={state.tier} checkout={state.checkout} selectedNames={state.selectedNames} occasions={state.occasions} error={state.detailsError} updateField={state.updateField} onBack={() => state.goToStep(2)} onNext={state.goToPayment} />}
           {state.step === 4 && <PaymentStep tier={state.tier} checkout={state.checkout} selectedNames={state.selectedNames} accepted={state.accepted} submitting={order.submitting} error={order.error} created={order.created} onAccepted={state.setAccepted} onReference={(value) => state.updateField("paymentReference", value)} onBack={() => state.goToStep(3)} onSubmit={submit} onWhatsapp={openWhatsapp} />}
         </div>
       </div>
