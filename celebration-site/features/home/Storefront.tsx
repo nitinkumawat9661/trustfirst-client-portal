@@ -5,6 +5,7 @@ import { OccasionRail } from "../catalog/OccasionRail"
 import { ProductSection } from "../catalog/ProductSection"
 import { HamperBuilder } from "../builder/HamperBuilder"
 import { useHamperBuilder } from "../builder/useHamperBuilder"
+import { CustomRequestSection } from "./CustomRequestSection"
 import { FinalCta } from "./FinalCta"
 import { Hero } from "./Hero"
 import { PromiseSection } from "./PromiseSection"
@@ -27,9 +28,10 @@ export function Storefront() {
       <TrustStrip />
       <SiteHeader onCreate={() => goBuilder(1)} />
       <Hero onBuild={() => goBuilder(1)} />
-      <OccasionRail value={state.checkout.occasion} onChange={(value) => { state.updateField("occasion", value); goBuilder(3) }} />
-      <BudgetSection selectedTierId={state.tierId} onSelect={pickTier} />
-      <ProductSection category={state.category} onCategory={state.setCategory} />
+      <OccasionRail value={state.checkout.occasion} occasions={state.occasions} onChange={(value) => { state.updateField("occasion", value); goBuilder(3) }} />
+      <BudgetSection tiers={state.tiers} selectedTierId={state.tierId} onSelect={pickTier} />
+      <ProductSection products={state.products} categories={state.categories} allCategoryId={state.catalog.settings.allCategory.id} category={state.category} onCategory={state.setCategory} />
+      <CustomRequestSection />
       <HamperBuilder state={state} />
       <PromiseSection />
       <FinalCta onBuild={() => goBuilder(1)} />
