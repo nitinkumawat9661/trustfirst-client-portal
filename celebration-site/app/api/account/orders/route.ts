@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
-import { getCustomerSession } from "../../../../../lib/security/customer-session"
-import { listCustomerOrders } from "../../../../../lib/server/customer-accounts"
-import { getCatalogConfig } from "../../../../../lib/server/catalog"
-import { productById } from "../../../../../lib/domain/catalog"
-import { createPackingVideoViewUrl } from "../../../../../lib/server/r2"
+import { getCustomerSession } from "../../../../lib/security/customer-session"
+import { listCustomerOrders } from "../../../../lib/server/customer-accounts"
+import { getCatalogConfig } from "../../../../lib/server/catalog"
+import { productById } from "../../../../lib/domain/catalog"
+import { createPackingVideoViewUrl } from "../../../../lib/server/r2"
 
 export const dynamic = "force-dynamic"
 
