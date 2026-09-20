@@ -8,7 +8,7 @@ export const adminOrderFilters = adminOrdersConfig.filters
 export const defaultAdminOrderFilter = adminOrdersConfig.defaultFilter
 
 function searchableText(order: AdminOrder) {
-  const productNames = order.selectedProductIds.map((id) => productById(id)?.name || id)
+  const productNames = order.selectedProductNames?.length ? order.selectedProductNames : order.selectedProductIds.map((id) => productById(id)?.name || id)
   return [
     order.publicId,
     order.customerName,
