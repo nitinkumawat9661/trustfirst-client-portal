@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { CUSTOMER_COOKIE_NAME, customerCookieOptions } from "../../../../../lib/security/customer-session"
-import { enforceSameOrigin, RequestSecurityError } from "../../../../../lib/security/request"
+import { CUSTOMER_COOKIE_NAME, customerCookieOptions } from "../../../../lib/security/customer-session"
+import { enforceSameOrigin, RequestSecurityError } from "../../../../lib/security/request"
 
 export async function POST(request: Request) {
   try {
