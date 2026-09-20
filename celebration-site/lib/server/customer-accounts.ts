@@ -23,6 +23,7 @@ export type CustomerOrderSummary = {
   amountPaise: number
   tierName: string
   selectedProductIds: string[]
+  selectedProductNames: string[]
   requiredDate: string
   occasion: string
   status: OrderStatus
@@ -50,6 +51,7 @@ type OrderRow = {
   amount_paise: number
   tier_name: string
   selected_product_ids: string[]
+  selected_product_names: string[]
   required_date: string
   occasion: string
   status: OrderStatus
@@ -140,7 +142,7 @@ export async function findCustomerAccountById(id: string) {
 export async function listCustomerOrders(accountId: string, limit = 50): Promise<CustomerOrderSummary[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 100)
   const result = await query<OrderRow>(
-    `SELECT public_id, amount_paise, tier_name, selected_product_ids, required_date::text, occasion, status,
+    `SELECT public_id, amount_paise, tier_name, selected_product_ids, selected_product_names, required_date::text, occasion, status,
             payment_status, receiver_name, packing_video_key, shipping_provider, shipping_tracking_number,
             customer_approved_at, created_at, updated_at
        FROM orders
@@ -154,6 +156,7 @@ export async function listCustomerOrders(accountId: string, limit = 50): Promise
     amountPaise: row.amount_paise,
     tierName: row.tier_name,
     selectedProductIds: row.selected_product_ids,
+    selectedProductNames: row.selected_product_names || [],
     requiredDate: row.required_date,
     occasion: row.occasion,
     status: row.status,
