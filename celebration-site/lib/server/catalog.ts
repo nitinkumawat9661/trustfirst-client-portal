@@ -1,9 +1,10 @@
 import { validation } from "../../config/validation"
 import { defaultCatalog, type CatalogConfig, type GiftProduct, type Tier } from "../domain/catalog"
 import { hasUnsafeText, sanitizeText } from "../validation/text"
-import { query } from "./db"
+import { query, transaction } from "./db"
 
 type CatalogRow = { payload: CatalogConfig; version: number }
+type RevisionRow = { id: string; version: number; payload: CatalogConfig; created_at: Date }
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/
 
@@ -122,6 +123,10 @@ export function normalizeCatalogConfig(input: unknown): CatalogConfig {
   }
 }
 
+async function recordRevision(version: number, catalog: CatalogConfig) {
+  await query(`INSERT INTO catalog_revisions (version, payload) VALUES ($1, $2::jsonb)`, [version, JSON.stringify(catalog)])
+}
+
 export async function getCatalogConfig() {
   const result = await query<CatalogRow>("SELECT payload, version FROM catalog_config WHERE id = 'primary'")
   const row = result.rows[0]
@@ -135,7 +140,10 @@ export async function getCatalogConfig() {
      RETURNING payload, version`,
     [JSON.stringify(seed)]
   )
-  if (inserted.rows[0]) return { catalog: normalizeCatalogConfig(inserted.rows[0].payload), version: inserted.rows[0].version }
+  if (inserted.rows[0]) {
+    await recordRevision(inserted.rows[0].version, seed)
+    return { catalog: seed, version: inserted.rows[0].version }
+  }
 
   const concurrent = await query<CatalogRow>("SELECT payload, version FROM catalog_config WHERE id = 'primary'")
   if (!concurrent.rows[0]) throw new Error("CATALOG_SEED_FAILED")
@@ -144,15 +152,54 @@ export async function getCatalogConfig() {
 
 export async function saveCatalogConfig(input: unknown) {
   const catalog = normalizeCatalogConfig(input)
-  const result = await query<CatalogRow>(
-    `INSERT INTO catalog_config (id, payload, version, updated_at)
-     VALUES ('primary', $1::jsonb, 1, now())
-     ON CONFLICT (id) DO UPDATE SET
-       payload = EXCLUDED.payload,
-       version = catalog_config.version + 1,
-       updated_at = now()
-     RETURNING payload, version`,
-    [JSON.stringify(catalog)]
+  return transaction(async (client) => {
+    const result = await client.query<CatalogRow>(
+      `INSERT INTO catalog_config (id, payload, version, updated_at)
+       VALUES ('primary', $1::jsonb, 1, now())
+       ON CONFLICT (id) DO UPDATE SET
+         payload = EXCLUDED.payload,
+         version = catalog_config.version + 1,
+         updated_at = now()
+       RETURNING payload, version`,
+      [JSON.stringify(catalog)]
+    )
+    const saved = normalizeCatalogConfig(result.rows[0].payload)
+    await client.query(`INSERT INTO catalog_revisions (version, payload) VALUES ($1, $2::jsonb)`, [result.rows[0].version, JSON.stringify(saved)])
+    return { catalog: saved, version: result.rows[0].version }
+  })
+}
+
+export async function listCatalogRevisions(limit = 25) {
+  const safeLimit = Math.min(Math.max(limit, 1), 100)
+  const result = await query<RevisionRow>(
+    `SELECT id::text, version, payload, created_at FROM catalog_revisions ORDER BY id DESC LIMIT $1`,
+    [safeLimit]
   )
-  return { catalog: normalizeCatalogConfig(result.rows[0].payload), version: result.rows[0].version }
+  return result.rows.map((row) => {
+    const catalog = normalizeCatalogConfig(row.payload)
+    return {
+      id: row.id,
+      version: row.version,
+      createdAt: row.created_at.toISOString(),
+      tiers: catalog.tiers.length,
+      products: catalog.products.length,
+      occasions: catalog.occasions.length
+    }
+  })
+}
+
+export async function rollbackCatalogRevision(revisionId: string) {
+  if (!/^\d+$/.test(revisionId)) throw new CatalogValidationError("INVALID_REVISION")
+  return transaction(async (client) => {
+    const source = await client.query<RevisionRow>(`SELECT id::text, version, payload, created_at FROM catalog_revisions WHERE id = $1 LIMIT 1`, [revisionId])
+    if (!source.rows[0]) throw new CatalogValidationError("REVISION_NOT_FOUND")
+    const catalog = normalizeCatalogConfig(source.rows[0].payload)
+    const saved = await client.query<CatalogRow>(
+      `UPDATE catalog_config SET payload = $1::jsonb, version = version + 1, updated_at = now() WHERE id = 'primary' RETURNING payload, version`,
+      [JSON.stringify(catalog)]
+    )
+    if (!saved.rows[0]) throw new Error("CATALOG_NOT_INITIALIZED")
+    await client.query(`INSERT INTO catalog_revisions (version, payload) VALUES ($1, $2::jsonb)`, [saved.rows[0].version, JSON.stringify(catalog)])
+    return { catalog, version: saved.rows[0].version, restoredFromVersion: source.rows[0].version }
+  })
 }
