@@ -1,4 +1,4 @@
-import { canSelectProduct, formatMoney, type CategoryOption, type GiftProduct, type SelectionRule, type Tier } from "../../../lib/domain/catalog"
+import { canSelectProduct, formatMoney, type CatalogConfig, type CategoryOption, type GiftProduct, type SelectionRule, type Tier } from "../../../lib/domain/catalog"
 import { uiContent } from "../../../lib/domain/content"
 
 function ruleMessage(rule: SelectionRule, copy: typeof uiContent.builder.products) {
@@ -8,20 +8,13 @@ function ruleMessage(rule: SelectionRule, copy: typeof uiContent.builder.product
   return ""
 }
 
-export function ProductStep({
-  tier,
-  products,
-  categories,
-  category,
-  search,
-  selected,
-  pointsUsed,
-  onCategory,
-  onSearch,
-  onToggle,
-  onBack,
-  onNext
-}: {
+function ProductVisual({ product }: { product: GiftProduct }) {
+  if (product.imageUrl) return <img className="catalogProductImage" src={product.imageUrl} alt="" loading="lazy" />
+  return <span className="pickIcon">{product.icon || "🎁"}</span>
+}
+
+export function ProductStep({ catalog, tier, products, categories, category, search, selected, pointsUsed, onCategory, onSearch, onToggle, onBack, onNext }: {
+  catalog: CatalogConfig
   tier: Tier
   products: GiftProduct[]
   categories: CategoryOption[]
@@ -46,11 +39,11 @@ export function ProductStep({
       <div className="pickGrid">
         {products.map((product) => {
           const selectedNow = selected.includes(product.id)
-          const rule = canSelectProduct(tier, selected, product)
+          const rule = canSelectProduct(catalog, tier, selected, product)
           const disabled = !selectedNow && !rule.ok
           return (
             <button key={product.id} className={`pick ${selectedNow ? "active" : ""} ${disabled ? "locked" : ""}`} disabled={disabled} onClick={() => onToggle(product.id)}>
-              <span className="pickIcon">{product.icon}</span>
+              <ProductVisual product={product} />
               <div className="pickCopy"><b>{product.name}</b><small>{product.category}{uiContent.common.separator}{product.points} {product.points === 1 ? copy.pointSingular : copy.pointPlural}</small>{disabled && <em>{ruleMessage(rule, copy)}</em>}</div>
               <span className="check">{selectedNow ? copy.selected : disabled ? copy.locked : copy.add}</span>
             </button>
