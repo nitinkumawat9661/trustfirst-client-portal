@@ -1,9 +1,9 @@
 "use client"
 
-import { formatMoney, tiers } from "../../lib/domain/catalog"
+import { formatMoney, type Tier } from "../../lib/domain/catalog"
 import { uiContent } from "../../lib/domain/content"
 
-export function BudgetSection({ selectedTierId, onSelect }: { selectedTierId: string; onSelect: (id: string) => void }) {
+export function BudgetSection({ tiers, selectedTierId, onSelect }: { tiers: Tier[]; selectedTierId: string; onSelect: (id: string) => void }) {
   return (
     <section id="budgets">
       <div className="wrap">
