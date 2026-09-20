@@ -21,7 +21,7 @@ export async function PATCH(request: Request) {
     enforceSameOrigin(request)
     const allowed = await consumeRequestRateLimit("admin-catalog", request, validation.rateLimits.adminMutation)
     if (!allowed) return NextResponse.json({ ok: false, error: "RATE_LIMITED" }, { status: 429 })
-    const body = await readJsonBody<{ catalog?: unknown }>(request)
+    const body = await readJsonBody<{ catalog?: unknown }>(request, validation.catalogRequestMaxBytes)
     return NextResponse.json({ ok: true, ...(await saveCatalogConfig(body.catalog)) })
   } catch (error) {
     if (error instanceof CatalogValidationError) return NextResponse.json({ ok: false, error: error.code }, { status: 422 })
