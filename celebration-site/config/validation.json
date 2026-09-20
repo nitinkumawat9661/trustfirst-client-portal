@@ -9,6 +9,11 @@
     "minDigits": 10,
     "maxDigits": 13
   },
+  "customerAccount": {
+    "passwordMin": 8,
+    "passwordMax": 72,
+    "displayNameMax": 80
+  },
   "address": {
     "min": 8,
     "max": 500
@@ -28,6 +33,7 @@
   },
   "trackingTokenTtlSeconds": 3888000,
   "adminSessionTtlSeconds": 43200,
+  "customerSessionTtlSeconds": 2592000,
   "packingVideoMaxBytes": 83886080,
   "catalogImageMaxBytes": 5242880,
   "trackingToken": {
@@ -60,6 +66,11 @@
     "messageMin": 10,
     "messageMax": 1200
   },
+  "storeSettings": {
+    "whatsappMax": 15,
+    "shortTextMax": 160,
+    "messageMax": 500
+  },
   "shipping": {
     "providerMax": 80,
     "trackingMax": 120
@@ -74,6 +85,18 @@
       "windowSeconds": 60,
       "max": 8
     },
+    "customerSignup": {
+      "windowSeconds": 900,
+      "max": 5
+    },
+    "customerLogin": {
+      "windowSeconds": 900,
+      "max": 10
+    },
+    "customerMutation": {
+      "windowSeconds": 60,
+      "max": 12
+    },
     "customRequest": {
       "windowSeconds": 900,
       "max": 5
@@ -81,10 +104,6 @@
     "trackOrder": {
       "windowSeconds": 60,
       "max": 30
-    },
-    "customerMutation": {
-      "windowSeconds": 60,
-      "max": 12
     },
     "adminLogin": {
       "windowSeconds": 900,
