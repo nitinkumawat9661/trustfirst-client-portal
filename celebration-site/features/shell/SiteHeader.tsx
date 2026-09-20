@@ -1,23 +1,31 @@
 import Link from "next/link"
 import { routes } from "../../config/routes"
 import { storeContent, uiContent } from "../../lib/domain/content"
+import { supportWhatsappUrl } from "../../lib/domain/support"
 
-export function SiteHeader({ onCreate }: { onCreate?: () => void }) {
+export function SiteHeader({ onCreate, showAccount = true }: { onCreate?: () => void; showAccount?: boolean }) {
   return (
-    <header className="nav">
-      <div className="wrap navin">
-        <Link href={routes.home} className="brand policyBrand" aria-label={storeContent.brand.name}>
-          <div className="logo">{storeContent.brand.name}</div>
-          <div className="tag">{storeContent.brand.tagline}</div>
-        </Link>
-        <nav className="links">
-          <a href={`${routes.home}#budgets`}>{uiContent.nav.budgets}</a>
-          <a href={`${routes.home}#products`}>{uiContent.nav.products}</a>
-          <a href={`${routes.home}#builder`}>{uiContent.nav.builder}</a>
-          <a href={`${routes.home}#trust`}>{uiContent.nav.promise}</a>
-        </nav>
-        {onCreate ? <button className="primary navCta" onClick={onCreate}>{uiContent.nav.create}</button> : <Link className="secondary" href={routes.home}>{uiContent.nav.backToStore}</Link>}
-      </div>
-    </header>
+    <>
+      <header className="nav">
+        <div className="wrap navin">
+          <Link href={routes.home} className="brand policyBrand" aria-label={storeContent.brand.name}>
+            <div className="logo">{storeContent.brand.name}</div>
+            <div className="tag">{storeContent.brand.tagline}</div>
+          </Link>
+          <nav className="links">
+            <a href={`${routes.home}#budgets`}>{uiContent.nav.budgets}</a>
+            <a href={`${routes.home}#products`}>{uiContent.nav.products}</a>
+            <a href={`${routes.home}#builder`}>{uiContent.nav.builder}</a>
+            <a href={`${routes.home}#trust`}>{uiContent.nav.promise}</a>
+          </nav>
+          <div className="navAccountActions">
+            {showAccount && <Link className="navAccountLink" href={routes.account} aria-label="My Celebration dashboard"><span>♡</span><b>My Celebration</b></Link>}
+            {onCreate ? <button className="primary navCta" onClick={onCreate}>{uiContent.nav.create}</button> : <Link className="secondary navStoreLink" href={routes.home}>{uiContent.nav.backToStore}</Link>}
+          </div>
+        </div>
+        {showAccount && <div className="assistBar"><div className="wrap assistBarInner"><span><b>Apne budget me dekh rahe ho?</b> Budget batao, hamper hum curate kar denge.</span><div><a href={`${routes.home}#custom-request`}>Budget request</a><a href={supportWhatsappUrl()} target="_blank" rel="noreferrer">WhatsApp</a></div></div></div>}
+      </header>
+      {showAccount && <a className="whatsappDock" href={supportWhatsappUrl()} target="_blank" rel="noreferrer" aria-label="Celebration WhatsApp support"><span>WA</span><b>Help chahiye?</b></a>}
+    </>
   )
 }
