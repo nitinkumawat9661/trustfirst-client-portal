@@ -1,9 +1,11 @@
-import { formatMoney, occasions, tiers } from "../../../lib/domain/catalog"
+import { formatMoney, type Tier } from "../../../lib/domain/catalog"
 import { uiContent } from "../../../lib/domain/content"
 
-export function BudgetStep({ tierId, occasion, onTier, onOccasion, onNext }: {
+export function BudgetStep({ tierId, occasion, tiers, occasions, onTier, onOccasion, onNext }: {
   tierId: string
   occasion: string
+  tiers: Tier[]
+  occasions: string[]
   onTier: (id: string) => void
   onOccasion: (value: string) => void
   onNext: () => void
