@@ -1,0 +1,12 @@
+{
+  "payment_verification_pending": "Payment verification pending",
+  "payment_verified": "Payment verified",
+  "preparing": "Preparing hamper",
+  "packing_video_ready": "Packing video ready",
+  "customer_approved": "Approved for dispatch",
+  "shipped": "Shipped",
+  "delivered": "Delivered",
+  "issue_reported": "Issue reported",
+  "refund_or_replacement_resolved": "Refund / replacement resolved",
+  "cancelled": "Cancelled"
+}
