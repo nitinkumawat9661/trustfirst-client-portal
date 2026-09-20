@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS customer_accounts (
 ALTER TABLE orders
   ADD COLUMN IF NOT EXISTS customer_account_id text REFERENCES customer_accounts(id) ON DELETE SET NULL;
 
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS selected_product_names text[] NOT NULL DEFAULT '{}';
+
 CREATE INDEX IF NOT EXISTS orders_customer_account_created_idx
   ON orders (customer_account_id, created_at DESC)
   WHERE customer_account_id IS NOT NULL;
