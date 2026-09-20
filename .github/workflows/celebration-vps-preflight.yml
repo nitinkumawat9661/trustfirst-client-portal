@@ -107,4 +107,19 @@ jobs:
           echo "=== LOOPBACK HEALTH ==="
           curl --silent --show-error --fail --max-time 5 "http://127.0.0.1:${PORT}/api/health"
           echo
+
+          echo "=== RUNTIME CATALOG ==="
+          CATALOG="$(curl --silent --show-error --fail --max-time 8 "http://127.0.0.1:${PORT}/api/catalog")"
+          printf '%s\n' "$CATALOG" | node -e '
+            const fs = require("fs");
+            const value = JSON.parse(fs.readFileSync(0, "utf8"));
+            if (value.ok !== true || !value.catalog || !Array.isArray(value.catalog.tiers) || !Array.isArray(value.catalog.products)) process.exit(1);
+            if (value.catalog.tiers.length < 1) process.exit(1);
+            console.log(JSON.stringify({ok: value.ok, version: value.version, tiers: value.catalog.tiers.length, products: value.catalog.products.length, occasions: value.catalog.occasions?.length || 0}));
+          '
+
+          echo "=== ADMIN CATALOG AUTH BOUNDARY ==="
+          STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "http://127.0.0.1:${PORT}/api/admin/catalog")"
+          test "$STATUS" = "401"
+          printf 'UNAUTHENTICATED_ADMIN_CATALOG_STATUS=%s\n' "$STATUS"
           REMOTE
