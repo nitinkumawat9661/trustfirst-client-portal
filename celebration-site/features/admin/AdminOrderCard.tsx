@@ -19,7 +19,7 @@ export function AdminOrderCard({ order, busy, onStatus, onShipping, onVideo }: {
   const copy = uiContent.admin
   const next = adminAllowedTransitions(order.status)
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | "">("")
-  const productNames = order.selectedProductIds.map((id) => productById(id)?.name || id)
+  const productNames = order.selectedProductNames?.length ? order.selectedProductNames : order.selectedProductIds.map((id) => productById(id)?.name || id)
 
   useEffect(() => { setSelectedStatus("") }, [order.status])
 
