@@ -1,6 +1,7 @@
 "use client"
 
 import { FormEvent, useState } from "react"
+import { supportWhatsappUrl } from "../../lib/domain/support"
 
 export function CustomRequestSection() {
   const [customerName, setCustomerName] = useState("")
@@ -24,14 +25,14 @@ export function CustomRequestSection() {
       })
       const data = await response.json() as { ok?: boolean; error?: string }
       if (!response.ok || !data.ok) throw new Error(data.error || "REQUEST_FAILED")
-      setNotice("Request received. We can review your budget and requirements before you place an order.")
+      setNotice("Request mil gayi. Team budget aur requirement dekhkar aapse contact karegi.")
       setCustomerName("")
       setPhone("")
       setBudget("")
       setMessage("")
     } catch (caught) {
       const code = caught instanceof Error ? caught.message : "REQUEST_FAILED"
-      setError(code === "RATE_LIMITED" ? "Too many requests. Please try again later." : "Could not submit your request. Check the details and try again.")
+      setError(code === "RATE_LIMITED" ? "Bahut requests ho gayi hain. Thodi der baad try karein." : "Request send nahi hui. Details check karke dobara try karein.")
     } finally {
       setBusy(false)
     }
@@ -41,20 +42,20 @@ export function CustomRequestSection() {
     <section className="customRequestSection" id="custom-request">
       <div className="wrap">
         <div className="centerHead">
-          <div className="kicker">CUSTOM BUDGET</div>
-          <h2>Want something different?</h2>
-          <p>Tell us your budget and what you want inside the hamper. This is a request, not an automatic order or payment.</p>
+          <div className="kicker">APNA BUDGET • APNI CHOICE</div>
+          <h2>Budget fixed hai? Aap batao, hamper hum plan kar denge.</h2>
+          <p>Exact listed hamper fit nahi ho raha? Budget, occasion aur kya-kya chahiye likh do. Team manually best mix suggest karegi. Ye request hai, automatic order ya payment nahi.</p>
         </div>
         <form className="customRequestCard" onSubmit={submit}>
           <div className="customRequestGrid">
-            <label>Name<input required minLength={2} maxLength={80} value={customerName} onChange={(event) => setCustomerName(event.target.value)} autoComplete="name" /></label>
-            <label>Phone<input required inputMode="numeric" minLength={10} maxLength={13} value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, ""))} autoComplete="tel" /></label>
-            <label>Budget (₹)<input required type="number" min={0} max={1000000} step={1} value={budget} onChange={(event) => setBudget(event.target.value)} /></label>
+            <label>Aapka naam<input required minLength={2} maxLength={80} value={customerName} onChange={(event) => setCustomerName(event.target.value)} autoComplete="name" /></label>
+            <label>Mobile / WhatsApp<input required inputMode="numeric" minLength={10} maxLength={13} value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, ""))} autoComplete="tel" /></label>
+            <label>Aapka budget (₹)<input required type="number" min={0} max={1000000} step={1} value={budget} onChange={(event) => setBudget(event.target.value)} /></label>
           </div>
-          <label>What should we make?<textarea required minLength={10} maxLength={1200} rows={5} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Example: ₹1200 budget, birthday hamper, blue theme, chocolates, mug and one photo item. Avoid perfume." /></label>
+          <label>Kaisa hamper chahiye?<textarea required minLength={10} maxLength={1200} rows={5} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Example: ₹1200 budget, birthday, blue theme, chocolates + mug + photo item; perfume nahi chahiye." /></label>
           <div className="customRequestFooter">
-            <span className="tiny">No HTML/script input is accepted. Final price and availability are confirmed manually.</span>
-            <button className="primary" disabled={busy}>{busy ? "Sending…" : "Send request"}</button>
+            <span className="tiny">Final price, stock aur delivery feasibility team confirm karegi.</span>
+            <div className="customRequestActions"><a className="secondary" href={supportWhatsappUrl("Hi Celebration, mujhe apne budget me custom hamper banwana hai.")} target="_blank" rel="noreferrer">WhatsApp par pucho</a><button className="primary" disabled={busy}>{busy ? "Sending…" : "Budget request bhejo"}</button></div>
           </div>
           {notice && <div className="successBox">{notice}</div>}
           {error && <div className="errorBox">{error}</div>}
