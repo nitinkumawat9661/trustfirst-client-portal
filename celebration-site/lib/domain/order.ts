@@ -30,6 +30,7 @@ export type NormalizedOrder = {
   amountPaise: number
   tierName: string
   selectedProductIds: string[]
+  selectedProductNames: string[]
   requiredDate: string
   customerName: string
   phone: string
@@ -113,6 +114,7 @@ export function normalizeOrderInput(input: CreateOrderInput, timezone: string, c
     amountPaise: toMinorUnits(tier.price),
     tierName: tier.name,
     selectedProductIds: ids,
+    selectedProductNames: selectedProducts.map((product) => product!.name),
     requiredDate,
     customerName,
     phone,
