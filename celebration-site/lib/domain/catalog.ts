@@ -9,6 +9,7 @@ export type Tier = {
   maxChoices: number
   pointBudget: number
   label?: string
+  active?: boolean
 }
 
 export type GiftProduct = {
@@ -18,14 +19,16 @@ export type GiftProduct = {
   minTier: number
   points: number
   note: string
-  icon: string
+  icon?: string
+  imageUrl?: string
+  active?: boolean
 }
 
 export type CategoryOption = { id: string; label: string }
 export type SelectionRuleReason = "minTier" | "maxChoices" | "pointBudget" | null
 export type SelectionRule = { ok: boolean; reason: SelectionRuleReason; value?: number }
 
-type CatalogFile = {
+export type CatalogConfig = {
   settings: {
     defaultTierId: string
     defaultOccasion: string
@@ -36,43 +39,49 @@ type CatalogFile = {
   occasions: string[]
 }
 
-const catalog = rawCatalog as CatalogFile
+export const defaultCatalog = rawCatalog as CatalogConfig
 
-export const catalogSettings = catalog.settings
-export const tiers = catalog.tiers
-export const products = catalog.products
-export const occasions = catalog.occasions
-export const categories: CategoryOption[] = [
-  catalogSettings.allCategory,
-  ...Array.from(new Set(products.map((item) => item.category))).map((label) => ({ id: label, label }))
-]
-
-export function tierById(id: string) {
-  return tiers.find((item) => item.id === id)
+export function visibleTiers(catalog: CatalogConfig) {
+  return catalog.tiers.filter((item) => item.active !== false)
 }
 
-export function productById(id: string) {
-  return products.find((item) => item.id === id)
+export function visibleProducts(catalog: CatalogConfig) {
+  return catalog.products.filter((item) => item.active !== false)
 }
 
-export function selectedPoints(ids: string[]) {
-  return ids.reduce((total, id) => total + (productById(id)?.points ?? 0), 0)
+export function categoriesForCatalog(catalog: CatalogConfig): CategoryOption[] {
+  return [
+    catalog.settings.allCategory,
+    ...Array.from(new Set(visibleProducts(catalog).map((item) => item.category))).map((label) => ({ id: label, label }))
+  ]
 }
 
-export function canSelectProduct(tier: Tier, selectedIds: string[], product: GiftProduct): SelectionRule {
+export function tierById(catalog: CatalogConfig, id: string) {
+  return visibleTiers(catalog).find((item) => item.id === id)
+}
+
+export function productById(catalog: CatalogConfig, id: string) {
+  return visibleProducts(catalog).find((item) => item.id === id)
+}
+
+export function selectedPoints(catalog: CatalogConfig, ids: string[]) {
+  return ids.reduce((total, id) => total + (productById(catalog, id)?.points ?? 0), 0)
+}
+
+export function canSelectProduct(catalog: CatalogConfig, tier: Tier, selectedIds: string[], product: GiftProduct): SelectionRule {
   if (product.minTier > tier.price) return { ok: false, reason: "minTier", value: product.minTier }
   if (selectedIds.includes(product.id)) return { ok: true, reason: null }
   if (selectedIds.length >= tier.maxChoices) return { ok: false, reason: "maxChoices", value: tier.maxChoices }
-  if (selectedPoints(selectedIds) + product.points > tier.pointBudget) return { ok: false, reason: "pointBudget" }
+  if (selectedPoints(catalog, selectedIds) + product.points > tier.pointBudget) return { ok: false, reason: "pointBudget" }
   return { ok: true, reason: null }
 }
 
-export function normalizeSelection(tier: Tier, ids: string[]) {
+export function normalizeSelection(catalog: CatalogConfig, tier: Tier, ids: string[]) {
   const kept: string[] = []
   for (const id of ids) {
-    const product = productById(id)
+    const product = productById(catalog, id)
     if (!product) continue
-    if (canSelectProduct(tier, kept, product).ok) kept.push(id)
+    if (canSelectProduct(catalog, tier, kept, product).ok) kept.push(id)
   }
   return kept
 }
