@@ -15,6 +15,7 @@ export const routes = {
     customerLogout: "/api/account/logout",
     customerMe: "/api/account/me",
     customerOrders: "/api/account/orders",
+    customerOrderApprove: (publicId: string) => `/api/account/orders/${encodeURIComponent(publicId)}/approve`,
     adminLogin: "/api/admin/login",
     adminLogout: "/api/admin/logout",
     adminOrders: "/api/admin/orders",
