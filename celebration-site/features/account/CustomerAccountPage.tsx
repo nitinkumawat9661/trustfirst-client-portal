@@ -41,6 +41,8 @@ export function CustomerAccountPage() {
   const [orders, setOrders] = useState<DashboardOrder[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState("")
+  const [approving, setApproving] = useState("")
+  const [approvalConsent, setApprovalConsent] = useState<Record<string, boolean>>({})
 
   const loadOrders = useCallback(async () => {
     if (!accountState.account) return
@@ -59,6 +61,23 @@ export function CustomerAccountPage() {
   }, [accountState.account])
 
   useEffect(() => { if (accountState.account) loadOrders() }, [accountState.account, loadOrders])
+
+  async function approvePacking(order: DashboardOrder) {
+    if (!approvalConsent[order.publicId]) return
+    setApproving(order.publicId)
+    setOrdersError("")
+    try {
+      const response = await fetch(routes.api.customerOrderApprove(order.publicId), { method: "POST" })
+      const data = await response.json() as { ok?: boolean; error?: string }
+      if (!response.ok || !data.ok) throw new Error(data.error || "APPROVAL_FAILED")
+      setApprovalConsent((current) => ({ ...current, [order.publicId]: false }))
+      await loadOrders()
+    } catch (cause) {
+      setOrdersError(cause instanceof Error ? cause.message : "APPROVAL_FAILED")
+    } finally {
+      setApproving("")
+    }
+  }
 
   const stats = useMemo(() => ({
     total: orders.length,
@@ -115,6 +134,7 @@ export function CustomerAccountPage() {
         {orders.map((order) => {
           const currentIndex = progressIndex(order.status)
           const supportMessage = `Hi Celebration, mujhe order ${order.publicId} ke baare me help chahiye.`
+          const approvalReady = order.status === "packing_video_ready" && Boolean(order.packingVideoUrl)
           return (
             <article className="customerOrderCard" key={order.publicId}>
               <header className="customerOrderHead">
@@ -139,6 +159,8 @@ export function CustomerAccountPage() {
                 <div className="customerUpdateCard"><span>Packing video</span>{order.packingVideoUrl ? <a href={order.packingVideoUrl} target="_blank" rel="noreferrer">Video dekhein</a> : <b>Preparation ke baad yahan milega</b>}</div>
                 <div className="customerUpdateCard"><span>Shipping</span>{order.shippingTrackingNumber ? <b>{order.shippingProvider || "Courier"} • {order.shippingTrackingNumber}</b> : <b>Ship hone ke baad tracking yahan aayegi</b>}</div>
               </div>
+
+              {approvalReady && <div className="customerPackingApproval"><div><b>Packing aapke approval ke liye ready hai</b><p>Video check karke approve karein. Approval ke baad team courier handover kar sakti hai.</p></div><label><input type="checkbox" checked={Boolean(approvalConsent[order.publicId])} onChange={(event) => setApprovalConsent((current) => ({ ...current, [order.publicId]: event.target.checked }))} /><span>Maine packing video dekh liya hai aur dispatch approve karta/karti hoon.</span></label><button className="primary" type="button" disabled={!approvalConsent[order.publicId] || approving === order.publicId} onClick={() => approvePacking(order)}>{approving === order.publicId ? "Approving…" : "Packing approve karein"}</button></div>}
 
               <footer className="customerOrderFooter">
                 <small>Last update: {new Date(order.updatedAt).toLocaleString("en-IN")}</small>
