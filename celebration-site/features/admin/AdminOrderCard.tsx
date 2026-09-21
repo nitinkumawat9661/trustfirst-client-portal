@@ -40,7 +40,7 @@ export function AdminOrderCard({ order, busy, onStatus, onShipping, onVideo }: {
           </div>
           <span>{order.customerName}{uiContent.common.separator}<a href={`tel:${order.phone}`}>{order.phone}</a></span>
         </div>
-        <strong>{formatMoney(fromMinorUnits(order.amountPaise))}</strong>
+        <div className="adminOrderPrice"><strong>{formatMoney(fromMinorUnits(order.amountPaise))}</strong>{order.discountPaise > 0 && <small><s>{formatMoney(fromMinorUnits(order.subtotalPaise))}</s> • saved {formatMoney(fromMinorUnits(order.discountPaise))}{order.campaignTitle ? ` • ${order.campaignTitle}` : ""}</small>}</div>
       </div>
 
       <div className="adminNextAction">
@@ -65,6 +65,7 @@ export function AdminOrderCard({ order, busy, onStatus, onShipping, onVideo }: {
         <div className="adminDetailGrid">
           <div><span>{copy.occasion}</span><b>{order.occasion}</b></div>
           <div><span>{copy.products}</span><b>{productNames.length ? productNames.join(", ") : uiContent.common.none}</b></div>
+          {order.discountPaise > 0 && <div><span>Offer</span><b>{order.campaignTitle || order.campaignId || "Campaign"} • saved {formatMoney(fromMinorUnits(order.discountPaise))}</b></div>}
           {order.message && <div className="wide"><span>{copy.giftMessage}</span><b>{order.message}</b></div>}
           <div><span>{copy.createdAt}</span><b>{new Date(order.createdAt).toLocaleString()}</b></div>
         </div>
