@@ -90,6 +90,13 @@ export function useOrderSubmit() {
     }
   }
 
+  function reset() {
+    idempotencyKey.current = crypto.randomUUID()
+    setSubmitting(false)
+    setError("")
+    setCreated(null)
+  }
+
   function whatsappUrl(args: SubmitArgs, orderId: string, trackingPath: string, supportNumber?: string) {
     const labels = uiContent.whatsapp
     const message = [
@@ -109,5 +116,5 @@ export function useOrderSubmit() {
     return supportWhatsappUrl(message, supportNumber)
   }
 
-  return { submitting, error, created, submit, whatsappUrl }
+  return { submitting, error, created, submit, reset, whatsappUrl }
 }
