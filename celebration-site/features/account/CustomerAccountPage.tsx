@@ -13,7 +13,10 @@ import { useCustomerAccount } from "./useCustomerAccount"
 
 type DashboardOrder = {
   publicId: string
+  subtotalPaise: number
+  discountPaise: number
   amountPaise: number
+  campaignTitle: string | null
   tierName: string
   productNames: string[]
   requiredDate: string
@@ -188,8 +191,10 @@ export function CustomerAccountPage() {
             <article className="customerOrderCard" key={order.publicId}>
               <header className="customerOrderHead">
                 <div><small>{new Date(order.createdAt).toLocaleDateString("en-IN")}</small><h3>{order.tierName}</h3><span>{order.publicId}</span></div>
-                <div><strong>{formatMoney(order.amountPaise / 100)}</strong><span className={`customerStatus status-${order.status}`}>{orderStatusLabels[order.status]}</span></div>
+                <div className="customerOrderPrice"><strong>{formatMoney(order.amountPaise / 100)}</strong>{order.discountPaise > 0 && <small><s>{formatMoney(order.subtotalPaise / 100)}</s> • saved {formatMoney(order.discountPaise / 100)}</small>}<span className={`customerStatus status-${order.status}`}>{orderStatusLabels[order.status]}</span></div>
               </header>
+
+              {order.discountPaise > 0 && <div className="customerOfferSaved"><b>Offer applied ✓</b><span>{order.campaignTitle || "Celebration offer"} saved you {formatMoney(order.discountPaise / 100)}.</span></div>}
 
               <div className="customerOrderMeta">
                 <div><span>Gift for</span><b>{order.receiverName}</b></div>
