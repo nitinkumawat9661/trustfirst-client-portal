@@ -6,6 +6,19 @@ import { storeContent } from "../../lib/domain/content"
 import type { CheckoutData } from "./types"
 import { validateCheckoutFields, type CheckoutFieldErrors } from "./validation"
 
+const BUILDER_DRAFT_KEY = "celebration:hamper-draft:v1"
+const BUILDER_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+type BuilderDraft = {
+  v: 1
+  tierId: string
+  selected: string[]
+  occasion: string
+  category: string
+  step: number
+  updatedAt: number
+}
+
 function defaultTierFor(catalog: CatalogConfig) {
   const tier = tierById(catalog, catalog.settings.defaultTierId) || visibleTiers(catalog)[0]
   if (!tier) throw new Error("Configured catalog has no active tier")
@@ -28,6 +41,48 @@ function checkoutDefaults(catalog: CatalogConfig, identity?: { customerName?: st
   }
 }
 
+function removeBuilderDraft() {
+  if (typeof window === "undefined") return
+  try { window.localStorage.removeItem(BUILDER_DRAFT_KEY) } catch { /* localStorage can be unavailable */ }
+}
+
+function readBuilderDraft(catalog: CatalogConfig) {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(BUILDER_DRAFT_KEY)
+    if (!raw) return null
+    const value = JSON.parse(raw) as Partial<BuilderDraft>
+    if (value.v !== 1 || typeof value.updatedAt !== "number" || Date.now() - value.updatedAt > BUILDER_DRAFT_TTL_MS) {
+      removeBuilderDraft()
+      return null
+    }
+
+    const nextTier = typeof value.tierId === "string" ? tierById(catalog, value.tierId) : null
+    const tier = nextTier || defaultTierFor(catalog)
+    const selected = normalizeSelection(
+      catalog,
+      tier,
+      Array.isArray(value.selected) ? value.selected.filter((item): item is string => typeof item === "string").slice(0, 100) : []
+    )
+    const occasion = typeof value.occasion === "string" && catalog.occasions.includes(value.occasion)
+      ? value.occasion
+      : catalog.settings.defaultOccasion
+    const categoryIds = new Set(categoriesForCatalog(catalog).map((item) => item.id))
+    const category = typeof value.category === "string" && categoryIds.has(value.category)
+      ? value.category
+      : catalog.settings.allCategory.id
+    const requestedStep = Number(value.step)
+    const step = Number.isInteger(requestedStep) && requestedStep >= 1 && requestedStep <= 3
+      ? requestedStep
+      : selected.length > 0 ? 2 : 1
+
+    return { tierId: tier.id, selected, occasion, category, step }
+  } catch {
+    removeBuilderDraft()
+    return null
+  }
+}
+
 export function useHamperBuilder() {
   const initialTier = defaultTierFor(defaultCatalog)
   const [catalog, setCatalog] = useState<CatalogConfig>(defaultCatalog)
@@ -42,6 +97,8 @@ export function useHamperBuilder() {
   const [detailsError, setDetailsError] = useState("")
   const [detailsFieldErrors, setDetailsFieldErrors] = useState<CheckoutFieldErrors>({})
   const [checkout, setCheckout] = useState<CheckoutData>(() => checkoutDefaults(defaultCatalog))
+  const [draftReady, setDraftReady] = useState(false)
+  const [draftRestored, setDraftRestored] = useState(false)
 
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true)
@@ -71,6 +128,47 @@ export function useHamperBuilder() {
   }, [])
 
   useEffect(() => { loadCatalog() }, [loadCatalog])
+
+  useEffect(() => {
+    if (catalogLoading || catalogError || draftReady) return
+    const draft = readBuilderDraft(catalog)
+    if (draft) {
+      setTierId(draft.tierId)
+      setSelected(draft.selected)
+      setCategory(draft.category)
+      setStep(draft.step)
+      setCheckout((current) => ({ ...current, occasion: draft.occasion }))
+      setDraftRestored(true)
+    }
+    setDraftReady(true)
+  }, [catalog, catalogError, catalogLoading, draftReady])
+
+  useEffect(() => {
+    if (!draftReady || typeof window === "undefined") return
+    const defaultTier = defaultTierFor(catalog)
+    const safeStep = Math.min(Math.max(step, 1), 3)
+    const meaningful = selected.length > 0
+      || tierId !== defaultTier.id
+      || checkout.occasion !== catalog.settings.defaultOccasion
+      || category !== catalog.settings.allCategory.id
+      || safeStep > 1
+
+    if (!meaningful) {
+      removeBuilderDraft()
+      return
+    }
+
+    const draft: BuilderDraft = {
+      v: 1,
+      tierId,
+      selected: selected.slice(0, 100),
+      occasion: checkout.occasion,
+      category,
+      step: safeStep,
+      updatedAt: Date.now()
+    }
+    try { window.localStorage.setItem(BUILDER_DRAFT_KEY, JSON.stringify(draft)) } catch { /* non-critical preference cache */ }
+  }, [catalog, category, checkout.occasion, draftReady, selected, step, tierId])
 
   const tiers = visibleTiers(catalog)
   const products = visibleProducts(catalog)
@@ -130,7 +228,13 @@ export function useHamperBuilder() {
     if (canSelectProduct(catalog, tier, selected, product).ok) setSelected((current) => [...current, productId])
   }
 
+  function clearDraft() {
+    removeBuilderDraft()
+    setDraftRestored(false)
+  }
+
   function resetForNewOrder(identity?: { customerName?: string; phone?: string }) {
+    clearDraft()
     const nextTier = defaultTierFor(catalog)
     setTierId(nextTier.id)
     setSelected([])
@@ -165,6 +269,9 @@ export function useHamperBuilder() {
     detailsError,
     detailsFieldErrors,
     filteredProducts,
+    draftRestored,
+    dismissDraftRestored: () => setDraftRestored(false),
+    clearDraft,
     setStep,
     goToStep,
     goToPayment,
