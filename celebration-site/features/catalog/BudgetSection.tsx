@@ -5,11 +5,19 @@ import { uiContent } from "../../lib/domain/content"
 
 const UNSUPPORTED_SOCIAL_PROOF = new Set(["POPULAR", "BESTSELLER", "MOST POPULAR", "CUSTOMER FAVORITE", "CUSTOMER FAVOURITE"])
 
+type TierSocialProof = {
+  tierName: string
+  orderCount: number
+  totalOrders: number
+  sharePercent: number
+}
+
 function valueScore(tier: Tier) {
   return tier.price > 0 ? tier.pointBudget / tier.price : 0
 }
 
-function tierBadge(item: Tier, recommendedTierId: string, bestValueId: string) {
+function tierBadge(item: Tier, recommendedTierId: string, bestValueId: string, socialProof: TierSocialProof | null) {
+  if (socialProof && item.name === socialProof.tierName) return "MOST CHOSEN"
   if (item.id === recommendedTierId) return "RECOMMENDED"
   if (item.id === bestValueId) return "BEST VALUE"
   const label = item.label?.trim()
@@ -17,7 +25,7 @@ function tierBadge(item: Tier, recommendedTierId: string, bestValueId: string) {
   return label
 }
 
-export function BudgetSection({ tiers, selectedTierId, recommendedTierId, onSelect }: { tiers: Tier[]; selectedTierId: string; recommendedTierId: string; onSelect: (id: string) => void }) {
+export function BudgetSection({ tiers, selectedTierId, recommendedTierId, socialProof, onSelect }: { tiers: Tier[]; selectedTierId: string; recommendedTierId: string; socialProof: TierSocialProof | null; onSelect: (id: string) => void }) {
   const bestValueId = tiers.reduce((best, item) => valueScore(item) > valueScore(best) ? item : best, tiers[0])?.id || ""
 
   return (
@@ -29,14 +37,15 @@ export function BudgetSection({ tiers, selectedTierId, recommendedTierId, onSele
         </div>
         <div className="tiers">
           {tiers.map((item) => {
-            const badge = tierBadge(item, recommendedTierId, bestValueId)
+            const isMostChosen = Boolean(socialProof && item.name === socialProof.tierName)
+            const badge = tierBadge(item, recommendedTierId, bestValueId, socialProof)
             return (
               <button key={item.id} className={`tier ${selectedTierId === item.id ? "active" : ""}`} onClick={() => onSelect(item.id)}>
                 {badge && <span className="badge">{badge}</span>}
                 <div className="size">{item.size}</div>
                 <div className="price">{formatMoney(item.price)}</div>
                 <div className="name">{item.name}</div>
-                <div className="note">Up to {item.maxChoices} gifts</div>
+                <div className="note">{isMostChosen ? `${socialProof!.sharePercent}% of tracked Celebration orders` : `Up to ${item.maxChoices} gifts`}</div>
               </button>
             )
           })}
