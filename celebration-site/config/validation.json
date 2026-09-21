@@ -60,6 +60,18 @@
     "maxPoints": 10000,
     "maxChoices": 100
   },
+  "campaign": {
+    "maxCampaigns": 50,
+    "idMax": 60,
+    "nameMax": 100,
+    "badgeMax": 40,
+    "messageMax": 180,
+    "maxPercent": 90,
+    "maxRupees": 1000000,
+    "maxUsageLimit": 1000000,
+    "offerQuoteTtlSeconds": 3600,
+    "sessionIdMax": 80
+  },
   "customRequest": {
     "budgetMin": 0,
     "budgetMax": 1000000,
@@ -84,6 +96,14 @@
     "createOrder": {
       "windowSeconds": 60,
       "max": 8
+    },
+    "offerQuote": {
+      "windowSeconds": 60,
+      "max": 20
+    },
+    "analyticsEvent": {
+      "windowSeconds": 60,
+      "max": 60
     },
     "customerSignup": {
       "windowSeconds": 900,
