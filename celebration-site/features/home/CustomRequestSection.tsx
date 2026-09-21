@@ -2,8 +2,10 @@
 
 import { FormEvent, useState } from "react"
 import { supportWhatsappUrl } from "../../lib/domain/support"
+import { useStoreSettings } from "../shell/useStoreSettings"
 
 export function CustomRequestSection() {
+  const settings = useStoreSettings()
   const [customerName, setCustomerName] = useState("")
   const [phone, setPhone] = useState("")
   const [budget, setBudget] = useState("")
@@ -55,7 +57,7 @@ export function CustomRequestSection() {
           <label>Kaisa hamper chahiye?<textarea required minLength={10} maxLength={1200} rows={5} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Example: ₹1200 budget, birthday, blue theme, chocolates + mug + photo item; perfume nahi chahiye." /></label>
           <div className="customRequestFooter">
             <span className="tiny">Final price, stock aur delivery feasibility team confirm karegi.</span>
-            <div className="customRequestActions"><a className="secondary" href={supportWhatsappUrl("Hi Celebration, mujhe apne budget me custom hamper banwana hai.")} target="_blank" rel="noreferrer">WhatsApp par pucho</a><button className="primary" disabled={busy}>{busy ? "Sending…" : "Budget request bhejo"}</button></div>
+            <div className="customRequestActions"><a className="secondary" href={supportWhatsappUrl("Hi Celebration, mujhe apne budget me custom hamper banwana hai.", settings.whatsapp)} target="_blank" rel="noreferrer">WhatsApp par pucho</a><button className="primary" disabled={busy}>{busy ? "Sending…" : "Budget request bhejo"}</button></div>
           </div>
           {notice && <div className="successBox">{notice}</div>}
           {error && <div className="errorBox">{error}</div>}
