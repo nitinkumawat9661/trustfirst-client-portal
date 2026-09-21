@@ -1,0 +1,38 @@
+name: Validate Celebration UX Foundation
+
+on:
+  push:
+    branches:
+      - feat/celebration-ux-foundation
+    paths:
+      - "celebration-site/**"
+      - ".github/workflows/validate-celebration-ux-foundation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: celebration-site
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v5
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: celebration-site/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run source and domain audit
+        run: npm run audit
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
