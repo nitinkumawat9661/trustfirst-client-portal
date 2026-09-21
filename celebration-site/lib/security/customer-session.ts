@@ -1,7 +1,7 @@
 import { cookies } from "next/headers"
+import { env, requireSecret } from "../../config/env"
 import { securityConfig } from "../../config/security"
 import { validation } from "../../config/validation"
-import { requireSecret } from "../../config/env"
 import { signValue, verifySignedValue } from "./tokens"
 
 export const CUSTOMER_COOKIE_NAME = securityConfig.customerCookieName
@@ -45,7 +45,7 @@ export function customerCookieOptions() {
   return {
     httpOnly: true,
     sameSite: "strict" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: env.isProduction,
     path: "/",
     maxAge: validation.customerSessionTtlSeconds
   }
