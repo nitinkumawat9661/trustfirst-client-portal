@@ -45,6 +45,7 @@ async function findExisting(client: PoolClient, idempotencyKey: string) {
 
 async function insertOrder(client: PoolClient, input: NormalizedOrder, customerAccountId: string, offerQuoteId?: unknown) {
   const trackingToken = createTrackingToken(input.idempotencyKey)
+  await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [input.idempotencyKey])
   const already = await findExisting(client, input.idempotencyKey)
   if (already) {
     if (already.customer_account_id !== customerAccountId) throw new Error("IDEMPOTENCY_OWNER_MISMATCH")
