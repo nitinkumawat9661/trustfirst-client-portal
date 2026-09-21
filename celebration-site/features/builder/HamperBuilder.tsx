@@ -13,10 +13,6 @@ import { CustomerAuthPanel } from "../account/CustomerAuthPanel"
 import { useStoreSettings } from "../shell/useStoreSettings"
 import { focusCheckoutField, notifyUx, scrollToUxTarget } from "../ux/UxMessenger"
 
-function shortDelay(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
 function builderStepUrl(step: number) {
   const url = new URL(window.location.href)
   url.hash = `builder-step-${step}`
@@ -203,29 +199,26 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
     }
   }
 
-  async function submit() {
+  async function submit(offerQuoteId?: string | null) {
     if (!customer.account) {
-      notifyUx({ title: "Almost there", body: "Login or create your account, then your order can be placed without losing your hamper choices.", tone: "info" })
+      notifyUx({ title: "Almost there", body: "Login or create your account, then continue to payment without losing your hamper choices.", tone: "info" })
       openAuth()
       return
     }
-    await order.submit({ ...submitArgs, checkout: { ...state.checkout, phone: customer.account.phone } })
+    await order.submit({ ...submitArgs, offerQuoteId, checkout: { ...state.checkout, phone: customer.account.phone } })
   }
 
   async function authenticated(account: NonNullable<typeof customer.account>) {
     const customerName = state.checkout.customerName.trim() || account.displayName
-    const checkout = { ...state.checkout, phone: account.phone, customerName }
     state.updateField("phone", account.phone)
     state.updateField("customerName", customerName)
     closeAuth()
-    notifyUx({ title: "You’re signed in ✓", body: `${account.displayName}, continuing your order now.`, tone: "success", durationMs: 2200 })
-    await shortDelay(650)
-    await order.submit({ ...submitArgs, checkout })
+    notifyUx({ title: "You’re signed in ✓", body: "Checking your best available checkout price now.", tone: "success", durationMs: 2400 })
   }
 
   function openWhatsapp() {
     if (!order.created) return
-    const url = order.whatsappUrl(submitArgs, order.created.orderId, order.created.trackingPath, storeSettings.whatsapp)
+    const url = order.whatsappUrl(submitArgs, order.created, storeSettings.whatsapp)
     window.open(url, "_blank", "noopener,noreferrer")
   }
 
@@ -247,11 +240,11 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
           {state.step === 1 && <BudgetStep tierId={state.tierId} occasion={state.checkout.occasion} tiers={state.tiers} occasions={state.occasions} onTier={state.selectTier} onOccasion={(value) => state.updateField("occasion", value)} onNext={() => moveToStep(2)} />}
           {state.step === 2 && <ProductStep catalog={state.catalog} tier={state.tier} products={state.filteredProducts} categories={state.categories} category={state.category} search={state.search} selected={state.selected} pointsUsed={state.pointsUsed} onCategory={state.setCategory} onSearch={state.setSearch} onToggle={state.toggleProduct} onBack={() => moveToStep(1)} onNext={() => moveToStep(3)} />}
           {state.step === 3 && <DetailsStep tier={state.tier} checkout={state.checkout} selectedNames={state.selectedNames} occasions={state.occasions} error={state.detailsError} fieldErrors={state.detailsFieldErrors} updateField={state.updateField} onBack={() => moveToStep(2)} onNext={moveToPayment} />}
-          {state.step === 4 && <PaymentStep tier={state.tier} checkout={state.checkout} selectedNames={state.selectedNames} accepted={state.accepted} submitting={order.submitting} error={order.error} created={order.created} customerAccount={customer.account} accountLoading={customer.loading} onAccepted={state.setAccepted} onReference={(value) => state.updateField("paymentReference", value)} onBack={() => moveToStep(3)} onSubmit={submit} onWhatsapp={openWhatsapp} onLogin={openAuth} onNewOrder={startAnotherOrder} />}
+          {state.step === 4 && <PaymentStep tier={state.tier} checkout={state.checkout} selectedProductIds={state.selected} selectedNames={state.selectedNames} accepted={state.accepted} submitting={order.submitting} error={order.error} created={order.created} customerAccount={customer.account} accountLoading={customer.loading} onAccepted={state.setAccepted} onReference={(value) => state.updateField("paymentReference", value)} onBack={() => moveToStep(3)} onSubmit={submit} onWhatsapp={openWhatsapp} onLogin={openAuth} onNewOrder={startAnotherOrder} />}
         </div>
       </div>
 
-      {showAuth && <div className="customerAuthOverlay" role="dialog" aria-modal="true" aria-label="Login to place order"><button className="customerAuthBackdrop" type="button" aria-label="Close login" onClick={() => closeAuth()} /><div className="customerAuthSheet" ref={authSheetRef}><button className="customerAuthClose" type="button" onClick={() => closeAuth()} aria-label="Close">×</button><CustomerAuthPanel busy={customer.busy} error={customer.error} initialPhone={state.checkout.phone} initialName={state.checkout.customerName} autoFocusPhone onAuthenticate={customer.authenticate} onClearError={() => customer.setError("")} onSuccess={authenticated} /></div></div>}
+      {showAuth && <div className="customerAuthOverlay" role="dialog" aria-modal="true" aria-label="Login to continue"><button className="customerAuthBackdrop" type="button" aria-label="Close login" onClick={() => closeAuth()} /><div className="customerAuthSheet" ref={authSheetRef}><button className="customerAuthClose" type="button" onClick={() => closeAuth()} aria-label="Close">×</button><CustomerAuthPanel busy={customer.busy} error={customer.error} initialPhone={state.checkout.phone} initialName={state.checkout.customerName} autoFocusPhone onAuthenticate={customer.authenticate} onClearError={() => customer.setError("")} onSuccess={authenticated} /></div></div>}
     </section>
   )
 }
