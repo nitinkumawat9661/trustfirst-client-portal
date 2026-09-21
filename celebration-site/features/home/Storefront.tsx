@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { BudgetSection } from "../catalog/BudgetSection"
 import { OccasionRail } from "../catalog/OccasionRail"
 import { ProductSection } from "../catalog/ProductSection"
@@ -13,19 +14,24 @@ import { SiteFooter } from "../shell/SiteFooter"
 import { SiteHeader } from "../shell/SiteHeader"
 import { TrustStrip } from "../shell/TrustStrip"
 import { notifyUx } from "../ux/UxMessenger"
+import { trackConversion } from "../analytics/conversion"
 import { formatMoney } from "../../lib/domain/catalog"
 
 export function Storefront() {
   const state = useHamperBuilder()
 
+  useEffect(() => { trackConversion("storefront_view") }, [])
+
   function goBuilder(step = 1) {
     state.setStep(step)
+    trackConversion("builder_started", { tierId: state.tierId })
     setTimeout(() => document.getElementById("builder")?.scrollIntoView({ behavior: "smooth", block: "start" }), 20)
   }
 
   function pickTier(id: string) {
     const picked = state.tiers.find((item) => item.id === id)
     state.selectTier(id)
+    trackConversion("budget_selected", { tierId: id })
     if (picked) notifyUx({ title: `${formatMoney(picked.price)} selected`, body: "Now pick the gifts that fit this budget.", tone: "info", durationMs: 2400 })
     goBuilder(2)
   }
