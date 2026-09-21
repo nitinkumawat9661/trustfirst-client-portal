@@ -1,13 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { storeContent } from "../../lib/domain/content"
 import type { StoreSettings } from "../../lib/server/store-settings"
 
 const fallback: StoreSettings = {
-  whatsapp: "917414853321",
-  assistTitle: "Apne budget me dekh rahe ho?",
-  assistBody: "Budget batao, hamper hum curate kar denge.",
-  supportMessage: "Hi Celebration, mujhe gift hamper me help chahiye."
+  whatsapp: storeContent.support.whatsapp,
+  assistTitle: storeContent.support.assistTitle,
+  assistBody: storeContent.support.assistBody,
+  supportMessage: storeContent.support.supportMessage
 }
 
 export function useStoreSettings() {
