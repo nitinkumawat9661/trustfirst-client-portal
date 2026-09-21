@@ -37,24 +37,24 @@ function progressIndex(status: OrderStatus) {
 }
 
 function friendlyOrderError(code: string) {
-  if (code === "UNAUTHORIZED") return "Session expire ho gayi. Dobara login karein."
-  if (code === "RATE_LIMITED") return "Bahut requests ho gayi hain. Thodi der baad refresh karein."
-  if (code === "APPROVAL_SERVICE_UNAVAILABLE") return "Packing approval abhi process nahi ho paya. Dobara try karein."
-  return "Order updates load nahi ho paaye. Internet check karke retry karein."
+  if (code === "UNAUTHORIZED") return "Your session has ended. Please login again."
+  if (code === "RATE_LIMITED") return "Too many requests. Please try again shortly."
+  if (code === "APPROVAL_SERVICE_UNAVAILABLE") return "We couldn’t save the packing approval right now. Please try again."
+  return "We couldn’t load the latest order updates. Check your connection and try again."
 }
 
 function nextUpdateText(status: OrderStatus) {
   const copy: Record<OrderStatus, string> = {
-    payment_verification_pending: "Next: team aapka payment reference verify karegi.",
-    payment_verified: "Next: hamper preparation start hogi.",
-    preparing: "Next: packing complete hote hi approval video yahan aayega.",
-    packing_video_ready: "Action needed: packing video dekho aur dispatch approve karo.",
-    customer_approved: "Next: team courier handover aur tracking add karegi.",
-    shipped: "Next: courier delivery update ka wait hai.",
-    delivered: "Delivered. Koi issue ho to WhatsApp support use karein.",
-    issue_reported: "Support team aapke reported issue ko review kar rahi hai.",
-    refund_or_replacement_resolved: "Issue resolution complete mark ho chuka hai.",
-    cancelled: "Ye order cancelled hai. Help ke liye WhatsApp support available hai."
+    payment_verification_pending: "We’re confirming your payment.",
+    payment_verified: "Your hamper is ready to move into preparation.",
+    preparing: "We’re preparing your hamper. The packing video comes next.",
+    packing_video_ready: "Your packing video is ready. Review it and approve dispatch.",
+    customer_approved: "Approved. Shipping details will be added next.",
+    shipped: "Your hamper is on the way.",
+    delivered: "Delivered. Need help? WhatsApp support is available below.",
+    issue_reported: "Your issue is under review.",
+    refund_or_replacement_resolved: "Your reported issue has been resolved.",
+    cancelled: "This order is cancelled. Contact support if you need help."
   }
   return copy[status]
 }
@@ -79,12 +79,12 @@ export function CustomerAccountPage() {
       if (!response.ok || !data.ok) throw new Error(data.error || "ORDER_LOAD_FAILED")
       setOrders(data.orders || [])
       setLastRefreshedAt(new Date())
-      if (announce) notifyUx({ title: "Orders updated ✓", body: "Latest order progress load ho gaya.", tone: "success" })
+      if (announce) notifyUx({ title: "Orders updated ✓", body: "You’re seeing the latest progress.", tone: "success" })
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "ORDER_LOAD_FAILED"
       const message = friendlyOrderError(code)
       setOrdersError(message)
-      if (announce) notifyUx({ title: "Refresh nahi hua", body: message, tone: "error" })
+      if (announce) notifyUx({ title: "Couldn’t refresh", body: message, tone: "error" })
     } finally {
       setOrdersLoading(false)
     }
@@ -101,13 +101,13 @@ export function CustomerAccountPage() {
       const data = await response.json() as { ok?: boolean; error?: string }
       if (!response.ok || !data.ok) throw new Error(data.error || "APPROVAL_FAILED")
       setApprovalConsent((current) => ({ ...current, [order.publicId]: false }))
-      notifyUx({ title: "Packing approved ✓", body: `${order.publicId} dispatch ke liye approve ho gaya.`, tone: "success", durationMs: 4000 })
+      notifyUx({ title: "Packing approved ✓", body: `${order.publicId} is ready for dispatch.`, tone: "success", durationMs: 4000 })
       await loadOrders()
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "APPROVAL_FAILED"
       const message = friendlyOrderError(code)
       setOrdersError(message)
-      notifyUx({ title: "Approval nahi hua", body: message, tone: "error" })
+      notifyUx({ title: "Approval not saved", body: message, tone: "error" })
     } finally {
       setApproving("")
     }
@@ -115,8 +115,8 @@ export function CustomerAccountPage() {
 
   async function logout() {
     const ok = await accountState.logout()
-    if (ok) notifyUx({ title: "Logout ho gaya", body: "Aapke order data private rahenge. Dobara login kabhi bhi kar sakte hain.", tone: "info" })
-    else notifyUx({ title: "Logout nahi hua", body: "Network issue ho sakta hai. Dobara try karein.", tone: "error" })
+    if (ok) notifyUx({ title: "Logged out", body: "You can sign in again anytime to see your orders.", tone: "info" })
+    else notifyUx({ title: "Couldn’t log out", body: "Please check your connection and try again.", tone: "error" })
   }
 
   async function copyTracking(number: string) {
@@ -124,7 +124,7 @@ export function CustomerAccountPage() {
       await navigator.clipboard.writeText(number)
       notifyUx({ title: "Tracking number copied ✓", body: number, tone: "success" })
     } catch {
-      notifyUx({ title: "Copy nahi hua", body: `Tracking number: ${number}`, tone: "error" })
+      notifyUx({ title: "Couldn’t copy", body: `Tracking number: ${number}`, tone: "error" })
     }
   }
 
@@ -134,12 +134,12 @@ export function CustomerAccountPage() {
     delivered: orders.filter((order) => order.status === "delivered").length
   }), [orders])
 
-  if (accountState.loading) return <div className="accountState">Account load ho raha hai…</div>
+  if (accountState.loading) return <div className="accountState">Loading your account…</div>
 
   if (!accountState.account) {
     return (
       <div className="accountPublicWrap">
-        <CustomerAuthPanel busy={accountState.busy} error={accountState.error} onAuthenticate={accountState.authenticate} onClearError={() => accountState.setError("")} onSuccess={(account) => notifyUx({ title: "Login successful ✓", body: `${account.displayName}, aapka dashboard load ho raha hai.`, tone: "success" })} />
+        <CustomerAuthPanel busy={accountState.busy} error={accountState.error} onAuthenticate={accountState.authenticate} onClearError={() => accountState.setError("")} onSuccess={(account) => notifyUx({ title: "Welcome back ✓", body: `${account.displayName}, your orders are loading.`, tone: "success" })} />
       </div>
     )
   }
@@ -149,11 +149,11 @@ export function CustomerAccountPage() {
       <section className="customerDashHero">
         <div>
           <div className="kicker">MY CELEBRATION</div>
-          <h1>Hi {accountState.account.displayName}, yahan sab order updates ek jagah milenge.</h1>
-          <p>Order kab kiya, abhi kis stage par hai, packing video aur shipping details. Sab mobile-friendly timeline me.</p>
+          <h1>Hi {accountState.account.displayName}, your orders are all here.</h1>
+          <p>See what you ordered, what happens next, packing approval and shipping updates — without hunting through messages.</p>
         </div>
         <div className="customerDashActions">
-          <Link className="primary" href={`${routes.home}#budgets`}>Naya hamper explore karein</Link>
+          <Link className="primary" href={`${routes.home}#budgets`}>Create another hamper</Link>
           <button className="secondary" type="button" disabled={accountState.busy} onClick={logout}>{accountState.busy ? "Logging out…" : "Logout"}</button>
         </div>
       </section>
@@ -165,24 +165,24 @@ export function CustomerAccountPage() {
       </section>
 
       <div className="customerDashToolbar">
-        <div><div className="kicker">YOUR ORDERS</div><h2>Order history & progress</h2>{lastRefreshedAt && <div className="dashboardActionNote">Last refreshed {lastRefreshedAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</div>}</div>
+        <div><div className="kicker">YOUR ORDERS</div><h2>Order progress</h2>{lastRefreshedAt && <div className="dashboardActionNote">Last refreshed {lastRefreshedAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</div>}</div>
         <button className="secondary" type="button" disabled={ordersLoading} onClick={() => loadOrders(true)}>{ordersLoading ? "Refreshing…" : "Refresh"}</button>
       </div>
 
       {ordersError && <div className="errorBox" role="alert">{ordersError}</div>}
-      {ordersLoading && orders.length === 0 && <div className="accountState">Orders load ho rahe hain…</div>}
+      {ordersLoading && orders.length === 0 && <div className="accountState">Loading your orders…</div>}
       {!ordersLoading && orders.length === 0 && (
         <section className="customerEmptyOrders">
-          <h3>Abhi koi order nahi hai</h3>
-          <p>Hamper explore karo, customize karo. Login already hai, checkout aur easy rahega.</p>
-          <Link className="primary" href={`${routes.home}#builder`}>Hamper banana start karein</Link>
+          <h3>No orders yet</h3>
+          <p>Start with a budget, pick a few gifts and make your first Celebration hamper.</p>
+          <Link className="primary" href={`${routes.home}#builder`}>Build a hamper</Link>
         </section>
       )}
 
       <div className="customerOrderList">
         {orders.map((order) => {
           const currentIndex = progressIndex(order.status)
-          const supportMessage = `Hi Celebration, mujhe order ${order.publicId} ke baare me help chahiye.`
+          const supportMessage = `Hi Celebration, I need help with order ${order.publicId}.`
           const approvalReady = order.status === "packing_video_ready" && Boolean(order.packingVideoUrl)
           return (
             <article className="customerOrderCard" key={order.publicId}>
@@ -194,24 +194,24 @@ export function CustomerAccountPage() {
               <div className="customerOrderMeta">
                 <div><span>Gift for</span><b>{order.receiverName}</b></div>
                 <div><span>Occasion</span><b>{order.occasion}</b></div>
-                <div><span>Required by</span><b>{order.requiredDate}</b></div>
+                <div><span>Needed by</span><b>{order.requiredDate}</b></div>
                 <div><span>Payment</span><b>{order.paymentStatus}</b></div>
               </div>
 
-              <div className="checkoutProgressNote"><span>→</span><span><b>Ab kya hoga:</b> {nextUpdateText(order.status)}</span></div>
+              <div className="checkoutProgressNote"><span>→</span><span><b>What’s next:</b> {nextUpdateText(order.status)}</span></div>
 
               <div className="customerProgress" aria-label="Order progress">
                 {customerTimeline.map((status, index) => <div className={index < currentIndex ? "done" : index === currentIndex ? "current" : ""} key={status}><i>{index <= currentIndex ? "✓" : ""}</i><span>{orderStatusLabels[status]}</span></div>)}
               </div>
 
-              {order.productNames.length > 0 && <div className="customerOrderProducts"><span>Selected items</span><p>{order.productNames.join(" • ")}</p></div>}
+              {order.productNames.length > 0 && <div className="customerOrderProducts"><span>Selected gifts</span><p>{order.productNames.join(" • ")}</p></div>}
 
               <div className="customerOrderUpdates">
-                <div className="customerUpdateCard"><span>Packing video</span>{order.packingVideoUrl ? <a href={order.packingVideoUrl} target="_blank" rel="noreferrer">Video dekhein</a> : <b>Preparation ke baad yahan milega</b>}</div>
-                <div className="customerUpdateCard"><span>Shipping</span>{order.shippingTrackingNumber ? <><b>{order.shippingProvider || "Courier"} • {order.shippingTrackingNumber}</b><div className="shippingActions"><button className="secondary" type="button" onClick={() => copyTracking(order.shippingTrackingNumber!)}>Copy tracking</button></div></> : <b>Ship hone ke baad tracking yahan aayegi</b>}</div>
+                <div className="customerUpdateCard"><span>Packing video</span>{order.packingVideoUrl ? <a href={order.packingVideoUrl} target="_blank" rel="noreferrer">Watch video</a> : <b>Available after packing</b>}</div>
+                <div className="customerUpdateCard"><span>Shipping</span>{order.shippingTrackingNumber ? <><b>{order.shippingProvider || "Courier"} • {order.shippingTrackingNumber}</b><div className="shippingActions"><button className="secondary" type="button" onClick={() => copyTracking(order.shippingTrackingNumber!)}>Copy tracking</button></div></> : <b>Tracking appears here after dispatch</b>}</div>
               </div>
 
-              {approvalReady && <div className="customerPackingApproval"><div><b>Packing aapke approval ke liye ready hai</b><p>Video check karke approve karein. Approval ke baad team courier handover kar sakti hai.</p></div><label><input type="checkbox" checked={Boolean(approvalConsent[order.publicId])} onChange={(event) => setApprovalConsent((current) => ({ ...current, [order.publicId]: event.target.checked }))} /><span>Maine packing video dekh liya hai aur dispatch approve karta/karti hoon.</span></label><button className="primary" type="button" disabled={!approvalConsent[order.publicId] || approving === order.publicId} onClick={() => approvePacking(order)}>{approving === order.publicId ? "Approving…" : "Packing approve karein"}</button></div>}
+              {approvalReady && <div className="customerPackingApproval"><div><b>Your hamper is ready for a final look</b><p>Watch the packing video and approve it when you’re happy with the presentation.</p></div><label><input type="checkbox" checked={Boolean(approvalConsent[order.publicId])} onChange={(event) => setApprovalConsent((current) => ({ ...current, [order.publicId]: event.target.checked }))} /><span>I’ve reviewed the packing video and approve this hamper for dispatch.</span></label><button className="primary" type="button" disabled={!approvalConsent[order.publicId] || approving === order.publicId} onClick={() => approvePacking(order)}>{approving === order.publicId ? "Approving…" : "Approve for dispatch"}</button></div>}
 
               <footer className="customerOrderFooter">
                 <small>Last update: {new Date(order.updatedAt).toLocaleString("en-IN")}</small>
@@ -221,11 +221,6 @@ export function CustomerAccountPage() {
           )
         })}
       </div>
-
-      <section className="accountSecurityNote">
-        <b>Account privacy</b>
-        <p>OTP intentionally use nahi ho raha. Isliye sirf isi account se place kiye gaye orders dashboard me aate hain; kisi mobile number ke purane orders auto-claim nahi hote.</p>
-      </section>
     </div>
   )
 }
