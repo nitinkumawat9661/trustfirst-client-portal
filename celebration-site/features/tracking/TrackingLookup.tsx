@@ -5,6 +5,7 @@ import type { FormEvent } from "react"
 import { routes } from "../../config/routes"
 import { validation } from "../../config/validation"
 import { uiContent } from "../../lib/domain/content"
+import { notifyUx } from "../ux/UxMessenger"
 
 export function TrackingLookup() {
   const copy = uiContent.tracking
@@ -21,6 +22,7 @@ export function TrackingLookup() {
 
     if (!cleanOrderId || cleanDigits.length !== validation.trackingLookupPhoneDigits) {
       setError(copy.lookupValidation)
+      notifyUx({ title: "Tracking details check karein", body: copy.lookupValidation, tone: "error" })
       return
     }
 
@@ -33,9 +35,12 @@ export function TrackingLookup() {
       })
       const result = await response.json() as { ok?: boolean; error?: string; trackingPath?: string }
       if (!response.ok || !result.ok || !result.trackingPath) throw new Error(copy.lookupFailed)
+      notifyUx({ title: "Order mil gaya ✓", body: "Latest tracking status khul raha hai.", tone: "success", durationMs: 1800 })
       window.location.assign(result.trackingPath)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : copy.lookupFailed)
+      const message = cause instanceof Error ? cause.message : copy.lookupFailed
+      setError(message)
+      notifyUx({ title: "Order track nahi hua", body: message, tone: "error" })
     } finally {
       setBusy(false)
     }
@@ -49,10 +54,10 @@ export function TrackingLookup() {
       </div>
       <div className="trackingLookupGrid">
         <label className="field">
-          <span>{copy.lookupOrderId}</span>
+          <span>{copy.lookupOrderId} <b className="requiredMark">*</b></span>
           <input
             value={orderId}
-            onChange={(event) => setOrderId(event.target.value)}
+            onChange={(event) => { setOrderId(event.target.value); setError("") }}
             placeholder={copy.lookupOrderPlaceholder}
             autoCapitalize="characters"
             autoComplete="off"
@@ -60,10 +65,10 @@ export function TrackingLookup() {
           />
         </label>
         <label className="field">
-          <span>{copy.lookupPhonePrefix} {validation.trackingLookupPhoneDigits} {copy.lookupPhoneSuffix}</span>
+          <span>{copy.lookupPhonePrefix} {validation.trackingLookupPhoneDigits} {copy.lookupPhoneSuffix} <b className="requiredMark">*</b></span>
           <input
             value={phoneLastDigits}
-            onChange={(event) => setPhoneLastDigits(event.target.value.replace(/\D/g, "").slice(0, validation.trackingLookupPhoneDigits))}
+            onChange={(event) => { setPhoneLastDigits(event.target.value.replace(/\D/g, "").slice(0, validation.trackingLookupPhoneDigits)); setError("") }}
             placeholder={"•".repeat(validation.trackingLookupPhoneDigits)}
             inputMode="numeric"
             autoComplete="tel-national"
@@ -71,7 +76,7 @@ export function TrackingLookup() {
           />
         </label>
       </div>
-      {error && <div className="errorBox">{error}</div>}
+      {error && <div className="errorBox" role="alert">{error}</div>}
       <button className="primary fullWidth" type="submit" disabled={busy}>
         {busy ? copy.lookupBusy : copy.lookupButton}
       </button>
