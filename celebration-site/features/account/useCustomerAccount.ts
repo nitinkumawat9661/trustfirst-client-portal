@@ -21,6 +21,7 @@ export function useCustomerAccount() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
+    setError("")
     try {
       const response = await fetch(routes.api.customerMe, { cache: "no-store" })
       const data = await response.json() as { ok?: boolean; account?: CustomerAccountView | null; error?: string }
@@ -61,8 +62,14 @@ export function useCustomerAccount() {
     setBusy(true)
     setError("")
     try {
-      await fetch(routes.api.customerLogout, { method: "POST" })
+      const response = await fetch(routes.api.customerLogout, { method: "POST" })
+      const data = await response.json().catch(() => ({})) as { ok?: boolean; error?: string }
+      if (!response.ok || !data.ok) throw new Error(data.error || "LOGOUT_FAILED")
       setAccount(null)
+      return true
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "LOGOUT_FAILED")
+      return false
     } finally {
       setBusy(false)
     }
