@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS offer_quotes (
   id uuid PRIMARY KEY,
   campaign_id text NOT NULL,
   campaign_title text NOT NULL,
-  customer_account_id uuid NOT NULL REFERENCES customer_accounts(id) ON DELETE CASCADE,
+  customer_account_id text NOT NULL REFERENCES customer_accounts(id) ON DELETE CASCADE,
   trigger text NOT NULL CHECK (trigger IN ('checkout', 'hesitation')),
   tier_id text NOT NULL,
   selected_product_ids text[] NOT NULL DEFAULT '{}',
@@ -27,7 +27,7 @@ CREATE INDEX IF NOT EXISTS offer_quotes_customer_idx ON offer_quotes (customer_a
 CREATE TABLE IF NOT EXISTS conversion_events (
   id uuid PRIMARY KEY,
   session_hash text NOT NULL,
-  customer_account_id uuid REFERENCES customer_accounts(id) ON DELETE SET NULL,
+  customer_account_id text REFERENCES customer_accounts(id) ON DELETE SET NULL,
   event_name text NOT NULL,
   tier_id text,
   campaign_id text,
