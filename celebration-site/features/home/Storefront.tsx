@@ -26,13 +26,13 @@ export function Storefront() {
   function pickTier(id: string) {
     const picked = state.tiers.find((item) => item.id === id)
     state.selectTier(id)
-    if (picked) notifyUx({ title: `${formatMoney(picked.price)} budget selected`, body: "Ab apne hamper ke items choose karein.", tone: "info", durationMs: 2400 })
+    if (picked) notifyUx({ title: `${formatMoney(picked.price)} selected`, body: "Now pick the gifts that fit this budget.", tone: "info", durationMs: 2400 })
     goBuilder(2)
   }
 
   function pickOccasion(value: string) {
     state.updateField("occasion", value)
-    notifyUx({ title: `${value} selected`, body: "Ab budget choose karein; occasion checkout me saved rahega.", tone: "info", durationMs: 2200 })
+    notifyUx({ title: `${value} selected`, body: "Great — now choose a budget.", tone: "info", durationMs: 2200 })
     goBuilder(1)
   }
 
@@ -42,7 +42,7 @@ export function Storefront() {
       <SiteHeader onCreate={() => goBuilder(1)} />
       <Hero onBuild={() => goBuilder(1)} tiers={state.tiers} products={state.products} />
       <OccasionRail value={state.checkout.occasion} occasions={state.occasions} onChange={pickOccasion} />
-      <BudgetSection tiers={state.tiers} selectedTierId={state.tierId} onSelect={pickTier} />
+      <BudgetSection tiers={state.tiers} selectedTierId={state.tierId} recommendedTierId={state.catalog.settings.defaultTierId} onSelect={pickTier} />
       <ProductSection products={state.products} categories={state.categories} allCategoryId={state.catalog.settings.allCategory.id} category={state.category} onCategory={state.setCategory} />
       <CustomRequestSection />
       <HamperBuilder state={state} />
