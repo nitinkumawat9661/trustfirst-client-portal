@@ -1,4 +1,5 @@
 import { validation } from "../../config/validation"
+import { storeContent } from "../domain/content"
 import { hasUnsafeText, sanitizeText } from "../validation/text"
 import { query } from "./db"
 
@@ -12,10 +13,10 @@ export type StoreSettings = {
 type SettingsRow = { payload: StoreSettings; version: number }
 
 export const defaultStoreSettings: StoreSettings = {
-  whatsapp: "917414853321",
-  assistTitle: "Apne budget me dekh rahe ho?",
-  assistBody: "Budget batao, hamper hum curate kar denge.",
-  supportMessage: "Hi Celebration, mujhe gift hamper me help chahiye."
+  whatsapp: storeContent.support.whatsapp,
+  assistTitle: storeContent.support.assistTitle,
+  assistBody: storeContent.support.assistBody,
+  supportMessage: storeContent.support.supportMessage
 }
 
 export class StoreSettingsError extends Error {
