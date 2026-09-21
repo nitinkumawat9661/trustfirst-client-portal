@@ -2,7 +2,11 @@ import type { OrderStatus } from "../../domain/order-status"
 
 export type OrderRecord = {
   publicId: string
+  subtotalPaise: number
+  discountPaise: number
   amountPaise: number
+  campaignId: string | null
+  campaignTitle: string | null
   tierName: string
   requiredDate: string
   occasion: string
@@ -30,7 +34,11 @@ export type OrderRecord = {
 
 export type DbOrder = {
   public_id: string
+  subtotal_paise: number
+  discount_paise: number
   amount_paise: number
+  campaign_id: string | null
+  campaign_title: string | null
   tier_name: string
   required_date: string
   occasion: string
@@ -59,7 +67,11 @@ export type DbOrder = {
 export function mapOrder(row: DbOrder): OrderRecord {
   return {
     publicId: row.public_id,
+    subtotalPaise: row.subtotal_paise,
+    discountPaise: row.discount_paise,
     amountPaise: row.amount_paise,
+    campaignId: row.campaign_id,
+    campaignTitle: row.campaign_title,
     tierName: row.tier_name,
     requiredDate: row.required_date,
     occasion: row.occasion,
@@ -88,7 +100,10 @@ export function mapOrder(row: DbOrder): OrderRecord {
 
 export type TrackingOrderRecord = {
   publicId: string
+  subtotalPaise: number
+  discountPaise: number
   amountPaise: number
+  campaignTitle: string | null
   tierName: string
   requiredDate: string
   occasion: string
@@ -105,7 +120,10 @@ export type TrackingOrderRecord = {
 
 export type DbTrackingOrder = {
   public_id: string
+  subtotal_paise: number
+  discount_paise: number
   amount_paise: number
+  campaign_title: string | null
   tier_name: string
   required_date: string
   occasion: string
@@ -123,7 +141,10 @@ export type DbTrackingOrder = {
 export function mapTrackingOrder(row: DbTrackingOrder): TrackingOrderRecord {
   return {
     publicId: row.public_id,
+    subtotalPaise: row.subtotal_paise,
+    discountPaise: row.discount_paise,
     amountPaise: row.amount_paise,
+    campaignTitle: row.campaign_title,
     tierName: row.tier_name,
     requiredDate: row.required_date,
     occasion: row.occasion,
@@ -139,9 +160,9 @@ export function mapTrackingOrder(row: DbTrackingOrder): TrackingOrderRecord {
   }
 }
 
-export const TRACKING_ORDER_SELECT = `public_id, amount_paise, tier_name, required_date::text, occasion, status, payment_status,
+export const TRACKING_ORDER_SELECT = `public_id, subtotal_paise, discount_paise, amount_paise, campaign_title, tier_name, required_date::text, occasion, status, payment_status,
   receiver_name, packing_video_key, shipping_provider, shipping_tracking_number, customer_approved_at, created_at, updated_at`
 
-export const ORDER_SELECT = `public_id, amount_paise, tier_name, required_date::text, occasion, status, payment_status, payment_reference,
+export const ORDER_SELECT = `public_id, subtotal_paise, discount_paise, amount_paise, campaign_id, campaign_title, tier_name, required_date::text, occasion, status, payment_status, payment_reference,
   customer_name, phone, receiver_name, address, city, state, pincode, gift_message,
   selected_product_ids, selected_product_names, packing_video_key, shipping_provider, shipping_tracking_number, issue_type, issue_note, created_at, updated_at`
