@@ -15,12 +15,18 @@ type SubmitArgs = {
   selectedNames: string[]
   checkout: CheckoutData
   accepted: boolean
+  offerQuoteId?: string | null
 }
 
-type CreatedOrder = {
+export type CreatedOrder = {
   orderId: string
   trackingToken: string
   trackingPath: string
+  subtotalPaise: number
+  discountPaise: number
+  payablePaise: number
+  campaignId: string | null
+  campaignTitle: string | null
 }
 
 export function useOrderSubmit() {
@@ -71,15 +77,36 @@ export function useOrderSubmit() {
           paymentReference: args.checkout.paymentReference,
           policyVersion: orderConfig.policyVersion,
           policyAccepted: args.accepted,
-          idempotencyKey: idempotencyKey.current
+          idempotencyKey: idempotencyKey.current,
+          offerQuoteId: args.offerQuoteId || undefined
         })
       })
-      const result = await response.json() as { ok?: boolean; error?: string; orderId?: string; trackingToken?: string; trackingPath?: string }
-      if (!response.ok || !result.ok || !result.orderId || !result.trackingToken || !result.trackingPath) {
+      const result = await response.json() as {
+        ok?: boolean
+        error?: string
+        orderId?: string
+        trackingToken?: string
+        trackingPath?: string
+        subtotalPaise?: number
+        discountPaise?: number
+        payablePaise?: number
+        campaignId?: string | null
+        campaignTitle?: string | null
+      }
+      if (!response.ok || !result.ok || !result.orderId || !result.trackingToken || !result.trackingPath || typeof result.payablePaise !== "number") {
         const code = result.error || "UNKNOWN"
         throw new Error(errorMessages[code] || errorMessages.UNKNOWN)
       }
-      const createdOrder = { orderId: result.orderId, trackingToken: result.trackingToken, trackingPath: result.trackingPath }
+      const createdOrder: CreatedOrder = {
+        orderId: result.orderId,
+        trackingToken: result.trackingToken,
+        trackingPath: result.trackingPath,
+        subtotalPaise: result.subtotalPaise ?? result.payablePaise,
+        discountPaise: result.discountPaise ?? 0,
+        payablePaise: result.payablePaise,
+        campaignId: result.campaignId || null,
+        campaignTitle: result.campaignTitle || null
+      }
       setCreated(createdOrder)
       return createdOrder
     } catch (cause) {
@@ -97,12 +124,13 @@ export function useOrderSubmit() {
     setCreated(null)
   }
 
-  function whatsappUrl(args: SubmitArgs, orderId: string, trackingPath: string, supportNumber?: string) {
+  function whatsappUrl(args: SubmitArgs, createdOrder: CreatedOrder, supportNumber?: string) {
     const labels = uiContent.whatsapp
     const message = [
       `*${storeContent.brand.name} ${labels.titleSuffix}*`,
-      `${labels.orderId}: ${orderId}`,
-      `${labels.hamper}: ${formatMoney(args.tier.price)}${uiContent.common.separator}${args.tier.name}`,
+      `${labels.orderId}: ${createdOrder.orderId}`,
+      `${labels.hamper}: ${formatMoney(createdOrder.payablePaise / 100)}${uiContent.common.separator}${args.tier.name}`,
+      createdOrder.discountPaise > 0 ? `Offer saved: ${formatMoney(createdOrder.discountPaise / 100)}${createdOrder.campaignTitle ? ` (${createdOrder.campaignTitle})` : ""}` : "",
       `${labels.occasion}: ${args.checkout.occasion}`,
       `${labels.requiredBy}: ${args.checkout.requiredDate}`,
       `${labels.preferences}: ${args.selectedNames.length ? args.selectedNames.join(", ") : labels.curate}`,
@@ -111,8 +139,8 @@ export function useOrderSubmit() {
       `${labels.giftFor}: ${args.checkout.receiverName}`,
       `${labels.address}: ${args.checkout.address}, ${args.checkout.city}, ${args.checkout.state} - ${args.checkout.pincode}`,
       `${labels.giftMessage}: ${args.checkout.message || uiContent.common.none}`,
-      `${labels.tracking}: ${window.location.origin}${trackingPath}`
-    ].join("\n")
+      `${labels.tracking}: ${window.location.origin}${createdOrder.trackingPath}`
+    ].filter(Boolean).join("\n")
     return supportWhatsappUrl(message, supportNumber)
   }
 
