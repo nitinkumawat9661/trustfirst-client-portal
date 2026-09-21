@@ -114,8 +114,9 @@ export function CustomerAccountPage() {
   }
 
   async function logout() {
-    await accountState.logout()
-    notifyUx({ title: "Logout ho gaya", body: "Aapke order data private rahenge. Dobara login kabhi bhi kar sakte hain.", tone: "info" })
+    const ok = await accountState.logout()
+    if (ok) notifyUx({ title: "Logout ho gaya", body: "Aapke order data private rahenge. Dobara login kabhi bhi kar sakte hain.", tone: "info" })
+    else notifyUx({ title: "Logout nahi hua", body: "Network issue ho sakta hai. Dobara try karein.", tone: "error" })
   }
 
   async function copyTracking(number: string) {
