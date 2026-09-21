@@ -59,7 +59,7 @@ export function TrackingPage() {
           <div className="kicker">{copy.title}</div>
           {!token && <TrackingLookup />}
           {token && tracked.loading && <div className="trackingState">{copy.loading}</div>}
-          {token && tracked.error && <><div className="errorBox" role="alert">{tracked.error}</div><TrackingLookup /></>}
+          {token && tracked.error && !order && <><div className="errorBox" role="alert">{tracked.error}</div><TrackingLookup /></>}
           {order && <>
             <div className="trackingHero"><div><h1>{order.tierName}</h1><p>{order.receiverName}{uiContent.common.separator}{order.occasion}</p></div><strong>{formatMoney(fromMinorUnits(order.amountPaise))}</strong></div>
             <div className="trackingMeta">
@@ -68,6 +68,7 @@ export function TrackingPage() {
               <div><span>{copy.payment}</span><b>{order.paymentStatus}</b></div>
               <div><span>{copy.status}</span><b>{orderStatusLabels[order.status]}</b></div>
             </div>
+            {tracked.error && <div className="errorBox" role="alert">{tracked.error}</div>}
             <TrackingTimeline status={order.status} />
             <PackingApprovalCard
               status={order.status}
