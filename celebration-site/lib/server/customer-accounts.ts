@@ -95,7 +95,7 @@ function publicAccount(row: AccountRow): CustomerAccount {
   }
 }
 
-export async function createCustomerAccount(input: { phone: unknown; password: unknown; displayName: unknown }) {
+export async function createCustomerAccount(input: { phone?: unknown; password?: unknown; displayName?: unknown }) {
   const phone = normalizeCustomerPhone(input.phone)
   const displayName = normalizeDisplayName(input.displayName)
   if (!isValidCustomerPassword(input.password)) throw new CustomerAccountError("INVALID_PASSWORD")
@@ -115,7 +115,7 @@ export async function createCustomerAccount(input: { phone: unknown; password: u
   }
 }
 
-export async function authenticateCustomerAccount(input: { phone: unknown; password: unknown }) {
+export async function authenticateCustomerAccount(input: { phone?: unknown; password?: unknown }) {
   const phone = normalizeCustomerPhone(input.phone)
   const password = typeof input.password === "string" ? input.password : ""
   if (!isValidCustomerPassword(password)) throw new CustomerAccountError("INVALID_CREDENTIALS", 401)
