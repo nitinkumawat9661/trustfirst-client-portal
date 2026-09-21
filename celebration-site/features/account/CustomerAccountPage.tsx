@@ -6,6 +6,7 @@ import { routes } from "../../config/routes"
 import { formatMoney } from "../../lib/domain/catalog"
 import { customerTimeline, orderStatusLabels, type OrderStatus } from "../../lib/domain/order-status"
 import { supportWhatsappUrl } from "../../lib/domain/support"
+import { useStoreSettings } from "../shell/useStoreSettings"
 import { CustomerAuthPanel } from "./CustomerAuthPanel"
 import { useCustomerAccount } from "./useCustomerAccount"
 
@@ -36,6 +37,7 @@ function progressIndex(status: OrderStatus) {
 
 export function CustomerAccountPage() {
   const accountState = useCustomerAccount()
+  const settings = useStoreSettings()
   const [orders, setOrders] = useState<DashboardOrder[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState("")
@@ -140,7 +142,7 @@ export function CustomerAccountPage() {
 
               <footer className="customerOrderFooter">
                 <small>Last update: {new Date(order.updatedAt).toLocaleString("en-IN")}</small>
-                <a className="secondary" href={supportWhatsappUrl(supportMessage)} target="_blank" rel="noreferrer">WhatsApp support</a>
+                <a className="secondary" href={supportWhatsappUrl(supportMessage, settings.whatsapp)} target="_blank" rel="noreferrer">WhatsApp support</a>
               </footer>
             </article>
           )
