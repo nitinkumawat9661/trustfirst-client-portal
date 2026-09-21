@@ -18,7 +18,7 @@ env:
 
 jobs:
   inspect:
-    name: Read-only Celebration VPS inspection
+    name: Safe Celebration VPS inspection
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
@@ -49,7 +49,7 @@ jobs:
           ssh-keygen -y -f "$HOME/.ssh/celebration_preflight" >/dev/null
           ssh-keygen -F "$VPS_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
 
-      - name: Inspect Celebration runtime without changes
+      - name: Inspect Celebration runtime safely
         shell: bash
         run: |
           set -euo pipefail
@@ -65,6 +65,7 @@ jobs:
           DOMAIN="$1"
           APP_DIR="$2"
           PORT="$3"
+          BASE="http://127.0.0.1:${PORT}"
 
           echo "=== TARGET ==="
           test "$(readlink -f "$APP_DIR")" = "/var/www/celebration"
@@ -105,11 +106,18 @@ jobs:
           sudo grep -R -n -E "server_name[[:space:]].*${DOMAIN}|proxy_pass[[:space:]].*127\\.0\\.0\\.1:${PORT}" /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true
 
           echo "=== LOOPBACK HEALTH ==="
-          curl --silent --show-error --fail --max-time 5 "http://127.0.0.1:${PORT}/api/health"
+          curl --silent --show-error --fail --max-time 5 "$BASE/api/health"
           echo
 
+          echo "=== PUBLIC PAGES ==="
+          HOME_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 8 "$BASE/")"
+          ACCOUNT_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 8 "$BASE/account")"
+          test "$HOME_STATUS" = "200"
+          test "$ACCOUNT_STATUS" = "200"
+          printf 'HOME_STATUS=%s ACCOUNT_PAGE_STATUS=%s\n' "$HOME_STATUS" "$ACCOUNT_STATUS"
+
           echo "=== RUNTIME CATALOG ==="
-          CATALOG="$(curl --silent --show-error --fail --max-time 8 "http://127.0.0.1:${PORT}/api/catalog")"
+          CATALOG="$(curl --silent --show-error --fail --max-time 8 "$BASE/api/catalog")"
           printf '%s\n' "$CATALOG" | node -e '
             const fs = require("fs");
             const value = JSON.parse(fs.readFileSync(0, "utf8"));
@@ -118,8 +126,33 @@ jobs:
             console.log(JSON.stringify({ok: value.ok, version: value.version, tiers: value.catalog.tiers.length, products: value.catalog.products.length, occasions: value.catalog.occasions?.length || 0}));
           '
 
-          echo "=== ADMIN CATALOG AUTH BOUNDARY ==="
-          STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "http://127.0.0.1:${PORT}/api/admin/catalog")"
-          test "$STATUS" = "401"
-          printf 'UNAUTHENTICATED_ADMIN_CATALOG_STATUS=%s\n' "$STATUS"
+          echo "=== RUNTIME SUPPORT SETTINGS ==="
+          SETTINGS="$(curl --silent --show-error --fail --max-time 8 "$BASE/api/store-settings")"
+          printf '%s\n' "$SETTINGS" | node -e '
+            const fs = require("fs");
+            const value = JSON.parse(fs.readFileSync(0, "utf8"));
+            const digits = String(value.settings?.whatsapp || "").replace(/\D/g, "");
+            if (value.ok !== true || !value.settings || digits !== "917414853321") process.exit(1);
+            if (!String(value.settings.assistTitle || "").toLowerCase().includes("budget")) process.exit(1);
+            console.log(JSON.stringify({ok: value.ok, version: value.version, whatsappConfigured: true, assistTitle: value.settings.assistTitle}));
+          '
+
+          echo "=== CUSTOMER ACCOUNT AUTH BOUNDARIES ==="
+          ME="$(curl --silent --show-error --fail --max-time 5 "$BASE/api/account/me")"
+          printf '%s\n' "$ME" | node -e '
+            const fs = require("fs");
+            const value = JSON.parse(fs.readFileSync(0, "utf8"));
+            if (value.ok !== true || value.account !== null) process.exit(1);
+            console.log(JSON.stringify({ok: value.ok, anonymousAccount: value.account}));
+          '
+          ORDERS_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$BASE/api/account/orders")"
+          test "$ORDERS_STATUS" = "401"
+          printf 'UNAUTHENTICATED_ACCOUNT_ORDERS_STATUS=%s\n' "$ORDERS_STATUS"
+
+          echo "=== ADMIN AUTH BOUNDARY ==="
+          ADMIN_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$BASE/api/admin/catalog")"
+          HISTORY_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$BASE/api/admin/catalog/history")"
+          test "$ADMIN_STATUS" = "401"
+          test "$HISTORY_STATUS" = "401"
+          printf 'UNAUTHENTICATED_ADMIN_CATALOG_STATUS=%s HISTORY_STATUS=%s\n' "$ADMIN_STATUS" "$HISTORY_STATUS"
           REMOTE
