@@ -1,0 +1,33 @@
+name: Validate Celebration Conversion Copy
+
+on:
+  push:
+    branches:
+      - feat/celebration-conversion-copy
+    paths:
+      - "celebration-site/**"
+      - ".github/workflows/validate-celebration-conversion-copy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Audit, typecheck and build Celebration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: celebration-site
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Install
+        run: npm ci
+      - name: Source and domain audit
+        run: npm run audit
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
