@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getCustomerSession } from "../../../../lib/security/customer-session"
-import { listCustomerOrders } from "../../../../lib/server/customer-accounts"
+import { findCustomerAccountById, listCustomerOrders } from "../../../../lib/server/customer-accounts"
 import { getCatalogConfig } from "../../../../lib/server/catalog"
 import { productById } from "../../../../lib/domain/catalog"
 import { createPackingVideoViewUrl } from "../../../../lib/server/r2"
@@ -11,7 +11,10 @@ export async function GET() {
   try {
     const session = getCustomerSession()
     if (!session) return NextResponse.json({ ok: false, error: "AUTH_REQUIRED" }, { status: 401 })
-    const [orders, catalogResult] = await Promise.all([listCustomerOrders(session.accountId), getCatalogConfig()])
+    const account = await findCustomerAccountById(session.accountId)
+    if (!account) return NextResponse.json({ ok: false, error: "AUTH_REQUIRED" }, { status: 401 })
+
+    const [orders, catalogResult] = await Promise.all([listCustomerOrders(account.id), getCatalogConfig()])
     const hydrated = await Promise.all(orders.map(async (order) => {
       let packingVideoUrl: string | null = null
       if (order.packingVideoKey) {
