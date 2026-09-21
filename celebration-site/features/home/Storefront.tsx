@@ -42,7 +42,7 @@ export function Storefront() {
       <SiteHeader onCreate={() => goBuilder(1)} />
       <Hero onBuild={() => goBuilder(1)} tiers={state.tiers} products={state.products} />
       <OccasionRail value={state.checkout.occasion} occasions={state.occasions} onChange={pickOccasion} />
-      <BudgetSection tiers={state.tiers} selectedTierId={state.tierId} recommendedTierId={state.catalog.settings.defaultTierId} onSelect={pickTier} />
+      <BudgetSection tiers={state.tiers} selectedTierId={state.tierId} recommendedTierId={state.catalog.settings.defaultTierId} socialProof={state.socialProof} onSelect={pickTier} />
       <ProductSection products={state.products} categories={state.categories} allCategoryId={state.catalog.settings.allCategory.id} category={state.category} onCategory={state.setCategory} />
       <CustomRequestSection />
       <HamperBuilder state={state} />
