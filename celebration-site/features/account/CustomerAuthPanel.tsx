@@ -16,6 +16,7 @@ const errorCopy: Record<string, string> = {
   RATE_LIMITED: "Bahut attempts ho gaye. Thodi der baad try karein.",
   UNSAFE_TEXT: "Is field me unsupported characters hain.",
   ACCOUNT_SERVICE_UNAVAILABLE: "Login service abhi available nahi hai. Dobara try karein.",
+  ACCOUNT_LOAD_FAILED: "Account status load nahi ho paya. Internet check karke login try karein.",
   AUTH_FAILED: "Login nahi ho paya. Details check karke dobara try karein."
 }
 
@@ -24,6 +25,7 @@ export function CustomerAuthPanel({
   error,
   initialPhone = "",
   initialName = "",
+  autoFocusPhone = false,
   onAuthenticate,
   onSuccess,
   onClearError
@@ -32,6 +34,7 @@ export function CustomerAuthPanel({
   error: string
   initialPhone?: string
   initialName?: string
+  autoFocusPhone?: boolean
   onAuthenticate: (mode: Mode, values: { phone: string; password: string; displayName?: string }) => Promise<CustomerAccountView | null>
   onSuccess?: (account: CustomerAccountView) => void
   onClearError?: () => void
@@ -73,7 +76,7 @@ export function CustomerAuthPanel({
 
       <form className="customerAuthForm" onSubmit={submit}>
         {mode === "signup" && <label className="field"><span>Aapka naam <b className="requiredMark">*</b></span><input className="control" value={displayName} required minLength={2} maxLength={80} autoComplete="name" onChange={(event) => { setDisplayName(event.target.value); onClearError?.() }} placeholder="Naam" /></label>}
-        <label className="field"><span>Mobile number <b className="requiredMark">*</b></span><input className="control" inputMode="tel" autoComplete="tel" value={phone} required autoFocus onChange={(event) => { setPhone(event.target.value.replace(/\D/g, "").slice(0, 13)); onClearError?.() }} placeholder="10-digit mobile" /></label>
+        <label className="field"><span>Mobile number <b className="requiredMark">*</b></span><input className="control" inputMode="tel" autoComplete="tel" value={phone} required autoFocus={autoFocusPhone} onChange={(event) => { setPhone(event.target.value.replace(/\D/g, "").slice(0, 13)); onClearError?.() }} placeholder="10-digit mobile" /></label>
         <label className="field"><span>Password <b className="requiredMark">*</b></span><div className="passwordControlWrap"><input className="control" type={showPassword ? "text" : "password"} minLength={8} maxLength={72} required autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(event) => { setPassword(event.target.value); onClearError?.() }} placeholder="Minimum 8 characters" /><button className="passwordToggle" type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Password hide karein" : "Password show karein"}>{showPassword ? "Hide" : "Show"}</button></div></label>
         {friendlyError && <div className="errorBox" role="alert">{friendlyError}</div>}
         <button className="primary fullWidth" disabled={busy} type="submit">{busy ? (mode === "login" ? "Login ho raha hai…" : "Account ban raha hai…") : mode === "login" ? "Login & continue" : "Create account & continue"}</button>
