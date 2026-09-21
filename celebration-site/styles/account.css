@@ -51,7 +51,7 @@
 .customerStats>div{background:#fff;border:1px solid var(--line);border-radius:17px;padding:13px;display:grid;gap:4px}
 .customerStats span{font-size:9px;color:var(--muted);font-weight:700}
 .customerStats b{font:700 24px/1 'Playfair Display',Georgia,serif;color:var(--m)}
-.customerDashToolbar{display:flex;justify-content:space-between;align-items:end;gap:10px;margin-top:4px}
+.customerDashToolbar{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-top:4px}
 .customerDashToolbar h2{margin:0;font:700 25px/1.1 'Playfair Display',Georgia,serif;color:#641317}
 .customerOrderList{display:grid;gap:13px}
 .customerOrderCard{background:#fff;border:1px solid var(--line);border-radius:22px;padding:15px;box-shadow:0 10px 30px rgba(80,35,25,.05)}
@@ -97,7 +97,7 @@
   .customerAuthOverlay{align-items:center;padding:22px}
   .customerAuthSheet{border-radius:26px;padding:0;background:transparent;overflow:visible}
   .customerAuthClose{right:10px;top:10px}
-  .customerDashHero{grid-template-columns:1fr auto;align-items:end;padding:30px}
+  .customerDashHero{grid-template-columns:1fr auto;align-items:flex-end;padding:30px}
   .customerDashHero h1{font-size:42px}
   .customerStats{max-width:620px}
   .customerOrderMeta{grid-template-columns:repeat(4,1fr)}
