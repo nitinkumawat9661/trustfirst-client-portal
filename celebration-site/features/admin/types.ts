@@ -2,7 +2,11 @@ import type { OrderStatus } from "../../lib/domain/order-status"
 
 export type AdminOrder = {
   publicId: string
+  subtotalPaise: number
+  discountPaise: number
   amountPaise: number
+  campaignId: string | null
+  campaignTitle: string | null
   tierName: string
   requiredDate: string
   occasion: string
