@@ -41,7 +41,10 @@ export function BudgetSection({ tiers, selectedTierId, recommendedTierId, onSele
             )
           })}
         </div>
-        <p className="budgetDecisionHint"><b>Not sure?</b> Start with the recommended option. You can change the budget anytime before payment.</p>
+        <div className="budgetDecisionHint">
+          <div><b>Not sure which one to choose?</b><span>Start with Recommended, or tell us your exact budget and we’ll suggest a better fit.</span></div>
+          <a className="secondary" href="#custom-request">Build around my budget</a>
+        </div>
       </div>
     </section>
   )
