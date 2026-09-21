@@ -36,13 +36,13 @@ export function ProductStep({ catalog, tier, products, categories, category, sea
   return (
     <div className="stepPane active">
       <div className="builderTitle">
-        <div><h3>{copy.title}</h3><p>{formatMoney(tier.price)}{uiContent.common.separator}{selected.length}/{tier.maxChoices} {copy.choicesLabel}{uiContent.common.separator}{pointsUsed}/{tier.pointBudget} {copy.mixPointsLabel}</p></div>
-        <input className="search" value={search} onChange={(event) => onSearch(event.target.value)} placeholder={copy.search} aria-label="Products search karein" />
+        <div><h3>{copy.title}</h3><p>{formatMoney(tier.price)}{uiContent.common.separator}{selected.length}/{tier.maxChoices} gifts selected</p></div>
+        <input className="search" value={search} onChange={(event) => onSearch(event.target.value)} placeholder={copy.search} aria-label="Search gifts" />
       </div>
-      {(choiceLimitReached || pointLimitReached) && <div className="builderInlineNotice" role="status"><b>Selection limit reached.</b> {choiceLimitReached ? `Aapke ${formatMoney(tier.price)} hamper me maximum ${tier.maxChoices} items select ho sakte hain.` : `Selected items ka mix-point budget ${tier.pointBudget} hai. Kisi selected item ko remove karke doosra choose karein.`}</div>}
+      {(choiceLimitReached || pointLimitReached) && <div className="builderInlineNotice" role="status"><b>Your hamper is full.</b> {choiceLimitReached ? `This ${formatMoney(tier.price)} hamper can include up to ${tier.maxChoices} selected gifts.` : "This combination has reached the selected budget. Remove one gift to choose another."}</div>}
       <div className="filters builderFilter">{categories.map((item) => <button type="button" key={item.id} className={`chip ${category === item.id ? "active" : ""}`} onClick={() => onCategory(item.id)}>{item.label}</button>)}</div>
       <div className="pickGrid">
-        {products.length === 0 && <div className="emptyFilterState"><b>Is filter me item nahi mila</b><p>Search ya category clear karke saare available items dekhein.</p><button className="secondary" type="button" onClick={clearFilters}>Clear filters</button></div>}
+        {products.length === 0 && <div className="emptyFilterState"><b>No gifts found here</b><p>Clear the search or category to see all available options.</p><button className="secondary" type="button" onClick={clearFilters}>Show all gifts</button></div>}
         {products.map((product) => {
           const selectedNow = selected.includes(product.id)
           const rule = canSelectProduct(catalog, tier, selected, product)
@@ -50,7 +50,7 @@ export function ProductStep({ catalog, tier, products, categories, category, sea
           return (
             <button type="button" key={product.id} className={`pick ${selectedNow ? "active" : ""} ${disabled ? "locked" : ""}`} disabled={disabled} onClick={() => onToggle(product.id)} aria-pressed={selectedNow}>
               <ProductVisual product={product} />
-              <div className="pickCopy"><b>{product.name}</b><small>{product.category}{uiContent.common.separator}{product.points} {product.points === 1 ? copy.pointSingular : copy.pointPlural}</small>{disabled && <em>{ruleMessage(rule, copy)}</em>}</div>
+              <div className="pickCopy"><b>{product.name}</b><small>{product.category}</small>{disabled && <em>{ruleMessage(rule, copy)}</em>}</div>
               <span className="check">{selectedNow ? copy.selected : disabled ? copy.locked : copy.add}</span>
             </button>
           )
