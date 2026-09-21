@@ -6,6 +6,7 @@
 .uxToastCopy{display:grid;gap:2px;min-width:0}.uxToastCopy strong{font-size:12px;color:var(--text)}.uxToastCopy span{font-size:10px;line-height:1.45;color:var(--muted)}
 .uxToast>button{width:34px;height:34px;border:0;border-radius:50%;background:transparent;color:var(--muted);font-size:22px;cursor:pointer}
 
+.builderCard{scroll-margin-top:118px}[data-order-success]{scroll-margin-top:130px;outline:none}
 .field.invalid .control{border-color:#b93b36;background:#fffafa;outline:2px solid rgba(185,59,54,.08)}
 .fieldError{display:block;margin-top:5px;color:#a5302c;font-size:9.5px;font-weight:700;line-height:1.4}
 .requiredMark{color:#a5302c}.optionalLabel{color:var(--muted);font-weight:500;font-size:9px}
@@ -18,4 +19,5 @@
 .dashboardActionNote{margin-top:8px;font-size:9px;color:var(--muted)}
 .shippingActions{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.shippingActions button,.shippingActions a{min-height:34px;padding:6px 9px;font-size:8.5px}
 
+@media(max-width:759px){.catalogLoadNotice,.paymentReturnHint{align-items:stretch;flex-direction:column}.catalogLoadNotice button,.paymentReturnHint button{width:100%}.uxToast{grid-template-columns:32px 1fr 32px}.customerAuthSheet{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}}
 @media(min-width:760px){.uxToastViewport{top:18px;left:18px;right:18px}.uxToast{padding:12px}.uxToastCopy strong{font-size:13px}.uxToastCopy span{font-size:11px}}
