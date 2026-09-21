@@ -47,6 +47,20 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
   }, [state.step])
 
   useEffect(() => {
+    if (!showAuth) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setShowAuth(false)
+    }
+    window.addEventListener("keydown", closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener("keydown", closeOnEscape)
+    }
+  }, [showAuth])
+
+  useEffect(() => {
     if (!order.error) return
     notifyUx({ title: "Order place nahi hua", body: order.error, tone: "error", durationMs: 4200 })
   }, [order.error])
@@ -60,7 +74,7 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
   function moveToStep(nextStep: number) {
     const invalidField = state.goToStep(nextStep)
     if (invalidField) {
-      notifyUx({ title: "Ek detail check karni hai", body: state.detailsFieldErrors[invalidField] || "Highlighted field complete karein.", tone: "error" })
+      notifyUx({ title: "Ek detail check karni hai", body: "Highlighted field complete karein. Hum aapko wahi le ja rahe hain.", tone: "error" })
       window.setTimeout(() => focusCheckoutField(invalidField), 80)
     }
   }
@@ -121,7 +135,7 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
         </div>
       </div>
 
-      {showAuth && <div className="customerAuthOverlay" role="dialog" aria-modal="true" aria-label="Login to place order"><button className="customerAuthBackdrop" type="button" aria-label="Close login" onClick={() => setShowAuth(false)} /><div className="customerAuthSheet"><button className="customerAuthClose" type="button" onClick={() => setShowAuth(false)} aria-label="Close">×</button><CustomerAuthPanel busy={customer.busy} error={customer.error} initialPhone={state.checkout.phone} initialName={state.checkout.customerName} onAuthenticate={customer.authenticate} onClearError={() => customer.setError("")} onSuccess={authenticated} /></div></div>}
+      {showAuth && <div className="customerAuthOverlay" role="dialog" aria-modal="true" aria-label="Login to place order"><button className="customerAuthBackdrop" type="button" aria-label="Close login" onClick={() => setShowAuth(false)} /><div className="customerAuthSheet"><button className="customerAuthClose" type="button" onClick={() => setShowAuth(false)} aria-label="Close">×</button><CustomerAuthPanel busy={customer.busy} error={customer.error} initialPhone={state.checkout.phone} initialName={state.checkout.customerName} autoFocusPhone onAuthenticate={customer.authenticate} onClearError={() => customer.setError("")} onSuccess={authenticated} /></div></div>}
     </section>
   )
 }
