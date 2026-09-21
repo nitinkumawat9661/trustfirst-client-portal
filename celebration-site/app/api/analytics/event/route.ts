@@ -22,7 +22,10 @@ export async function POST(request: Request) {
     const body = await readJsonBody<EventInput>(request)
     const session = getCustomerSession()
     const recorded = await recordConversionEvent({
-      ...body,
+      sessionId: body.sessionId,
+      eventName: body.eventName,
+      tierId: body.tierId,
+      campaignId: body.campaignId,
       customerAccountId: session?.accountId || null
     })
     if (!recorded) return NextResponse.json({ ok: false, error: "INVALID_EVENT" }, { status: 422 })
