@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { canSelectProduct, categoriesForCatalog, defaultCatalog, normalizeSelection, productById, selectedPoints, tierById, visibleProducts, visibleTiers, type CatalogConfig } from "../../lib/domain/catalog"
 import { storeContent } from "../../lib/domain/content"
 import type { CheckoutData } from "./types"
-import { validateCheckoutDetails } from "./validation"
+import { validateCheckoutFields, type CheckoutFieldErrors } from "./validation"
 
 function defaultTierFor(catalog: CatalogConfig) {
   const tier = tierById(catalog, catalog.settings.defaultTierId) || visibleTiers(catalog)[0]
@@ -12,10 +12,27 @@ function defaultTierFor(catalog: CatalogConfig) {
   return tier
 }
 
+function checkoutDefaults(catalog: CatalogConfig, identity?: { customerName?: string; phone?: string }): CheckoutData {
+  return {
+    customerName: identity?.customerName || "",
+    phone: identity?.phone || "",
+    receiverName: "",
+    address: "",
+    city: "",
+    state: storeContent.checkout.defaultState,
+    pincode: "",
+    requiredDate: "",
+    occasion: catalog.settings.defaultOccasion,
+    message: "",
+    paymentReference: ""
+  }
+}
+
 export function useHamperBuilder() {
   const initialTier = defaultTierFor(defaultCatalog)
   const [catalog, setCatalog] = useState<CatalogConfig>(defaultCatalog)
   const [catalogLoading, setCatalogLoading] = useState(true)
+  const [catalogError, setCatalogError] = useState("")
   const [tierId, setTierId] = useState(initialTier.id)
   const [selected, setSelected] = useState<string[]>([])
   const [step, setStep] = useState(1)
@@ -23,44 +40,37 @@ export function useHamperBuilder() {
   const [search, setSearch] = useState("")
   const [accepted, setAccepted] = useState(false)
   const [detailsError, setDetailsError] = useState("")
-  const [checkout, setCheckout] = useState<CheckoutData>({
-    customerName: "",
-    phone: "",
-    receiverName: "",
-    address: "",
-    city: "",
-    state: storeContent.checkout.defaultState,
-    pincode: "",
-    requiredDate: "",
-    occasion: defaultCatalog.settings.defaultOccasion,
-    message: "",
-    paymentReference: ""
-  })
+  const [detailsFieldErrors, setDetailsFieldErrors] = useState<CheckoutFieldErrors>({})
+  const [checkout, setCheckout] = useState<CheckoutData>(() => checkoutDefaults(defaultCatalog))
 
-  useEffect(() => {
-    let cancelled = false
-    fetch("/api/catalog", { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("catalog")
-        return response.json() as Promise<{ ok: boolean; catalog?: CatalogConfig }>
-      })
-      .then((payload) => {
-        if (cancelled || !payload.ok || !payload.catalog) return
-        const next = payload.catalog
-        const nextTier = tierById(next, tierId) || defaultTierFor(next)
-        setCatalog(next)
-        setTierId(nextTier.id)
+  const loadCatalog = useCallback(async () => {
+    setCatalogLoading(true)
+    setCatalogError("")
+    try {
+      const response = await fetch("/api/catalog", { cache: "no-store" })
+      if (!response.ok) throw new Error("catalog")
+      const payload = await response.json() as { ok: boolean; catalog?: CatalogConfig }
+      if (!payload.ok || !payload.catalog) throw new Error("catalog")
+      const next = payload.catalog
+      setCatalog(next)
+      setTierId((currentTierId) => {
+        const nextTier = tierById(next, currentTierId) || defaultTierFor(next)
         setSelected((current) => normalizeSelection(next, nextTier, current))
-        setCategory(next.settings.allCategory.id)
-        setCheckout((current) => ({
-          ...current,
-          occasion: next.occasions.includes(current.occasion) ? current.occasion : next.settings.defaultOccasion
-        }))
+        return nextTier.id
       })
-      .catch(() => undefined)
-      .finally(() => { if (!cancelled) setCatalogLoading(false) })
-    return () => { cancelled = true }
+      setCategory(next.settings.allCategory.id)
+      setCheckout((current) => ({
+        ...current,
+        occasion: next.occasions.includes(current.occasion) ? current.occasion : next.settings.defaultOccasion
+      }))
+    } catch {
+      setCatalogError("Latest hamper options load nahi ho paaye. Retry karein — tab tak safe fallback options dikh rahe hain.")
+    } finally {
+      setCatalogLoading(false)
+    }
   }, [])
+
+  useEffect(() => { loadCatalog() }, [loadCatalog])
 
   const tiers = visibleTiers(catalog)
   const products = visibleProducts(catalog)
@@ -76,22 +86,31 @@ export function useHamperBuilder() {
 
   function updateField<K extends keyof CheckoutData>(key: K, value: CheckoutData[K]) {
     setCheckout((current) => ({ ...current, [key]: value }))
-    if (detailsError) setDetailsError("")
-  }
-
-  function goToPayment() {
-    const error = validateCheckoutDetails(checkout)
-    setDetailsError(error)
-    if (!error) setStep(4)
-  }
-
-  function goToStep(nextStep: number) {
-    if (nextStep === 4) {
-      goToPayment()
-      return
-    }
     setDetailsError("")
+    setDetailsFieldErrors((current) => {
+      if (!current[key]) return current
+      const next = { ...current }
+      delete next[key]
+      return next
+    })
+  }
+
+  function goToPayment(): keyof CheckoutData | null {
+    const fieldErrors = validateCheckoutFields(checkout)
+    setDetailsFieldErrors(fieldErrors)
+    const firstField = Object.keys(fieldErrors)[0] as keyof CheckoutData | undefined
+    const firstError = firstField ? fieldErrors[firstField] || "" : ""
+    setDetailsError(firstError)
+    if (!firstField) setStep(4)
+    return firstField || null
+  }
+
+  function goToStep(nextStep: number): keyof CheckoutData | null {
+    if (nextStep === 4) return goToPayment()
+    setDetailsError("")
+    setDetailsFieldErrors({})
     setStep(nextStep)
+    return null
   }
 
   function selectTier(id: string) {
@@ -111,9 +130,24 @@ export function useHamperBuilder() {
     if (canSelectProduct(catalog, tier, selected, product).ok) setSelected((current) => [...current, productId])
   }
 
+  function resetForNewOrder(identity?: { customerName?: string; phone?: string }) {
+    const nextTier = defaultTierFor(catalog)
+    setTierId(nextTier.id)
+    setSelected([])
+    setStep(1)
+    setCategory(catalog.settings.allCategory.id)
+    setSearch("")
+    setAccepted(false)
+    setDetailsError("")
+    setDetailsFieldErrors({})
+    setCheckout(checkoutDefaults(catalog, identity))
+  }
+
   return {
     catalog,
     catalogLoading,
+    catalogError,
+    retryCatalog: loadCatalog,
     tier,
     tierId,
     tiers,
@@ -129,6 +163,7 @@ export function useHamperBuilder() {
     checkout,
     accepted,
     detailsError,
+    detailsFieldErrors,
     filteredProducts,
     setStep,
     goToStep,
@@ -138,6 +173,7 @@ export function useHamperBuilder() {
     setAccepted,
     updateField,
     selectTier,
-    toggleProduct
+    toggleProduct,
+    resetForNewOrder
   }
 }
