@@ -57,10 +57,10 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
   useEffect(() => {
     if (!state.draftRestored) return
     notifyUx({
-      title: "Aapka hamper draft restore ho gaya ✓",
-      body: "Budget, selected items aur occasion wapas aa gaye. Privacy ke liye delivery details aur payment info save nahi ki gayi.",
+      title: "Your hamper is back ✓",
+      body: "We restored your budget, selected gifts and occasion so you can continue where you left off.",
       tone: "success",
-      durationMs: 5000
+      durationMs: 4200
     })
     state.dismissDraftRestored()
   }, [state.draftRestored])
@@ -167,13 +167,13 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
 
   useEffect(() => {
     if (!order.error) return
-    notifyUx({ title: "Order place nahi hua", body: order.error, tone: "error", durationMs: 4200 })
+    notifyUx({ title: "Order not placed", body: order.error, tone: "error", durationMs: 4200 })
   }, [order.error])
 
   useEffect(() => {
     if (!order.created) return
     state.clearDraft()
-    notifyUx({ title: "Order successfully place ho gaya ✓", body: `Order ${order.created.orderId} My Celebration dashboard me save ho gaya.`, tone: "success", durationMs: 4500 })
+    notifyUx({ title: "Order placed ✓", body: `${order.created.orderId} is now in My Celebration.`, tone: "success", durationMs: 4500 })
     window.setTimeout(() => {
       const success = document.querySelector<HTMLElement>("[data-order-success]")
       scrollToUxTarget(success, "center")
@@ -190,7 +190,7 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
 
     const invalidField = state.goToStep(nextStep)
     if (invalidField) {
-      notifyUx({ title: "Ek detail check karni hai", body: "Highlighted field complete karein. Hum aapko wahi le ja rahe hain.", tone: "error" })
+      notifyUx({ title: "One detail is missing", body: "Complete the highlighted field to continue.", tone: "error" })
       window.setTimeout(() => focusCheckoutField(invalidField), 80)
     }
   }
@@ -198,14 +198,14 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
   function moveToPayment() {
     const invalidField = state.goToPayment()
     if (invalidField) {
-      notifyUx({ title: "Is field ko complete karein", body: "Hum aapko missing detail par le ja rahe hain.", tone: "error" })
+      notifyUx({ title: "Complete this field", body: "We’ve highlighted the detail that needs attention.", tone: "error" })
       window.setTimeout(() => focusCheckoutField(invalidField), 80)
     }
   }
 
   async function submit() {
     if (!customer.account) {
-      notifyUx({ title: "Bas login baki hai", body: "Mobile + password se login/signup karein. Aapka hamper selection safe rahega.", tone: "info" })
+      notifyUx({ title: "Almost there", body: "Login or create your account, then your order can be placed without losing your hamper choices.", tone: "info" })
       openAuth()
       return
     }
@@ -218,7 +218,7 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
     state.updateField("phone", account.phone)
     state.updateField("customerName", customerName)
     closeAuth()
-    notifyUx({ title: "Login ho gaya ✓", body: `${account.displayName}, ab aapka order continue ho raha hai.`, tone: "success", durationMs: 2200 })
+    notifyUx({ title: "You’re signed in ✓", body: `${account.displayName}, continuing your order now.`, tone: "success", durationMs: 2200 })
     await shortDelay(650)
     await order.submit({ ...submitArgs, checkout })
   }
@@ -232,7 +232,7 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
   function startAnotherOrder() {
     order.reset()
     state.resetForNewOrder(customer.account ? { customerName: customer.account.displayName, phone: customer.account.phone } : undefined)
-    notifyUx({ title: "Naya hamper ready", body: "Aapka account login hi rahega. Naya budget choose karein.", tone: "info" })
+    notifyUx({ title: "Ready for another one", body: "Choose a new budget and start your next hamper.", tone: "info" })
     window.setTimeout(() => scrollToUxTarget(document.getElementById("builder"), "start"), 80)
   }
 
@@ -240,7 +240,7 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
     <section id="builder" className="builder">
       <div className="wrap">
         <div className="centerHead"><div className="kicker">{copy.kicker}</div><h2>{copy.title}</h2><p>{copy.body}</p></div>
-        {state.catalogLoading && <div className="trackingState">Latest hamper options load ho rahe hain…</div>}
+        {state.catalogLoading && <div className="trackingState">Loading the latest hamper options…</div>}
         {state.catalogError && <div className="catalogLoadNotice" role="alert"><span>{state.catalogError}</span><button className="secondary" type="button" disabled={state.catalogLoading} onClick={state.retryCatalog}>{state.catalogLoading ? "Retrying…" : "Retry"}</button></div>}
         <div className="steps fourSteps">{copy.stepLabels.map((label, index) => { const step = index + 1; return <button type="button" key={label} className={`stepBtn ${state.step === step ? "active" : state.step > step ? "done" : ""}`} aria-current={state.step === step ? "step" : undefined} onClick={() => moveToStep(step)}>{label}</button> })}</div>
         <div className="builderCard" data-builder-step-shell>
