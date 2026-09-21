@@ -19,6 +19,13 @@ type BuilderDraft = {
   updatedAt: number
 }
 
+export type TierSocialProof = {
+  tierName: string
+  orderCount: number
+  totalOrders: number
+  sharePercent: number
+}
+
 function defaultTierFor(catalog: CatalogConfig) {
   const tier = tierById(catalog, catalog.settings.defaultTierId) || visibleTiers(catalog)[0]
   if (!tier) throw new Error("Configured catalog has no active tier")
@@ -88,6 +95,7 @@ export function useHamperBuilder() {
   const [catalog, setCatalog] = useState<CatalogConfig>(defaultCatalog)
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogError, setCatalogError] = useState("")
+  const [socialProof, setSocialProof] = useState<TierSocialProof | null>(null)
   const [tierId, setTierId] = useState(initialTier.id)
   const [selected, setSelected] = useState<string[]>([])
   const [step, setStep] = useState(1)
@@ -106,10 +114,11 @@ export function useHamperBuilder() {
     try {
       const response = await fetch("/api/catalog", { cache: "no-store" })
       if (!response.ok) throw new Error("catalog")
-      const payload = await response.json() as { ok: boolean; catalog?: CatalogConfig }
+      const payload = await response.json() as { ok: boolean; catalog?: CatalogConfig; socialProof?: TierSocialProof | null }
       if (!payload.ok || !payload.catalog) throw new Error("catalog")
       const next = payload.catalog
       setCatalog(next)
+      setSocialProof(payload.socialProof || null)
       setTierId((currentTierId) => {
         const nextTier = tierById(next, currentTierId) || defaultTierFor(next)
         setSelected((current) => normalizeSelection(next, nextTier, current))
@@ -121,7 +130,8 @@ export function useHamperBuilder() {
         occasion: next.occasions.includes(current.occasion) ? current.occasion : next.settings.defaultOccasion
       }))
     } catch {
-      setCatalogError("Latest hamper options load nahi ho paaye. Retry karein — tab tak safe fallback options dikh rahe hain.")
+      setSocialProof(null)
+      setCatalogError("We couldn’t load the latest hamper options. Try again — safe fallback options are still available.")
     } finally {
       setCatalogLoading(false)
     }
@@ -251,6 +261,7 @@ export function useHamperBuilder() {
     catalog,
     catalogLoading,
     catalogError,
+    socialProof,
     retryCatalog: loadCatalog,
     tier,
     tierId,
