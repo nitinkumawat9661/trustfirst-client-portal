@@ -14,12 +14,29 @@ permissions:
 
 jobs:
   validate:
-    name: Audit, typecheck and build Celebration
+    name: Audit, migrate, typecheck and build Celebration
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: celebration_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d celebration_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: celebration-site
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/celebration_ci
+      DATABASE_SSL_MODE: disable
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -29,5 +46,9 @@ jobs:
         run: npm run audit
       - name: Typecheck
         run: npm run typecheck
+      - name: Apply migrations
+        run: npm run db:migrate
+      - name: Verify migrations are idempotent
+        run: npm run db:migrate
       - name: Production build
         run: npm run build
