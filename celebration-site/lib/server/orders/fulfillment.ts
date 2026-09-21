@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg"
 import { orderEvents } from "../../../config/order-events"
 import { statusHasCapability, workflowActionTarget, type OrderStatus } from "../../domain/order-status"
 import { trackingTokenHash } from "../../security/tokens"
@@ -34,7 +35,7 @@ export function setPackingVideo(publicId: string, key: string) {
   })
 }
 
-async function approveOrderRow(client: Awaited<ReturnType<Parameters<typeof transaction>[0]>> extends never ? never : any, order: { id: string; status: OrderStatus; packing_video_key: string | null }) {
+async function approveOrderRow(client: PoolClient, order: { id: string; status: OrderStatus; packing_video_key: string | null }) {
   if (!order.packing_video_key) return { ok: false as const, code: "PACKING_VIDEO_NOT_READY" }
   if (!statusHasCapability(order.status, "packingVideoApproval")) return { ok: false as const, code: "INVALID_STATUS_TRANSITION" }
 
