@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { uiContent } from "../../lib/domain/content"
 import { BudgetStep } from "./steps/BudgetStep"
 import { ProductStep } from "./steps/ProductStep"
@@ -25,6 +25,12 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
     checkout: state.checkout,
     accepted: state.accepted
   }
+
+  useEffect(() => {
+    if (!customer.account) return
+    state.updateField("phone", customer.account.phone)
+    if (!state.checkout.customerName.trim()) state.updateField("customerName", customer.account.displayName)
+  }, [customer.account?.id])
 
   async function submit() {
     if (!customer.account) {
