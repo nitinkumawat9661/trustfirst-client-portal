@@ -34,6 +34,16 @@ export function setPackingVideo(publicId: string, key: string) {
   })
 }
 
+async function approveOrderRow(client: Awaited<ReturnType<Parameters<typeof transaction>[0]>> extends never ? never : any, order: { id: string; status: OrderStatus; packing_video_key: string | null }) {
+  if (!order.packing_video_key) return { ok: false as const, code: "PACKING_VIDEO_NOT_READY" }
+  if (!statusHasCapability(order.status, "packingVideoApproval")) return { ok: false as const, code: "INVALID_STATUS_TRANSITION" }
+
+  const nextStatus = workflowActionTarget("customerApproved")
+  await client.query(`UPDATE orders SET status = $1, customer_approved_at = now(), updated_at = now() WHERE id = $2`, [nextStatus, order.id])
+  await appendOrderEvent(client, order.id, orderEvents.customerApprovedPacking, { from: order.status, to: nextStatus })
+  return { ok: true as const }
+}
+
 export function approvePackingVideo(token: string) {
   return transaction(async (client) => {
     const result = await client.query<{ id: string; status: OrderStatus; packing_video_key: string | null }>(
@@ -42,12 +52,21 @@ export function approvePackingVideo(token: string) {
     )
     const order = result.rows[0]
     if (!order) return { ok: false as const, code: "ORDER_NOT_FOUND" }
-    if (!order.packing_video_key) return { ok: false as const, code: "PACKING_VIDEO_NOT_READY" }
-    if (!statusHasCapability(order.status, "packingVideoApproval")) return { ok: false as const, code: "INVALID_STATUS_TRANSITION" }
+    return approveOrderRow(client, order)
+  })
+}
 
-    const nextStatus = workflowActionTarget("customerApproved")
-    await client.query(`UPDATE orders SET status = $1, customer_approved_at = now(), updated_at = now() WHERE id = $2`, [nextStatus, order.id])
-    await appendOrderEvent(client, order.id, orderEvents.customerApprovedPacking, { from: order.status, to: nextStatus })
-    return { ok: true as const }
+export function approvePackingVideoForAccount(publicId: string, customerAccountId: string) {
+  return transaction(async (client) => {
+    const result = await client.query<{ id: string; status: OrderStatus; packing_video_key: string | null }>(
+      `SELECT id, status, packing_video_key
+         FROM orders
+        WHERE public_id = $1 AND customer_account_id = $2
+        FOR UPDATE`,
+      [publicId, customerAccountId]
+    )
+    const order = result.rows[0]
+    if (!order) return { ok: false as const, code: "ORDER_NOT_FOUND" }
+    return approveOrderRow(client, order)
   })
 }
