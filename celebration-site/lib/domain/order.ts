@@ -23,6 +23,7 @@ export type CreateOrderInput = {
   policyVersion?: unknown
   policyAccepted?: unknown
   idempotencyKey?: unknown
+  offerQuoteId?: unknown
 }
 
 export type NormalizedOrder = {
