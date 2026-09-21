@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { supportWhatsappUrl } from "../../lib/domain/support"
+import { useStoreSettings } from "../shell/useStoreSettings"
 import type { CustomerAccountView } from "./useCustomerAccount"
 
 type Mode = "login" | "signup"
@@ -32,6 +33,7 @@ export function CustomerAuthPanel({
   onAuthenticate: (mode: Mode, values: { phone: string; password: string; displayName?: string }) => Promise<CustomerAccountView | null>
   onSuccess?: (account: CustomerAccountView) => void
 }) {
+  const settings = useStoreSettings()
   const [mode, setMode] = useState<Mode>("login")
   const [phone, setPhone] = useState(initialPhone)
   const [password, setPassword] = useState("")
@@ -66,7 +68,7 @@ export function CustomerAuthPanel({
 
       <div className="customerAuthHelp">
         <span>Password ya login me help chahiye?</span>
-        <a href={supportWhatsappUrl("Hi Celebration, mujhe account/login help chahiye.")} target="_blank" rel="noreferrer">WhatsApp support</a>
+        <a href={supportWhatsappUrl("Hi Celebration, mujhe account/login help chahiye.", settings.whatsapp)} target="_blank" rel="noreferrer">WhatsApp support</a>
       </div>
       <small className="customerAuthPrivacy">Mobile ownership OTP se verify nahi hota, isliye purane orders sirf phone match karke account me attach nahi kiye jaate.</small>
     </div>
