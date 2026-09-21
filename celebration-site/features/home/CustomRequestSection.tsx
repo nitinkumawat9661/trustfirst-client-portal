@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react"
 import { supportWhatsappUrl } from "../../lib/domain/support"
 import { useStoreSettings } from "../shell/useStoreSettings"
+import { notifyUx, scrollToUxTarget } from "../ux/UxMessenger"
 
 export function CustomRequestSection() {
   const settings = useStoreSettings()
@@ -14,7 +15,7 @@ export function CustomRequestSection() {
   const [notice, setNotice] = useState("")
   const [error, setError] = useState("")
 
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setBusy(true)
     setNotice("")
@@ -27,14 +28,19 @@ export function CustomRequestSection() {
       })
       const data = await response.json() as { ok?: boolean; error?: string }
       if (!response.ok || !data.ok) throw new Error(data.error || "REQUEST_FAILED")
-      setNotice("Request mil gayi. Team budget aur requirement dekhkar aapse contact karegi.")
+      const success = "Request mil gayi. Team budget aur requirement dekhkar aapse contact karegi."
+      setNotice(success)
       setCustomerName("")
       setPhone("")
       setBudget("")
       setMessage("")
+      notifyUx({ title: "Budget request mil gayi ✓", body: "Team aapki requirement review karke contact karegi.", tone: "success", durationMs: 4200 })
+      window.setTimeout(() => scrollToUxTarget(document.querySelector("#custom-request .successBox"), "center"), 80)
     } catch (caught) {
       const code = caught instanceof Error ? caught.message : "REQUEST_FAILED"
-      setError(code === "RATE_LIMITED" ? "Bahut requests ho gayi hain. Thodi der baad try karein." : "Request send nahi hui. Details check karke dobara try karein.")
+      const failure = code === "RATE_LIMITED" ? "Bahut requests ho gayi hain. Thodi der baad try karein." : "Request send nahi hui. Details check karke dobara try karein."
+      setError(failure)
+      notifyUx({ title: "Request send nahi hui", body: failure, tone: "error" })
     } finally {
       setBusy(false)
     }
@@ -50,17 +56,17 @@ export function CustomRequestSection() {
         </div>
         <form className="customRequestCard" onSubmit={submit}>
           <div className="customRequestGrid">
-            <label>Aapka naam<input required minLength={2} maxLength={80} value={customerName} onChange={(event) => setCustomerName(event.target.value)} autoComplete="name" /></label>
-            <label>Mobile / WhatsApp<input required inputMode="numeric" minLength={10} maxLength={13} value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, ""))} autoComplete="tel" /></label>
-            <label>Aapka budget (₹)<input required type="number" min={0} max={1000000} step={1} value={budget} onChange={(event) => setBudget(event.target.value)} /></label>
+            <label>Aapka naam <b className="requiredMark">*</b><input required minLength={2} maxLength={80} value={customerName} onChange={(event) => setCustomerName(event.target.value)} autoComplete="name" /></label>
+            <label>Mobile / WhatsApp <b className="requiredMark">*</b><input required inputMode="numeric" minLength={10} maxLength={13} value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, ""))} autoComplete="tel" /></label>
+            <label>Aapka budget (₹) <b className="requiredMark">*</b><input required type="number" min={0} max={1000000} step={1} value={budget} onChange={(event) => setBudget(event.target.value)} /></label>
           </div>
-          <label>Kaisa hamper chahiye?<textarea required minLength={10} maxLength={1200} rows={5} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Example: ₹1200 budget, birthday, blue theme, chocolates + mug + photo item; perfume nahi chahiye." /></label>
+          <label>Kaisa hamper chahiye? <b className="requiredMark">*</b><textarea required minLength={10} maxLength={1200} rows={5} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Example: ₹1200 budget, birthday, blue theme, chocolates + mug + photo item; perfume nahi chahiye." /></label>
           <div className="customRequestFooter">
             <span className="tiny">Final price, stock aur delivery feasibility team confirm karegi.</span>
-            <div className="customRequestActions"><a className="secondary" href={supportWhatsappUrl("Hi Celebration, mujhe apne budget me custom hamper banwana hai.", settings.whatsapp)} target="_blank" rel="noreferrer">WhatsApp par pucho</a><button className="primary" disabled={busy}>{busy ? "Sending…" : "Budget request bhejo"}</button></div>
+            <div className="customRequestActions"><a className="secondary" href={supportWhatsappUrl("Hi Celebration, mujhe apne budget me custom hamper banwana hai.", settings.whatsapp)} target="_blank" rel="noreferrer">WhatsApp par pucho</a><button className="primary" disabled={busy}>{busy ? "Request bhej rahe hain…" : "Budget request bhejo"}</button></div>
           </div>
-          {notice && <div className="successBox">{notice}</div>}
-          {error && <div className="errorBox">{error}</div>}
+          {notice && <div className="successBox" role="status">{notice}</div>}
+          {error && <div className="errorBox" role="alert">{error}</div>}
         </form>
       </div>
     </section>
