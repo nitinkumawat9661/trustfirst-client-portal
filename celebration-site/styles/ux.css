@@ -18,6 +18,15 @@
 .checkoutProgressNote{display:flex;align-items:flex-start;gap:8px;border-radius:13px;padding:9px 10px;background:#fff8ef;margin-bottom:10px;font-size:9.5px;line-height:1.45;color:var(--muted)}.checkoutProgressNote b{color:var(--text)}
 .dashboardActionNote{margin-top:8px;font-size:9px;color:var(--muted)}
 .shippingActions{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.shippingActions button,.shippingActions a{min-height:34px;padding:6px 9px;font-size:8.5px}
+.customerAuthSheet :focus-visible,.builderCard :focus-visible,.uxToast :focus-visible{outline:3px solid rgba(116,25,29,.22);outline-offset:2px}
 
+@media(max-width:639px){
+  .builder .navRow,.builder .nextRow{position:sticky;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:9;margin:18px -6px -6px;padding:8px;background:rgba(255,250,245,.97);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 34px rgba(58,23,23,.12);backdrop-filter:blur(14px)}
+  .builder .navRow{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px}
+  .builder .navRow .tiny{grid-column:1/-1;order:-1;padding:1px 4px;text-align:center}
+  .builder .navRow .secondary,.builder .navRow .primary{width:100%;min-width:0;padding-inline:9px}
+  .builder .nextRow .primary{width:100%}
+  .whatsappDock{bottom:calc(82px + env(safe-area-inset-bottom,0px))}
+}
 @media(max-width:759px){.catalogLoadNotice,.paymentReturnHint{align-items:stretch;flex-direction:column}.catalogLoadNotice button,.paymentReturnHint button{width:100%}.uxToast{grid-template-columns:32px 1fr 32px}.customerAuthSheet{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}}
 @media(min-width:760px){.uxToastViewport{top:18px;left:18px;right:18px}.uxToast{padding:12px}.uxToastCopy strong{font-size:13px}.uxToastCopy span{font-size:11px}}
