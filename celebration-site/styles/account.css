@@ -79,6 +79,9 @@
 .customerOrderUpdates{display:grid;gap:8px}
 .customerUpdateCard{display:grid;gap:4px;border:1px solid var(--line);border-radius:13px;padding:10px}
 .customerUpdateCard a{font-size:11px;color:var(--m);font-weight:800}
+.customerPackingApproval{display:grid;gap:10px;margin-top:10px;padding:13px;border:1px solid #e4cfa9;background:#fff9eb;border-radius:15px}
+.customerPackingApproval>div{display:grid;gap:4px}.customerPackingApproval>div b{font-size:12px;color:var(--text)}.customerPackingApproval>div p{font-size:10px;color:var(--muted);line-height:1.5;margin:0}
+.customerPackingApproval label{display:flex;align-items:flex-start;gap:8px;font-size:10px;line-height:1.45;color:var(--text)}.customerPackingApproval label input{margin-top:2px;flex:0 0 auto}.customerPackingApproval .primary{justify-self:start;min-height:40px;font-size:10px}
 .customerOrderFooter{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .customerOrderFooter small{font-size:8.5px;color:var(--muted)}
 .customerOrderFooter .secondary{font-size:9px;min-height:38px;padding:7px 10px}
