@@ -17,12 +17,28 @@ function shortDelay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
+function builderStepUrl(step: number) {
+  const url = new URL(window.location.href)
+  url.hash = `builder-step-${step}`
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
+function historyBuilderStep(value: unknown) {
+  const step = Number(value)
+  return Number.isInteger(step) && step >= 1 && step <= 4 ? step : null
+}
+
 export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBuilder> }) {
   const order = useOrderSubmit()
   const customer = useCustomerAccount()
   const storeSettings = useStoreSettings()
   const [showAuth, setShowAuth] = useState(false)
   const initialStep = useRef(true)
+  const previousStep = useRef(state.step)
+  const historyInitialized = useRef(false)
+  const applyingHistory = useRef(false)
+  const authSheetRef = useRef<HTMLDivElement>(null)
+  const authReturnFocus = useRef<HTMLElement | null>(null)
   const copy = uiContent.builder
   const submitArgs = {
     tier: state.tier,
@@ -39,24 +55,113 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
   }, [customer.account?.id])
 
   useEffect(() => {
+    if (!state.draftRestored) return
+    notifyUx({
+      title: "Aapka hamper draft restore ho gaya ✓",
+      body: "Budget, selected items aur occasion wapas aa gaye. Privacy ke liye delivery details aur payment info save nahi ki gayi.",
+      tone: "success",
+      durationMs: 5000
+    })
+    state.dismissDraftRestored()
+  }, [state.draftRestored])
+
+  useEffect(() => {
     if (initialStep.current) {
       initialStep.current = false
+      previousStep.current = state.step
       return
     }
+
     window.setTimeout(() => scrollToUxTarget(document.querySelector("[data-builder-step-shell]"), "start"), 40)
+
+    if (applyingHistory.current) {
+      previousStep.current = state.step
+      applyingHistory.current = false
+      return
+    }
+
+    if (previousStep.current === state.step) return
+
+    if (!historyInitialized.current) {
+      window.history.replaceState(
+        { ...(window.history.state || {}), celebrationBuilder: true, celebrationBuilderStep: 1 },
+        "",
+        builderStepUrl(1)
+      )
+      historyInitialized.current = true
+    }
+
+    window.history.pushState(
+      { ...(window.history.state || {}), celebrationBuilder: true, celebrationBuilderStep: state.step },
+      "",
+      builderStepUrl(state.step)
+    )
+    previousStep.current = state.step
   }, [state.step])
+
+  useEffect(() => {
+    function onPopState(event: PopStateEvent) {
+      const eventState = event.state as { celebrationBuilder?: boolean; celebrationBuilderStep?: number } | null
+      if (!eventState?.celebrationBuilder) return
+      const nextStep = historyBuilderStep(eventState.celebrationBuilderStep)
+      if (!nextStep) return
+      historyInitialized.current = true
+      applyingHistory.current = true
+      previousStep.current = nextStep
+      state.setStep(nextStep)
+      window.setTimeout(() => scrollToUxTarget(document.querySelector("[data-builder-step-shell]"), "start"), 40)
+    }
+    window.addEventListener("popstate", onPopState)
+    return () => window.removeEventListener("popstate", onPopState)
+  }, [state.setStep])
+
+  function openAuth() {
+    authReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    customer.setError("")
+    setShowAuth(true)
+  }
+
+  function closeAuth(restoreFocus = true) {
+    setShowAuth(false)
+    if (!restoreFocus) return
+    window.setTimeout(() => authReturnFocus.current?.focus({ preventScroll: true }), 40)
+  }
 
   useEffect(() => {
     if (!showAuth) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = "hidden"
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setShowAuth(false)
+
+    function handleDialogKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        closeAuth()
+        return
+      }
+      if (event.key !== "Tab") return
+
+      const sheet = authSheetRef.current
+      if (!sheet) return
+      const focusable = Array.from(sheet.querySelectorAll<HTMLElement>(
+        'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+      )).filter((item) => item.offsetParent !== null)
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement
+      if (event.shiftKey && active === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
-    window.addEventListener("keydown", closeOnEscape)
+
+    window.addEventListener("keydown", handleDialogKeyboard)
     return () => {
       document.body.style.overflow = previousOverflow
-      window.removeEventListener("keydown", closeOnEscape)
+      window.removeEventListener("keydown", handleDialogKeyboard)
     }
   }, [showAuth])
 
@@ -67,11 +172,22 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
 
   useEffect(() => {
     if (!order.created) return
+    state.clearDraft()
     notifyUx({ title: "Order successfully place ho gaya ✓", body: `Order ${order.created.orderId} My Celebration dashboard me save ho gaya.`, tone: "success", durationMs: 4500 })
-    window.setTimeout(() => scrollToUxTarget(document.querySelector("[data-order-success]"), "center"), 100)
+    window.setTimeout(() => {
+      const success = document.querySelector<HTMLElement>("[data-order-success]")
+      scrollToUxTarget(success, "center")
+      window.setTimeout(() => success?.focus({ preventScroll: true }), 280)
+    }, 100)
   }, [order.created?.orderId])
 
   function moveToStep(nextStep: number) {
+    const currentHistory = window.history.state as { celebrationBuilder?: boolean; celebrationBuilderStep?: number } | null
+    if (nextStep === state.step - 1 && currentHistory?.celebrationBuilder && currentHistory.celebrationBuilderStep === state.step) {
+      window.history.back()
+      return
+    }
+
     const invalidField = state.goToStep(nextStep)
     if (invalidField) {
       notifyUx({ title: "Ek detail check karni hai", body: "Highlighted field complete karein. Hum aapko wahi le ja rahe hain.", tone: "error" })
@@ -90,7 +206,7 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
   async function submit() {
     if (!customer.account) {
       notifyUx({ title: "Bas login baki hai", body: "Mobile + password se login/signup karein. Aapka hamper selection safe rahega.", tone: "info" })
-      setShowAuth(true)
+      openAuth()
       return
     }
     await order.submit({ ...submitArgs, checkout: { ...state.checkout, phone: customer.account.phone } })
@@ -101,7 +217,7 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
     const checkout = { ...state.checkout, phone: account.phone, customerName }
     state.updateField("phone", account.phone)
     state.updateField("customerName", customerName)
-    setShowAuth(false)
+    closeAuth()
     notifyUx({ title: "Login ho gaya ✓", body: `${account.displayName}, ab aapka order continue ho raha hai.`, tone: "success", durationMs: 2200 })
     await shortDelay(650)
     await order.submit({ ...submitArgs, checkout })
@@ -131,11 +247,11 @@ export function HamperBuilder({ state }: { state: ReturnType<typeof useHamperBui
           {state.step === 1 && <BudgetStep tierId={state.tierId} occasion={state.checkout.occasion} tiers={state.tiers} occasions={state.occasions} onTier={state.selectTier} onOccasion={(value) => state.updateField("occasion", value)} onNext={() => moveToStep(2)} />}
           {state.step === 2 && <ProductStep catalog={state.catalog} tier={state.tier} products={state.filteredProducts} categories={state.categories} category={state.category} search={state.search} selected={state.selected} pointsUsed={state.pointsUsed} onCategory={state.setCategory} onSearch={state.setSearch} onToggle={state.toggleProduct} onBack={() => moveToStep(1)} onNext={() => moveToStep(3)} />}
           {state.step === 3 && <DetailsStep tier={state.tier} checkout={state.checkout} selectedNames={state.selectedNames} occasions={state.occasions} error={state.detailsError} fieldErrors={state.detailsFieldErrors} updateField={state.updateField} onBack={() => moveToStep(2)} onNext={moveToPayment} />}
-          {state.step === 4 && <PaymentStep tier={state.tier} checkout={state.checkout} selectedNames={state.selectedNames} accepted={state.accepted} submitting={order.submitting} error={order.error} created={order.created} customerAccount={customer.account} accountLoading={customer.loading} onAccepted={state.setAccepted} onReference={(value) => state.updateField("paymentReference", value)} onBack={() => moveToStep(3)} onSubmit={submit} onWhatsapp={openWhatsapp} onLogin={() => setShowAuth(true)} onNewOrder={startAnotherOrder} />}
+          {state.step === 4 && <PaymentStep tier={state.tier} checkout={state.checkout} selectedNames={state.selectedNames} accepted={state.accepted} submitting={order.submitting} error={order.error} created={order.created} customerAccount={customer.account} accountLoading={customer.loading} onAccepted={state.setAccepted} onReference={(value) => state.updateField("paymentReference", value)} onBack={() => moveToStep(3)} onSubmit={submit} onWhatsapp={openWhatsapp} onLogin={openAuth} onNewOrder={startAnotherOrder} />}
         </div>
       </div>
 
-      {showAuth && <div className="customerAuthOverlay" role="dialog" aria-modal="true" aria-label="Login to place order"><button className="customerAuthBackdrop" type="button" aria-label="Close login" onClick={() => setShowAuth(false)} /><div className="customerAuthSheet"><button className="customerAuthClose" type="button" onClick={() => setShowAuth(false)} aria-label="Close">×</button><CustomerAuthPanel busy={customer.busy} error={customer.error} initialPhone={state.checkout.phone} initialName={state.checkout.customerName} autoFocusPhone onAuthenticate={customer.authenticate} onClearError={() => customer.setError("")} onSuccess={authenticated} /></div></div>}
+      {showAuth && <div className="customerAuthOverlay" role="dialog" aria-modal="true" aria-label="Login to place order"><button className="customerAuthBackdrop" type="button" aria-label="Close login" onClick={() => closeAuth()} /><div className="customerAuthSheet" ref={authSheetRef}><button className="customerAuthClose" type="button" onClick={() => closeAuth()} aria-label="Close">×</button><CustomerAuthPanel busy={customer.busy} error={customer.error} initialPhone={state.checkout.phone} initialName={state.checkout.customerName} autoFocusPhone onAuthenticate={customer.authenticate} onClearError={() => customer.setError("")} onSuccess={authenticated} /></div></div>}
     </section>
   )
 }
