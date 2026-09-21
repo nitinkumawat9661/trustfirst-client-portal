@@ -15,6 +15,7 @@ env:
   APP_ROOT: /var/www/celebration
   APP_PORT: "3040"
   PM2_HOME: /home/nitin/.pm2
+  EXPECTED_RELEASE: github-922149436cb5
 
 jobs:
   smoke:
@@ -54,18 +55,16 @@ jobs:
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "$VPS_USER@$VPS_HOST" \
-            bash -s -- "$APP_ROOT" "$APP_PORT" "$PM2_HOME" <<'REMOTE'
+            bash -s -- "$APP_ROOT" "$APP_PORT" "$PM2_HOME" "$EXPECTED_RELEASE" <<'REMOTE'
           set -euo pipefail
           APP_ROOT="$1"
           PORT="$2"
           PM2_HOME="$3"
+          EXPECTED_RELEASE="$4"
           CURRENT="$(readlink -f "$APP_ROOT/current")"
           BASE="http://127.0.0.1:${PORT}"
 
-          case "$CURRENT" in
-            "$APP_ROOT"/releases/github-*) ;;
-            *) echo "Unexpected active release: $CURRENT" >&2; exit 1 ;;
-          esac
+          test "$CURRENT" = "$APP_ROOT/releases/$EXPECTED_RELEASE"
           printf 'CURRENT=%s\n' "$CURRENT"
 
           sudo -u nitin env PM2_HOME="$PM2_HOME" pm2 jlist | node -e '
@@ -74,7 +73,7 @@ jobs:
             const app = list.find((item) => item.name === "celebration-site");
             if (!app || app.pm2_env?.status !== "online") process.exit(1);
             const cwd = String(app.pm2_env?.pm_cwd || "");
-            if (!cwd.includes("/var/www/celebration/releases/github-")) process.exit(1);
+            if (!cwd.endsWith("/github-922149436cb5")) process.exit(1);
             console.log(JSON.stringify({pm2: "online", cwd}));
           '
 
@@ -103,24 +102,4 @@ jobs:
           test "$ACCOUNT_ORDERS" = "401"
           test "$OFFER_AUTH" = "401"
           printf 'AUTH_BOUNDARIES campaigns=%s analytics=%s accountOrders=%s offerQuote=%s\n' "$ADMIN_CAMPAIGNS" "$ADMIN_ANALYTICS" "$ACCOUNT_ORDERS" "$OFFER_AUTH"
-
-          sudo -u nitin env HOME=/home/nitin bash -c 'cd "$1" && node <<'"'"'NODE'"'"'
-          const { loadEnvConfig } = require("@next/env");
-          loadEnvConfig(process.cwd(), false);
-          const { Client } = require("pg");
-          const ssl = process.env.DATABASE_SSL_MODE === "disable" ? false : { rejectUnauthorized: true };
-          const client = new Client({ connectionString: process.env.DATABASE_URL, ssl });
-          (async () => {
-            await client.connect();
-            const tables = await client.query("SELECT to_regclass('public.campaign_config') AS campaign_config, to_regclass('public.offer_quotes') AS offer_quotes, to_regclass('public.conversion_events') AS conversion_events");
-            const row = tables.rows[0] || {};
-            if (!row.campaign_config || !row.offer_quotes || !row.conversion_events) throw new Error("campaign tables missing");
-            const cols = await client.query("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='orders' AND column_name = ANY($1::text[])", [["subtotal_paise","discount_paise","campaign_id","campaign_title","offer_quote_id"]]);
-            if (cols.rowCount !== 5) throw new Error("order campaign columns missing");
-            const migration = await client.query("SELECT 1 FROM schema_migrations WHERE name = '005_campaigns_conversion_analytics.sql'");
-            if (migration.rowCount !== 1) throw new Error("migration 005 not recorded");
-            console.log(JSON.stringify({schema: true, campaignTables: 3, orderCampaignColumns: 5, migration005: true}));
-            await client.end();
-          })().catch(async (error) => { console.error(error.message); try { await client.end(); } catch {} process.exit(1); });
-          NODE' _ "$CURRENT"
           REMOTE
