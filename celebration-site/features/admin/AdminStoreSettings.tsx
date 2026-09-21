@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react"
 import type { StoreSettings } from "../../lib/server/store-settings"
+import { storeContent } from "../../lib/domain/content"
 import { supportWhatsappUrl } from "../../lib/domain/support"
 
 const fallback: StoreSettings = {
-  whatsapp: "917414853321",
-  assistTitle: "Apne budget me dekh rahe ho?",
-  assistBody: "Budget batao, hamper hum curate kar denge.",
-  supportMessage: "Hi Celebration, mujhe gift hamper me help chahiye."
+  whatsapp: storeContent.support.whatsapp,
+  assistTitle: storeContent.support.assistTitle,
+  assistBody: storeContent.support.assistBody,
+  supportMessage: storeContent.support.supportMessage
 }
 
 export function AdminStoreSettings() {
@@ -51,7 +52,7 @@ export function AdminStoreSettings() {
       setSettings(data.settings)
       setVersion(data.version || version + 1)
       setDirty(false)
-      setNotice("Store support settings published.")
+      setNotice("Store support settings publish ho gayi.")
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "SETTINGS_SAVE_FAILED")
     } finally {
@@ -69,7 +70,7 @@ export function AdminStoreSettings() {
       {notice && <div className="successBox adminFeedback">{notice}</div>}
       {error && <div className="errorBox adminFeedback">{error}</div>}
       <div className="adminSettingsGrid">
-        <label>WhatsApp support number<input value={settings.whatsapp} inputMode="tel" onChange={(event) => patch("whatsapp", event.target.value.replace(/\D/g, ""))} /><small>Current default: +91 74148 53321</small></label>
+        <label>WhatsApp support number<input value={settings.whatsapp} inputMode="tel" onChange={(event) => patch("whatsapp", event.target.value.replace(/\D/g, ""))} /><small>Default: {storeContent.support.whatsappDisplay}</small></label>
         <label>Top helper heading<input value={settings.assistTitle} maxLength={160} onChange={(event) => patch("assistTitle", event.target.value)} /></label>
         <label className="adminWide">Top helper line<input value={settings.assistBody} maxLength={160} onChange={(event) => patch("assistBody", event.target.value)} /></label>
         <label className="adminWide">Default WhatsApp message<textarea rows={4} value={settings.supportMessage} maxLength={500} onChange={(event) => patch("supportMessage", event.target.value)} /></label>
