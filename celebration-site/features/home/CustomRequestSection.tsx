@@ -28,19 +28,19 @@ export function CustomRequestSection() {
       })
       const data = await response.json() as { ok?: boolean; error?: string }
       if (!response.ok || !data.ok) throw new Error(data.error || "REQUEST_FAILED")
-      const success = "Request mil gayi. Team budget aur requirement dekhkar aapse contact karegi."
+      const success = "Got it. We’ll review your budget and preferences and contact you with a suitable option."
       setNotice(success)
       setCustomerName("")
       setPhone("")
       setBudget("")
       setMessage("")
-      notifyUx({ title: "Budget request mil gayi ✓", body: "Team aapki requirement review karke contact karegi.", tone: "success", durationMs: 4200 })
+      notifyUx({ title: "Request received ✓", body: "We’ll help you find a hamper that fits your budget.", tone: "success", durationMs: 4200 })
       window.setTimeout(() => scrollToUxTarget(document.querySelector("#custom-request .successBox"), "center"), 80)
     } catch (caught) {
       const code = caught instanceof Error ? caught.message : "REQUEST_FAILED"
-      const failure = code === "RATE_LIMITED" ? "Bahut requests ho gayi hain. Thodi der baad try karein." : "Request send nahi hui. Details check karke dobara try karein."
+      const failure = code === "RATE_LIMITED" ? "Too many requests. Please try again shortly." : "We couldn’t send your request. Check the details and try again."
       setError(failure)
-      notifyUx({ title: "Request send nahi hui", body: failure, tone: "error" })
+      notifyUx({ title: "Request not sent", body: failure, tone: "error" })
     } finally {
       setBusy(false)
     }
@@ -50,20 +50,20 @@ export function CustomRequestSection() {
     <section className="customRequestSection" id="custom-request">
       <div className="wrap">
         <div className="centerHead">
-          <div className="kicker">APNA BUDGET • APNI CHOICE</div>
-          <h2>Budget fixed hai? Aap batao, hamper hum plan kar denge.</h2>
-          <p>Exact listed hamper fit nahi ho raha? Budget, occasion aur kya-kya chahiye likh do. Team manually best mix suggest karegi. Ye request hai, automatic order ya payment nahi.</p>
+          <div className="kicker">YOUR BUDGET • YOUR STYLE</div>
+          <h2>Have a budget in mind? We’ll help you build around it.</h2>
+          <p>Tell us the occasion, budget and the kind of gifts you want. We’ll suggest a mix that feels right before you decide.</p>
         </div>
         <form className="customRequestCard" onSubmit={submit}>
           <div className="customRequestGrid">
-            <label>Aapka naam <b className="requiredMark">*</b><input required minLength={2} maxLength={80} value={customerName} onChange={(event) => setCustomerName(event.target.value)} autoComplete="name" /></label>
+            <label>Your name <b className="requiredMark">*</b><input required minLength={2} maxLength={80} value={customerName} onChange={(event) => setCustomerName(event.target.value)} autoComplete="name" /></label>
             <label>Mobile / WhatsApp <b className="requiredMark">*</b><input required inputMode="numeric" minLength={10} maxLength={13} value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, ""))} autoComplete="tel" /></label>
-            <label>Aapka budget (₹) <b className="requiredMark">*</b><input required type="number" min={0} max={1000000} step={1} value={budget} onChange={(event) => setBudget(event.target.value)} /></label>
+            <label>Your budget (₹) <b className="requiredMark">*</b><input required type="number" min={0} max={1000000} step={1} value={budget} onChange={(event) => setBudget(event.target.value)} /></label>
           </div>
-          <label>Kaisa hamper chahiye? <b className="requiredMark">*</b><textarea required minLength={10} maxLength={1200} rows={5} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Example: ₹1200 budget, birthday, blue theme, chocolates + mug + photo item; perfume nahi chahiye." /></label>
+          <label>What should the hamper feel like? <b className="requiredMark">*</b><textarea required minLength={10} maxLength={1200} rows={5} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Example: ₹1200, birthday, blue theme, chocolates + mug + photo item, no perfume." /></label>
           <div className="customRequestFooter">
-            <span className="tiny">Final price, stock aur delivery feasibility team confirm karegi.</span>
-            <div className="customRequestActions"><a className="secondary" href={supportWhatsappUrl("Hi Celebration, mujhe apne budget me custom hamper banwana hai.", settings.whatsapp)} target="_blank" rel="noreferrer">WhatsApp par pucho</a><button className="primary" disabled={busy}>{busy ? "Request bhej rahe hain…" : "Budget request bhejo"}</button></div>
+            <span className="tiny">We’ll confirm the final mix, price and delivery before you commit.</span>
+            <div className="customRequestActions"><a className="secondary" href={supportWhatsappUrl("Hi Celebration, I need help building a hamper within my budget.", settings.whatsapp)} target="_blank" rel="noreferrer">Ask on WhatsApp</a><button className="primary" disabled={busy}>{busy ? "Sending…" : "Get a suggestion"}</button></div>
           </div>
           {notice && <div className="successBox" role="status">{notice}</div>}
           {error && <div className="errorBox" role="alert">{error}</div>}
