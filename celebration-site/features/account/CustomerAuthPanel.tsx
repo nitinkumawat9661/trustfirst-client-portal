@@ -8,16 +8,16 @@ import type { CustomerAccountView } from "./useCustomerAccount"
 type Mode = "login" | "signup"
 
 const errorCopy: Record<string, string> = {
-  INVALID_PHONE: "10-digit mobile number check karein.",
-  INVALID_PASSWORD: "Password minimum 8 characters ka rakhein.",
-  INVALID_CREDENTIALS: "Mobile number ya password match nahi hua.",
-  INVALID_NAME: "Apna naam enter karein.",
-  ACCOUNT_EXISTS: "Is mobile number ka account already hai. Login karein.",
-  RATE_LIMITED: "Bahut attempts ho gaye. Thodi der baad try karein.",
-  UNSAFE_TEXT: "Is field me unsupported characters hain.",
-  ACCOUNT_SERVICE_UNAVAILABLE: "Login service abhi available nahi hai. Dobara try karein.",
-  ACCOUNT_LOAD_FAILED: "Account status load nahi ho paya. Internet check karke login try karein.",
-  AUTH_FAILED: "Login nahi ho paya. Details check karke dobara try karein."
+  INVALID_PHONE: "Please check your mobile number.",
+  INVALID_PASSWORD: "Use at least 8 characters for your password.",
+  INVALID_CREDENTIALS: "Mobile number or password doesn’t match.",
+  INVALID_NAME: "Please enter your name.",
+  ACCOUNT_EXISTS: "An account already exists with this mobile number. Try login instead.",
+  RATE_LIMITED: "Too many attempts. Please try again shortly.",
+  UNSAFE_TEXT: "Please remove unsupported characters and try again.",
+  ACCOUNT_SERVICE_UNAVAILABLE: "Login is temporarily unavailable. Please try again.",
+  ACCOUNT_LOAD_FAILED: "We couldn’t load your account. Check your connection and try again.",
+  AUTH_FAILED: "We couldn’t continue. Please check your details and try again."
 }
 
 export function CustomerAuthPanel({
@@ -59,34 +59,34 @@ export function CustomerAuthPanel({
     if (account) onSuccess?.(account)
   }
 
-  const friendlyError = error ? errorCopy[error] || "Login nahi ho paya. Details check karke dobara try karein." : ""
+  const friendlyError = error ? errorCopy[error] || "We couldn’t continue. Please check your details and try again." : ""
 
   return (
     <div className="customerAuthCard">
       <div className="customerAuthIntro">
-        <div className="kicker">YOUR CELEBRATION ACCOUNT</div>
-        <h2>{mode === "login" ? "Login karke order complete karein" : "30 seconds me account bana lo"}</h2>
-        <p>OTP nahi. Sirf mobile number + password. Explore pehle bhi kar sakte ho, login order place karte waqt zaroori hai.</p>
+        <div className="kicker">MY CELEBRATION</div>
+        <h2>{mode === "login" ? "Welcome back" : "Create your Celebration account"}</h2>
+        <p>{mode === "login" ? "Login to place your order and keep all updates in one place." : "Save your orders, packing updates and shipping details in one simple dashboard."}</p>
       </div>
 
       <div className="customerAuthTabs" role="tablist" aria-label="Login or create account">
         <button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "active" : ""} onClick={() => changeMode("login")}>Login</button>
-        <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "active" : ""} onClick={() => changeMode("signup")}>New account</button>
+        <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "active" : ""} onClick={() => changeMode("signup")}>Create account</button>
       </div>
 
       <form className="customerAuthForm" onSubmit={submit}>
-        {mode === "signup" && <label className="field"><span>Aapka naam <b className="requiredMark">*</b></span><input className="control" value={displayName} required minLength={2} maxLength={80} autoComplete="name" onChange={(event) => { setDisplayName(event.target.value); onClearError?.() }} placeholder="Naam" /></label>}
+        {mode === "signup" && <label className="field"><span>Your name <b className="requiredMark">*</b></span><input className="control" value={displayName} required minLength={2} maxLength={80} autoComplete="name" onChange={(event) => { setDisplayName(event.target.value); onClearError?.() }} placeholder="Full name" /></label>}
         <label className="field"><span>Mobile number <b className="requiredMark">*</b></span><input className="control" inputMode="tel" autoComplete="tel" value={phone} required autoFocus={autoFocusPhone} onChange={(event) => { setPhone(event.target.value.replace(/\D/g, "").slice(0, 13)); onClearError?.() }} placeholder="10-digit mobile" /></label>
-        <label className="field"><span>Password <b className="requiredMark">*</b></span><div className="passwordControlWrap"><input className="control" type={showPassword ? "text" : "password"} minLength={8} maxLength={72} required autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(event) => { setPassword(event.target.value); onClearError?.() }} placeholder="Minimum 8 characters" /><button className="passwordToggle" type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Password hide karein" : "Password show karein"}>{showPassword ? "Hide" : "Show"}</button></div></label>
+        <label className="field"><span>Password <b className="requiredMark">*</b></span><div className="passwordControlWrap"><input className="control" type={showPassword ? "text" : "password"} minLength={8} maxLength={72} required autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(event) => { setPassword(event.target.value); onClearError?.() }} placeholder="Minimum 8 characters" /><button className="passwordToggle" type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? "Hide" : "Show"}</button></div></label>
         {friendlyError && <div className="errorBox" role="alert">{friendlyError}</div>}
-        <button className="primary fullWidth" disabled={busy} type="submit">{busy ? (mode === "login" ? "Login ho raha hai…" : "Account ban raha hai…") : mode === "login" ? "Login & continue" : "Create account & continue"}</button>
+        <button className="primary fullWidth" disabled={busy} type="submit">{busy ? (mode === "login" ? "Signing in…" : "Creating account…") : mode === "login" ? "Login & continue" : "Create account & continue"}</button>
       </form>
 
       <div className="customerAuthHelp">
-        <span>Password ya login me help chahiye?</span>
-        <a href={supportWhatsappUrl("Hi Celebration, mujhe account/login help chahiye.", settings.whatsapp)} target="_blank" rel="noreferrer">WhatsApp support</a>
+        <span>Need help?</span>
+        <a href={supportWhatsappUrl("Hi Celebration, I need help with my account.", settings.whatsapp)} target="_blank" rel="noreferrer">Chat on WhatsApp</a>
       </div>
-      <small className="customerAuthPrivacy">Mobile ownership OTP se verify nahi hota, isliye purane orders sirf phone match karke account me attach nahi kiye jaate.</small>
+      <small className="customerAuthPrivacy">Your order updates stay inside your Celebration account.</small>
     </div>
   )
 }
