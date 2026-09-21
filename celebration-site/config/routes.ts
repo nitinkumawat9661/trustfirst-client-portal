@@ -6,6 +6,8 @@ export const routes = {
   admin: "/admin",
   api: {
     orders: "/api/orders",
+    offerQuote: "/api/offers/quote",
+    analyticsEvent: "/api/analytics/event",
     tracking: "/api/track",
     trackingLookup: "/api/track/lookup",
     approvePacking: "/api/orders/approve",
@@ -19,6 +21,8 @@ export const routes = {
     adminLogin: "/api/admin/login",
     adminLogout: "/api/admin/logout",
     adminOrders: "/api/admin/orders",
+    adminCampaigns: "/api/admin/campaigns",
+    adminAnalytics: "/api/admin/analytics",
     packingVideoPresign: "/api/packing-video/presign",
     adminOrderStatus: (publicId: string) => `/api/admin/orders/${encodeURIComponent(publicId)}/status`,
     adminOrderShipping: (publicId: string) => `/api/admin/orders/${encodeURIComponent(publicId)}/shipping`,
