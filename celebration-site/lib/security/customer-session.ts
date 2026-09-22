@@ -37,8 +37,8 @@ export function validateCustomerSession(value: string | undefined): CustomerSess
   }
 }
 
-export function getCustomerSession() {
-  return validateCustomerSession(cookies().get(CUSTOMER_COOKIE_NAME)?.value)
+export async function getCustomerSession() {
+  return validateCustomerSession((await cookies()).get(CUSTOMER_COOKIE_NAME)?.value)
 }
 
 export function customerCookieOptions() {

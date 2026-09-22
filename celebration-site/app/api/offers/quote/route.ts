@@ -19,7 +19,7 @@ type QuoteInput = {
 export async function POST(request: Request) {
   try {
     enforceSameOrigin(request)
-    const session = getCustomerSession()
+    const session = await getCustomerSession()
     if (!session) return NextResponse.json({ ok: false, error: "AUTH_REQUIRED" }, { status: 401 })
     const account = await findCustomerAccountById(session.accountId)
     if (!account) return NextResponse.json({ ok: false, error: "AUTH_REQUIRED" }, { status: 401 })

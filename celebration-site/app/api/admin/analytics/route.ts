@@ -5,7 +5,7 @@ import { getConversionAnalytics } from "../../../../lib/server/conversion-analyt
 export const dynamic = "force-dynamic"
 
 export async function GET(request: Request) {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
     const url = new URL(request.url)
     const days = Number(url.searchParams.get("days") || 30)

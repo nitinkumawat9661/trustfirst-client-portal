@@ -7,7 +7,7 @@ import { createCatalogImageUploadUrl, isCatalogImageKey, isCatalogImageMimeType,
 import { sanitizeText } from "../../../../../lib/validation/text"
 
 export async function POST(request: Request) {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
     enforceSameOrigin(request)
     const allowed = await consumeRequestRateLimit("admin-catalog-image", request, validation.rateLimits.catalogUpload)

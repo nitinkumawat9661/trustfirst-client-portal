@@ -6,8 +6,8 @@ import { setShippingDetails } from "../../../../../../lib/server/orders"
 import { consumeRequestRateLimit } from "../../../../../../lib/server/rate-limit"
 import { sanitizeText } from "../../../../../../lib/validation/text"
 
-export async function POST(request: Request, context: { params: { publicId: string } }) {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+export async function POST(request: Request, context: { params: Promise<{ publicId: string }> }) {
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
     enforceSameOrigin(request)
     const allowed = await consumeRequestRateLimit("admin-mutation", request, validation.rateLimits.adminMutation)
@@ -18,7 +18,7 @@ export async function POST(request: Request, context: { params: { publicId: stri
     const trackingNumber = sanitizeText(body.trackingNumber, validation.shipping.trackingMax)
     if (!provider || !trackingNumber) return NextResponse.json({ ok: false, error: "INVALID_SHIPPING_DETAILS" }, { status: 422 })
 
-    const result = await setShippingDetails(context.params.publicId, provider, trackingNumber)
+    const result = await setShippingDetails((await context.params).publicId, provider, trackingNumber)
     return NextResponse.json(result, { status: result.ok ? 200 : result.code === "ORDER_NOT_FOUND" ? 404 : 409 })
   } catch (error) {
     if (error instanceof RequestSecurityError) return NextResponse.json({ ok: false, error: error.code }, { status: error.status })

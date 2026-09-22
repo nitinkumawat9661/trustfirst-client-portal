@@ -9,7 +9,7 @@ import { sanitizeText } from "../../../../lib/validation/text"
 const statuses = new Set(["new", "contacted", "closed"])
 
 export async function GET() {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
     return NextResponse.json({ ok: true, requests: await listCustomHamperRequests() }, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
@@ -19,7 +19,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
     enforceSameOrigin(request)
     const allowed = await consumeRequestRateLimit("admin-custom-request", request, validation.rateLimits.adminMutation)

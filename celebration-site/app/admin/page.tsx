@@ -7,8 +7,8 @@ import { isAdminRequest } from "../../lib/security/admin-session"
 export const dynamic = "force-dynamic"
 export const metadata = { robots: { index: false, follow: false } }
 
-export default function AdminPage() {
-  const authenticated = isAdminRequest()
+export default async function AdminPage() {
+  const authenticated = await isAdminRequest()
   return (
     <main>
       <TrustStrip />

@@ -50,6 +50,6 @@ export function validateAdminSession(value: string | undefined) {
   }
 }
 
-export function isAdminRequest() {
-  return validateAdminSession(cookies().get(ADMIN_COOKIE_NAME)?.value)
+export async function isAdminRequest() {
+  return validateAdminSession((await cookies()).get(ADMIN_COOKIE_NAME)?.value)
 }

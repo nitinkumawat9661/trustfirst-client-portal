@@ -8,7 +8,7 @@ import { consumeRequestRateLimit } from "../../../../../lib/server/rate-limit"
 export const dynamic = "force-dynamic"
 
 export async function POST(request: Request) {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
     enforceSameOrigin(request)
     const allowed = await consumeRequestRateLimit("admin-catalog-publish", request, validation.rateLimits.adminMutation)

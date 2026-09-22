@@ -6,8 +6,8 @@ import { enforceSameOrigin, readJsonBody, RequestSecurityError } from "../../../
 import { updateOrderStatus } from "../../../../../../lib/server/orders"
 import { consumeRequestRateLimit } from "../../../../../../lib/server/rate-limit"
 
-export async function POST(request: Request, context: { params: { publicId: string } }) {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+export async function POST(request: Request, context: { params: Promise<{ publicId: string }> }) {
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
     enforceSameOrigin(request)
     const allowed = await consumeRequestRateLimit("admin-mutation", request, validation.rateLimits.adminMutation)
@@ -15,7 +15,7 @@ export async function POST(request: Request, context: { params: { publicId: stri
 
     const body = await readJsonBody<{ status?: unknown }>(request)
     if (!isOrderStatus(body.status)) return NextResponse.json({ ok: false, error: "INVALID_STATUS" }, { status: 422 })
-    const result = await updateOrderStatus(context.params.publicId, body.status)
+    const result = await updateOrderStatus((await context.params).publicId, body.status)
     return NextResponse.json(result, { status: result.ok ? 200 : result.code === "ORDER_NOT_FOUND" ? 404 : 409 })
   } catch (error) {
     if (error instanceof RequestSecurityError) return NextResponse.json({ ok: false, error: error.code }, { status: error.status })

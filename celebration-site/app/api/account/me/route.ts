@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
-    const session = getCustomerSession()
+    const session = await getCustomerSession()
     if (!session) return NextResponse.json({ ok: true, account: null }, { headers: { "Cache-Control": "no-store" } })
     const account = await findCustomerAccountById(session.accountId)
     return NextResponse.json({ ok: true, account: account ? { ...account, phoneVerified: false } : null }, { headers: { "Cache-Control": "no-store" } })

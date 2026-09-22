@@ -8,7 +8,7 @@ import { getStoreSettings, saveStoreSettings, StoreSettingsError } from "../../.
 export const dynamic = "force-dynamic"
 
 export async function GET() {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
     return NextResponse.json({ ok: true, ...(await getStoreSettings()) }, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
@@ -18,7 +18,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
     enforceSameOrigin(request)
     const allowed = await consumeRequestRateLimit("admin-store-settings", request, validation.rateLimits.adminMutation)

@@ -8,7 +8,7 @@ import { consumeRequestRateLimit } from "../../../../../lib/server/rate-limit"
 export const dynamic = "force-dynamic"
 
 export async function GET() {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
     return NextResponse.json({ ok: true, revisions: await listCatalogRevisions() }, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
@@ -18,7 +18,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
     enforceSameOrigin(request)
     const allowed = await consumeRequestRateLimit("admin-catalog-history", request, validation.rateLimits.adminMutation)

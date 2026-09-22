@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const allowed = await consumeRequestRateLimit("conversion-event", request, validation.rateLimits.analyticsEvent)
     if (!allowed) return NextResponse.json({ ok: false, error: "RATE_LIMITED" }, { status: 429 })
     const body = await readJsonBody<EventInput>(request)
-    const session = getCustomerSession()
+    const session = await getCustomerSession()
     const recorded = await recordConversionEvent({
       sessionId: body.sessionId,
       eventName: body.eventName,

@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
-    const session = getCustomerSession()
+    const session = await getCustomerSession()
     if (!session) return NextResponse.json({ ok: false, error: "AUTH_REQUIRED" }, { status: 401 })
     const account = await findCustomerAccountById(session.accountId)
     if (!account) return NextResponse.json({ ok: false, error: "AUTH_REQUIRED" }, { status: 401 })

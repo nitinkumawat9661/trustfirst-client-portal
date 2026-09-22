@@ -6,11 +6,11 @@ import { findAdminPackingVideoKey, setPackingVideo } from "../../../../../../lib
 import { createPackingVideoViewUrl, isPackingVideoKeyForOrder, verifyPackingVideoObject } from "../../../../../../lib/server/r2"
 import { consumeRequestRateLimit } from "../../../../../../lib/server/rate-limit"
 
-export async function GET(_request: Request, context: { params: { publicId: string } }) {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+export async function GET(_request: Request, context: { params: Promise<{ publicId: string }> }) {
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
-    const key = await findAdminPackingVideoKey(context.params.publicId)
-    if (!key || !isPackingVideoKeyForOrder(key, context.params.publicId)) {
+    const key = await findAdminPackingVideoKey((await context.params).publicId)
+    if (!key || !isPackingVideoKeyForOrder(key, (await context.params).publicId)) {
       return NextResponse.json({ ok: false, error: "PACKING_VIDEO_NOT_READY" }, { status: 404 })
     }
     return NextResponse.redirect(await createPackingVideoViewUrl(key), 302)
@@ -20,8 +20,8 @@ export async function GET(_request: Request, context: { params: { publicId: stri
   }
 }
 
-export async function POST(request: Request, context: { params: { publicId: string } }) {
-  if (!isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
+export async function POST(request: Request, context: { params: Promise<{ publicId: string }> }) {
+  if (!await isAdminRequest()) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 })
   try {
     enforceSameOrigin(request)
     const allowed = await consumeRequestRateLimit("admin-mutation", request, validation.rateLimits.adminMutation)
@@ -29,10 +29,10 @@ export async function POST(request: Request, context: { params: { publicId: stri
 
     const body = await readJsonBody<{ key?: unknown }>(request)
     const key = typeof body.key === "string" ? body.key.trim() : ""
-    if (!isPackingVideoKeyForOrder(key, context.params.publicId)) return NextResponse.json({ ok: false, error: "INVALID_VIDEO_KEY" }, { status: 422 })
+    if (!isPackingVideoKeyForOrder(key, (await context.params).publicId)) return NextResponse.json({ ok: false, error: "INVALID_VIDEO_KEY" }, { status: 422 })
     if (!(await verifyPackingVideoObject(key))) return NextResponse.json({ ok: false, error: "INVALID_VIDEO_OBJECT" }, { status: 422 })
 
-    const result = await setPackingVideo(context.params.publicId, key)
+    const result = await setPackingVideo((await context.params).publicId, key)
     return NextResponse.json(result, { status: result.ok ? 200 : result.code === "ORDER_NOT_FOUND" ? 404 : 409 })
   } catch (error) {
     if (error instanceof RequestSecurityError) return NextResponse.json({ ok: false, error: error.code }, { status: error.status })
