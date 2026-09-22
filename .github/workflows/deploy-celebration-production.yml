@@ -52,6 +52,7 @@ jobs:
           test ! -e .env
           test ! -e .env.production
           npm ci
+          npm audit --omit=dev
           npm run audit
           npm run typecheck
 
@@ -155,7 +156,7 @@ jobs:
           }
 
           echo "Installing and verifying new Celebration release"
-          run_as_runtime bash -c 'cd "$1" && npm ci && npm run audit && npm run typecheck && npm run build' _ "$NEW_RELEASE"
+          run_as_runtime bash -c 'cd "$1" && npm ci && npm audit --omit=dev && npm run audit && npm run typecheck && npm run build' _ "$NEW_RELEASE"
 
           echo "Applying idempotent database migrations"
           run_as_runtime bash -c 'cd "$1" && node -e "const {loadEnvConfig}=require(\"@next/env\"); loadEnvConfig(process.cwd(), false); import(\"./scripts/migrate.mjs\")"' _ "$NEW_RELEASE"
