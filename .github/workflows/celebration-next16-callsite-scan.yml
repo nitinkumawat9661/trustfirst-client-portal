@@ -1,0 +1,17 @@
+name: Celebration Next 16 Callsite Scan
+on:
+  push:
+    branches: [feat/celebration-hardening-draft-publish]
+    paths: [.github/workflows/celebration-next16-callsite-scan.yml]
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: |
+          echo '=== admin ==='
+          grep -R -n --exclude-dir=node_modules --exclude-dir=.next 'isAdminRequest(' celebration-site || true
+          echo '=== customer ==='
+          grep -R -n --exclude-dir=node_modules --exclude-dir=.next 'getCustomerSession(' celebration-site || true
