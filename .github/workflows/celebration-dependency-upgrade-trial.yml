@@ -1,0 +1,37 @@
+name: Celebration Dependency Upgrade Trial
+
+on:
+  push:
+    branches:
+      - feat/celebration-hardening-draft-publish
+    paths:
+      - ".github/workflows/celebration-dependency-upgrade-trial.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trial:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: celebration-site
+    steps:
+      - uses: actions/checkout@v5
+      - name: Upgrade in working tree
+        run: |
+          npm install --save-exact next@15.5.24 react@19.3.0 react-dom@19.3.0 @aws-sdk/client-s3@3.1137.0 @aws-sdk/s3-request-presigner@3.1137.0 @types/react@latest @types/react-dom@latest
+          npm ls next react react-dom @aws-sdk/client-s3 @aws-sdk/s3-request-presigner @types/react @types/react-dom
+      - name: Production audit
+        run: npm audit --omit=dev
+      - name: Source/domain audit
+        run: npm run audit
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Show manifest diff
+        if: always()
+        run: git diff -- package.json package-lock.json | head -n 240
