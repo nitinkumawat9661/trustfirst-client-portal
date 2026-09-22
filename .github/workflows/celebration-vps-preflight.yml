@@ -15,6 +15,7 @@ env:
   TARGET_DOMAIN: shopcelebration.in
   TARGET_PATH: /var/www/celebration
   EXPECTED_PORT: "3040"
+  EXPECTED_NEXT_VERSION: "16.3.5"
 
 jobs:
   inspect:
@@ -60,11 +61,12 @@ jobs:
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "$VPS_USER@$VPS_HOST" \
-            bash -s -- "$TARGET_DOMAIN" "$TARGET_PATH" "$EXPECTED_PORT" <<'REMOTE'
+            bash -s -- "$TARGET_DOMAIN" "$TARGET_PATH" "$EXPECTED_PORT" "$EXPECTED_NEXT_VERSION" <<'REMOTE'
           set -euo pipefail
           DOMAIN="$1"
           APP_DIR="$2"
           PORT="$3"
+          EXPECTED_NEXT_VERSION="$4"
           BASE="http://127.0.0.1:${PORT}"
 
           echo "=== TARGET ==="
@@ -74,14 +76,16 @@ jobs:
           printf 'CURRENT=%s\n' "$CURRENT"
 
           echo "=== NITIN PM2 SAFE MAP ==="
-          sudo -u nitin env PM2_HOME=/home/nitin/.pm2 pm2 jlist | node -e '
+          sudo -u nitin env PM2_HOME=/home/nitin/.pm2 pm2 jlist | EXPECTED_NEXT_VERSION="$EXPECTED_NEXT_VERSION" node -e '
             const fs = require("fs");
             const list = JSON.parse(fs.readFileSync(0, "utf8"));
+            let celebrationFound = false;
             for (const item of list) {
               const env = item.pm2_env || {};
               const out = {
                 id: item.pm_id,
                 name: String(item.name || env.name || ""),
+                version: String(env.version || ""),
                 pid: item.pid || "",
                 status: String(env.status || ""),
                 cwd: String(env.pm_cwd || ""),
@@ -89,8 +93,13 @@ jobs:
                 args: Array.isArray(env.args) ? env.args.join(" ") : String(env.args || ""),
                 interpreter: String(env.exec_interpreter || "")
               };
+              if (out.name === "celebration-site") {
+                celebrationFound = true;
+                if (out.status !== "online" || out.version !== process.env.EXPECTED_NEXT_VERSION || !out.cwd.includes("/var/www/celebration/releases/github-")) process.exit(1);
+              }
               console.log(JSON.stringify(out));
             }
+            if (!celebrationFound) process.exit(1);
           '
 
           echo "=== CURRENT RELEASE LINKS (NAMES ONLY) ==="
@@ -112,9 +121,11 @@ jobs:
           echo "=== PUBLIC PAGES ==="
           HOME_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 8 "$BASE/")"
           ACCOUNT_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 8 "$BASE/account")"
+          PREVIEW_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 8 "$BASE/admin/catalog-preview")"
           test "$HOME_STATUS" = "200"
           test "$ACCOUNT_STATUS" = "200"
-          printf 'HOME_STATUS=%s ACCOUNT_PAGE_STATUS=%s\n' "$HOME_STATUS" "$ACCOUNT_STATUS"
+          test "$PREVIEW_STATUS" = "200"
+          printf 'HOME_STATUS=%s ACCOUNT_PAGE_STATUS=%s ADMIN_PREVIEW_PAGE_STATUS=%s\n' "$HOME_STATUS" "$ACCOUNT_STATUS" "$PREVIEW_STATUS"
 
           echo "=== RUNTIME CATALOG ==="
           CATALOG="$(curl --silent --show-error --fail --max-time 8 "$BASE/api/catalog")"
@@ -149,10 +160,12 @@ jobs:
           test "$ORDERS_STATUS" = "401"
           printf 'UNAUTHENTICATED_ACCOUNT_ORDERS_STATUS=%s\n' "$ORDERS_STATUS"
 
-          echo "=== ADMIN AUTH BOUNDARY ==="
+          echo "=== ADMIN AUTH BOUNDARIES ==="
           ADMIN_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$BASE/api/admin/catalog")"
           HISTORY_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$BASE/api/admin/catalog/history")"
+          PUBLISH_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 -X POST -H 'Content-Type: application/json' --data '{"version":1}' "$BASE/api/admin/catalog/publish")"
           test "$ADMIN_STATUS" = "401"
           test "$HISTORY_STATUS" = "401"
-          printf 'UNAUTHENTICATED_ADMIN_CATALOG_STATUS=%s HISTORY_STATUS=%s\n' "$ADMIN_STATUS" "$HISTORY_STATUS"
+          test "$PUBLISH_STATUS" = "401"
+          printf 'UNAUTHENTICATED_ADMIN_CATALOG_STATUS=%s HISTORY_STATUS=%s PUBLISH_STATUS=%s\n' "$ADMIN_STATUS" "$HISTORY_STATUS" "$PUBLISH_STATUS"
           REMOTE
