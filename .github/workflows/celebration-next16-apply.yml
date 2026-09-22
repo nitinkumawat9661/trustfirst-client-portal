@@ -31,6 +31,8 @@ jobs:
               continue
             s=p.read_text()
             n=s.replace('isAdminRequest()', 'await isAdminRequest()').replace('getCustomerSession()', 'await getCustomerSession()')
+            n=n.replace('params: { publicId: string }', 'params: Promise<{ publicId: string }>')
+            n=n.replace('context.params.publicId', '(await context.params).publicId').replace('params.publicId', '(await params).publicId')
             if p.as_posix().endswith('app/admin/page.tsx'):
               n=n.replace('export default function AdminPage()', 'export default async function AdminPage()')
             if n!=s: p.write_text(n)
