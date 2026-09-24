@@ -8,9 +8,10 @@ function drawTriangle(ctx: CanvasRenderingContext2D, x: number, y: number, size:
 export function ShapeWaves({ className = "", color = "#8b2529", cellSize = 14 }: ShapeWavesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
-    const canvasElement = canvasRef.current
-    if (!canvasElement) return
-    const context = canvasElement.getContext("2d", { alpha: true })
+    const currentCanvas = canvasRef.current
+    if (!currentCanvas) return
+    const canvas: HTMLCanvasElement = currentCanvas
+    const context = canvas.getContext("2d", { alpha: true })
     if (!context) return
     const ctx: CanvasRenderingContext2D = context
     let width = 0, height = 0, raf = 0, running = false, visible = true
@@ -39,10 +40,10 @@ export function ShapeWaves({ className = "", color = "#8b2529", cellSize = 14 }:
       }
       ctx.globalAlpha = 1
     }
-    function resize() { const rect = canvasElement.getBoundingClientRect(); width = Math.max(1, Math.round(rect.width)); height = Math.max(1, Math.round(rect.height)); canvasElement.width = Math.round(width * dpr); canvasElement.height = Math.round(height * dpr); ctx.setTransform(dpr,0,0,dpr,0,0); draw(performance.now()) }
+    function resize() { const rect = canvas.getBoundingClientRect(); width = Math.max(1, Math.round(rect.width)); height = Math.max(1, Math.round(rect.height)); canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); ctx.setTransform(dpr,0,0,dpr,0,0); draw(performance.now()) }
     function loop(now: number) { if (!running) return; if (visible && !document.hidden) draw(now); raf = requestAnimationFrame(loop) }
-    const ro = new ResizeObserver(resize); ro.observe(canvasElement)
-    const io = new IntersectionObserver(([entry]) => { visible = Boolean(entry?.isIntersecting); if (visible) draw(performance.now()) }, { rootMargin: "120px" }); io.observe(canvasElement)
+    const ro = new ResizeObserver(resize); ro.observe(canvas)
+    const io = new IntersectionObserver(([entry]) => { visible = Boolean(entry?.isIntersecting); if (visible) draw(performance.now()) }, { rootMargin: "120px" }); io.observe(canvas)
     resize(); if (!reduced) { running = true; raf = requestAnimationFrame(loop) }
     return () => { running = false; cancelAnimationFrame(raf); ro.disconnect(); io.disconnect() }
   }, [cellSize, color])
