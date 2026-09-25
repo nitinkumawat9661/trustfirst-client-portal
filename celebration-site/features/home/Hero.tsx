@@ -37,7 +37,7 @@ export function Hero({ tiers, products }: { tiers: Tier[]; products: GiftProduct
             <span>Made around their moment</span>
             <i aria-hidden="true">{storeContent.brand.giftIcon}</i>
           </div>
-          <p className="heroVisualLine">Pick a budget. Add what feels right. We’ll pack it beautifully.</p>
+          <p className="heroVisualLine">A little box of reasons to smile.</p>
           <div className="heroVisualItems">
             {showcaseItems.map((item) => (
               <div className="heroVisualItem" key={item.label}>
