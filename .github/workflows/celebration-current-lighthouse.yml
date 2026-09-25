@@ -1,0 +1,105 @@
+name: Celebration Current Mobile Lighthouse
+
+on:
+  push:
+    branches:
+      - verify/celebration-current-lighthouse
+    paths:
+      - ".github/workflows/celebration-current-lighthouse.yml"
+      - "celebration-site/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: celebration-site
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: celebration-site/package-lock.json
+      - name: Validate source
+        run: |
+          npm ci
+          npm audit --omit=dev
+          npm run audit
+          npm run typecheck
+          npm run build
+      - name: Start local production server
+        run: |
+          npm start -- -H 127.0.0.1 -p 3099 > /tmp/celebration-server.log 2>&1 &
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:3099/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/celebration-server.log
+          exit 1
+      - name: Lighthouse mobile - local build
+        run: |
+          npx --yes lighthouse@12.8.2 http://127.0.0.1:3099/ \
+            --quiet \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --only-categories=performance,accessibility,best-practices,seo \
+            --form-factor=mobile \
+            --screenEmulation.mobile=true \
+            --screenEmulation.width=390 \
+            --screenEmulation.height=844 \
+            --screenEmulation.deviceScaleFactor=2 \
+            --throttling-method=simulate \
+            --output=json \
+            --output-path=/tmp/lighthouse-local.json
+      - name: Lighthouse mobile - live production
+        run: |
+          npx --yes lighthouse@12.8.2 https://shopcelebration.in/ \
+            --quiet \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --only-categories=performance,accessibility,best-practices,seo \
+            --form-factor=mobile \
+            --screenEmulation.mobile=true \
+            --screenEmulation.width=390 \
+            --screenEmulation.height=844 \
+            --screenEmulation.deviceScaleFactor=2 \
+            --throttling-method=simulate \
+            --output=json \
+            --output-path=/tmp/lighthouse-live.json
+      - name: Print Lighthouse metrics
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          for (const [name, path] of [['LOCAL','/tmp/lighthouse-local.json'],['LIVE','/tmp/lighthouse-live.json']]) {
+            const r = JSON.parse(fs.readFileSync(path,'utf8'))
+            const score = k => Math.round((r.categories[k]?.score || 0) * 100)
+            const val = k => r.audits[k]?.displayValue ?? r.audits[k]?.numericValue
+            const summary = {
+              performance: score('performance'),
+              accessibility: score('accessibility'),
+              bestPractices: score('best-practices'),
+              seo: score('seo'),
+              FCP: val('first-contentful-paint'),
+              LCP: val('largest-contentful-paint'),
+              TBT: val('total-blocking-time'),
+              CLS: val('cumulative-layout-shift'),
+              SpeedIndex: val('speed-index'),
+              INPProxy: val('interactive')
+            }
+            console.log(`LIGHTHOUSE_${name}=${JSON.stringify(summary)}`)
+          }
+          NODE
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: celebration-current-lighthouse
+          path: |
+            /tmp/lighthouse-local.json
+            /tmp/lighthouse-live.json
+          if-no-files-found: warn
+          retention-days: 1
