@@ -1,0 +1,108 @@
+name: Celebration Live Post-Deploy Audit
+
+on:
+  push:
+    branches:
+      - validate/private-main-lighthouse
+    paths:
+      - ".github/workflows/celebration-live-postdeploy-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Wait for public health
+        run: |
+          for i in {1..30}; do
+            if curl -fsS https://shopcelebration.in/api/health >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Lighthouse mobile - live production
+        run: |
+          npx --yes lighthouse@12.8.2 https://shopcelebration.in/ \
+            --quiet \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --only-categories=performance,accessibility,best-practices,seo \
+            --form-factor=mobile \
+            --screenEmulation.mobile=true \
+            --screenEmulation.width=390 \
+            --screenEmulation.height=844 \
+            --screenEmulation.deviceScaleFactor=2 \
+            --throttling-method=simulate \
+            --output=json \
+            --output-path=/tmp/lighthouse-live.json
+      - name: Print live metrics
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const r = JSON.parse(fs.readFileSync('/tmp/lighthouse-live.json','utf8'))
+          const score = k => Math.round((r.categories[k]?.score || 0) * 100)
+          const val = k => r.audits[k]?.displayValue ?? r.audits[k]?.numericValue
+          const summary = {
+            performance: score('performance'),
+            accessibility: score('accessibility'),
+            bestPractices: score('best-practices'),
+            seo: score('seo'),
+            FCP: val('first-contentful-paint'),
+            LCP: val('largest-contentful-paint'),
+            TBT: val('total-blocking-time'),
+            CLS: val('cumulative-layout-shift'),
+            SpeedIndex: val('speed-index')
+          }
+          console.log('LIGHTHOUSE_LIVE=' + JSON.stringify(summary))
+          if (summary.performance < 80) process.exitCode = 2
+          if (summary.accessibility < 95 || summary.bestPractices < 90 || summary.seo < 95) process.exitCode = 3
+          NODE
+      - name: Install Playwright Chromium
+        if: always()
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Verify live mobile hero and marquee
+        if: always()
+        run: |
+          mkdir -p live-visuals
+          node <<'NODE'
+          const { chromium, devices } = require('playwright')
+          ;(async () => {
+            const browser = await chromium.launch({ headless: true })
+            const context = await browser.newContext({ ...devices['iPhone 13'] })
+            const page = await context.newPage()
+            await page.goto('https://shopcelebration.in/', { waitUntil: 'networkidle', timeout: 60000 })
+            await page.waitForTimeout(500)
+            const before = await page.$eval('.trustStripTrack', el => getComputedStyle(el).transform)
+            const italic = await page.$eval('.heroItalic', el => getComputedStyle(el).fontStyle)
+            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+            const hero = await page.locator('.hero h1').innerText()
+            await page.screenshot({ path: 'live-visuals/live-mobile-start.png', fullPage: false })
+            await page.waitForTimeout(1400)
+            const after = await page.$eval('.trustStripTrack', el => getComputedStyle(el).transform)
+            await page.screenshot({ path: 'live-visuals/live-mobile-moving.png', fullPage: false })
+            console.log('LIVE_VISUAL=' + JSON.stringify({ before, after, italic, overflow, hero }))
+            if (before === after) throw new Error('Live trust strip is not auto-moving')
+            if (italic !== 'italic') throw new Error('Live hero accent is not italic')
+            if (overflow > 1) throw new Error(`Live horizontal overflow: ${overflow}px`)
+            if (!hero.includes('Make their day.') || !hero.includes('Your way.')) throw new Error('Live hero text mismatch')
+            await browser.close()
+          })().catch(error => { console.error(error); process.exit(1) })
+          NODE
+      - name: Upload live evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: celebration-live-postdeploy-audit
+          path: |
+            /tmp/lighthouse-live.json
+            live-visuals
+          if-no-files-found: warn
+          retention-days: 1
