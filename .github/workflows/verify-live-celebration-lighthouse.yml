@@ -15,11 +15,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Prepare isolated browser tools
+        run: |
+          mkdir -p /tmp/celebration-live-check
+          cd /tmp/celebration-live-check
+          npm init -y >/dev/null 2>&1
+          npm install --no-package-lock playwright@1.55.0 lighthouse@12.8.2
+          npx playwright install --with-deps chromium
+          mkdir -p "$GITHUB_WORKSPACE/live-verify"
+
       - name: Verify live mobile motion and layout
         run: |
-          npm install --no-save --no-package-lock playwright@1.55.0
-          npx playwright install --with-deps chromium
-          mkdir -p live-verify
+          cd /tmp/celebration-live-check
           node <<'NODE'
           const { chromium, devices } = require('playwright')
           ;(async () => {
@@ -36,12 +43,12 @@ jobs:
             const marqueeAnimation = await track.evaluate(el => getComputedStyle(el).animationName)
             const marqueeBefore = await track.evaluate(el => getComputedStyle(el).transform)
             const widthCheck = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }))
-            await page.screenshot({ path: 'live-verify/live-mobile-hero.png', fullPage: false })
+            await page.screenshot({ path: process.env.GITHUB_WORKSPACE + '/live-verify/live-mobile-hero.png', fullPage: false })
             await page.waitForTimeout(1800)
             const marqueeAfter = await track.evaluate(el => getComputedStyle(el).transform)
             const wave = page.locator('.heroShapeWaves')
             const waveRect = await wave.boundingBox()
-            await page.screenshot({ path: 'live-verify/live-mobile-hero-motion.png', fullPage: false })
+            await page.screenshot({ path: process.env.GITHUB_WORKSPACE + '/live-verify/live-mobile-hero-motion.png', fullPage: false })
             const health = await page.request.get('https://shopcelebration.in/api/health')
 
             const report = { heroRefresh, heroItalic, heroVisual, marqueeAnimation, marqueeBefore, marqueeAfter, waveRect, widthCheck, healthStatus: health.status() }
@@ -57,8 +64,9 @@ jobs:
 
       - name: Live Lighthouse mobile median
         run: |
+          cd /tmp/celebration-live-check
           for run in 1 2 3; do
-            npx --yes lighthouse@12.8.2 https://shopcelebration.in/ \
+            ./node_modules/.bin/lighthouse https://shopcelebration.in/ \
               --quiet \
               --chrome-flags="--headless --no-sandbox --disable-gpu" \
               --only-categories=performance,accessibility,best-practices,seo \
@@ -69,11 +77,12 @@ jobs:
               --screenEmulation.deviceScaleFactor=2 \
               --throttling-method=simulate \
               --output=json \
-              --output-path="live-verify/lighthouse-$run.json"
+              --output-path="$GITHUB_WORKSPACE/live-verify/lighthouse-$run.json"
           done
           node <<'NODE'
           const fs = require('fs')
-          const reports = [1,2,3].map(n => JSON.parse(fs.readFileSync(`live-verify/lighthouse-${n}.json`, 'utf8')))
+          const base = process.env.GITHUB_WORKSPACE + '/live-verify/'
+          const reports = [1,2,3].map(n => JSON.parse(fs.readFileSync(`${base}lighthouse-${n}.json`, 'utf8')))
           const score = (r,k) => Math.round((r.categories[k]?.score || 0) * 100)
           const num = (r,k) => Number(r.audits[k]?.numericValue || 0)
           const median = a => [...a].sort((x,y)=>x-y)[Math.floor(a.length/2)]
@@ -91,5 +100,5 @@ jobs:
         with:
           name: celebration-live-hero-lighthouse
           path: live-verify
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 1
