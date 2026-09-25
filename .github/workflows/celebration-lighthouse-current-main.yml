@@ -26,16 +26,13 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: celebration-site/package-lock.json
-      - name: Install
-        run: npm ci
-      - name: Dependency audit
-        run: npm audit --omit=dev
-      - name: Source audit
-        run: npm run audit
-      - name: TypeScript
-        run: npm run typecheck
-      - name: Production build
-        run: npm run build
+      - name: Install and validate
+        run: |
+          npm ci
+          npm audit --omit=dev
+          npm run audit
+          npm run typecheck
+          npm run build
       - name: Start production server
         run: |
           npm start -- -H 127.0.0.1 -p 3099 > /tmp/celebration-current-server.log 2>&1 &
@@ -46,48 +43,58 @@ jobs:
           done
           cat /tmp/celebration-current-server.log
           exit 1
-      - name: Lighthouse mobile audit
+      - name: Lighthouse storefront and policy shell
         run: |
-          npx --yes lighthouse@12.8.2 http://127.0.0.1:3099/ \
-            --quiet \
-            --chrome-flags="--headless --no-sandbox --disable-gpu" \
-            --only-categories=performance,accessibility,best-practices,seo \
-            --form-factor=mobile \
-            --screenEmulation.mobile=true \
-            --screenEmulation.width=390 \
-            --screenEmulation.height=844 \
-            --screenEmulation.deviceScaleFactor=2 \
-            --throttling-method=simulate \
-            --output=json \
-            --output-path=/tmp/celebration-current-lighthouse.json
+          run_lh() {
+            local url="$1"
+            local out="$2"
+            npx --yes lighthouse@12.8.2 "$url" \
+              --quiet \
+              --chrome-flags="--headless --no-sandbox --disable-gpu" \
+              --only-categories=performance,accessibility,best-practices,seo \
+              --form-factor=mobile \
+              --screenEmulation.mobile=true \
+              --screenEmulation.width=390 \
+              --screenEmulation.height=844 \
+              --screenEmulation.deviceScaleFactor=2 \
+              --throttling-method=simulate \
+              --output=json \
+              --output-path="$out"
+          }
+          run_lh http://127.0.0.1:3099/ /tmp/home-lighthouse.json
+          run_lh http://127.0.0.1:3099/policies /tmp/policy-lighthouse.json
 
           node <<'NODE'
           const fs = require('fs')
-          const report = JSON.parse(fs.readFileSync('/tmp/celebration-current-lighthouse.json', 'utf8'))
-          const score = key => Math.round((report.categories[key]?.score || 0) * 100)
-          const audit = key => report.audits[key]?.displayValue || report.audits[key]?.numericValue
-          const summary = {
-            performance: score('performance'),
-            accessibility: score('accessibility'),
-            bestPractices: score('best-practices'),
-            seo: score('seo'),
-            FCP: audit('first-contentful-paint'),
-            LCP: audit('largest-contentful-paint'),
-            TBT: audit('total-blocking-time'),
-            CLS: audit('cumulative-layout-shift'),
-            SpeedIndex: audit('speed-index'),
-            interactive: audit('interactive')
+          const summarize = path => {
+            const report = JSON.parse(fs.readFileSync(path, 'utf8'))
+            const score = key => Math.round((report.categories[key]?.score || 0) * 100)
+            const audit = key => report.audits[key]?.displayValue || report.audits[key]?.numericValue
+            return {
+              performance: score('performance'),
+              accessibility: score('accessibility'),
+              bestPractices: score('best-practices'),
+              seo: score('seo'),
+              FCP: audit('first-contentful-paint'),
+              LCP: audit('largest-contentful-paint'),
+              TBT: audit('total-blocking-time'),
+              CLS: audit('cumulative-layout-shift'),
+              SpeedIndex: audit('speed-index'),
+              interactive: audit('interactive')
+            }
           }
-          console.log('LIGHTHOUSE_HYDRATION_SPLIT=' + JSON.stringify(summary))
-          fs.writeFileSync('/tmp/celebration-current-summary.json', JSON.stringify(summary, null, 2))
+          const result = { home: summarize('/tmp/home-lighthouse.json'), policy: summarize('/tmp/policy-lighthouse.json') }
+          console.log('LIGHTHOUSE_CONTROL=' + JSON.stringify(result))
+          fs.writeFileSync('/tmp/control-summary.json', JSON.stringify(result, null, 2))
           NODE
       - name: Upload Lighthouse evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: celebration-hydration-split-lighthouse
+          name: celebration-hydration-control-lighthouse
           path: |
-            /tmp/celebration-current-lighthouse.json
-            /tmp/celebration-current-summary.json
+            /tmp/home-lighthouse.json
+            /tmp/policy-lighthouse.json
+            /tmp/control-summary.json
           if-no-files-found: warn
           retention-days: 1
