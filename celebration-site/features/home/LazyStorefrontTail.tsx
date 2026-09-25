@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState, type ComponentType } from "react"
+import { useCallback, useEffect, useState, type ComponentType } from "react"
 import type { CatalogConfig } from "../../lib/domain/catalog"
 
 type TierSocialProof = {
@@ -27,22 +27,22 @@ type TailComponent = ComponentType<TailProps>
 const DEFERRED_HASHES = new Set(["#products", "#builder", "#custom-request", "#trust"])
 
 export function LazyStorefrontTail(props: TailProps) {
-  const loadingRef = useRef<Promise<void> | null>(null)
   const [Tail, setTail] = useState<TailComponent | null>(null)
+  const [loading, setLoading] = useState(false)
 
   const loadTail = useCallback(() => {
-    if (Tail || loadingRef.current) return loadingRef.current
-    loadingRef.current = import("./StorefrontTail").then((mod) => {
+    if (Tail || loading) return
+    setLoading(true)
+    void import("./StorefrontTail").then((mod) => {
       setTail(() => mod.StorefrontTail)
     }).finally(() => {
-      loadingRef.current = null
+      setLoading(false)
     })
-    return loadingRef.current
-  }, [Tail])
+  }, [Tail, loading])
 
   useEffect(() => {
     if (props.builderActive) {
-      void loadTail()
+      loadTail()
       return
     }
     if (Tail) return
@@ -53,7 +53,7 @@ export function LazyStorefrontTail(props: TailProps) {
       done = true
       window.removeEventListener("scroll", onScroll)
       window.removeEventListener("hashchange", onHashChange)
-      void loadTail()
+      loadTail()
     }
     const onScroll = () => {
       if (window.scrollY >= 120) trigger()
@@ -77,7 +77,7 @@ export function LazyStorefrontTail(props: TailProps) {
   if (Tail) return <Tail {...props} />
 
   return (
-    <div className="storefrontTailPlaceholder" aria-hidden="true">
+    <div id="builder" className="storefrontTailPlaceholder" aria-hidden="true">
       <div className="wrap storefrontTailPlaceholderInner">
         <span />
       </div>
