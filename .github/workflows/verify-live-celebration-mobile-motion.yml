@@ -1,0 +1,90 @@
+name: Verify Live Celebration Mobile Motion
+
+on:
+  push:
+    branches:
+      - verify/live-celebration-mobile-motion
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: celebration-site
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install browser
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Verify live iPhone motion
+        run: |
+          mkdir -p ../live-visual-artifacts
+          node <<'NODE'
+          const crypto = require('crypto')
+          const { chromium, devices } = require('playwright')
+          const hash = (value) => crypto.createHash('sha256').update(value).digest('hex')
+          ;(async () => {
+            const browser = await chromium.launch({ headless: true })
+            const context = await browser.newContext({ ...devices['iPhone 13'] })
+            const page = await context.newPage()
+            await page.goto('https://shopcelebration.in', { waitUntil: 'networkidle', timeout: 60000 })
+            await page.waitForTimeout(1200)
+
+            const coarse = await page.evaluate(() => matchMedia('(pointer: coarse)').matches)
+            const ambientAnimation = await page.$eval('.ambientOrbOne', (el) => getComputedStyle(el).animationName)
+            const showcaseAnimation = await page.$eval('.showcase', (el) => getComputedStyle(el).animationName)
+            const sectionAnimation = await page.$eval('#budgets', (el) => getComputedStyle(el, '::before').animationName)
+            const waveRect = await page.$eval('.heroShapeWaves', (el) => { const r = el.getBoundingClientRect(); return { width: r.width, height: r.height } })
+            const ambientBefore = await page.$eval('.ambientOrbOne', (el) => getComputedStyle(el).transform)
+            const waveBefore = hash(await page.$eval('.heroShapeWaves', (el) => el.toDataURL()))
+            await page.screenshot({ path: '../live-visual-artifacts/live-mobile-start.png', fullPage: false })
+
+            await page.waitForTimeout(2300)
+            const ambientAfter = await page.$eval('.ambientOrbOne', (el) => getComputedStyle(el).transform)
+            const waveAfter = hash(await page.$eval('.heroShapeWaves', (el) => el.toDataURL()))
+            await page.screenshot({ path: '../live-visual-artifacts/live-mobile-motion.png', fullPage: false })
+
+            await page.locator('#budgets').scrollIntoViewIfNeeded()
+            await page.waitForTimeout(650)
+            await page.screenshot({ path: '../live-visual-artifacts/live-mobile-budgets.png', fullPage: false })
+            const tier = page.locator('.tiltSurface').first()
+            await tier.dispatchEvent('pointerdown', { pointerType: 'touch', clientX: 90, clientY: 90 })
+            const touchActive = await tier.getAttribute('data-touch-active')
+            await tier.dispatchEvent('pointerup', { pointerType: 'touch', clientX: 90, clientY: 90 })
+
+            await page.locator('#products').scrollIntoViewIfNeeded()
+            await page.waitForTimeout(800)
+            const productVisible = await page.locator('.productReveal[data-visible="true"]').count()
+            await page.screenshot({ path: '../live-visual-artifacts/live-mobile-products.png', fullPage: false })
+
+            const health = await page.request.get('https://shopcelebration.in/api/health')
+            const report = { url: page.url(), coarse, ambientAnimation, showcaseAnimation, sectionAnimation, waveRect, ambientBefore, ambientAfter, waveBefore, waveAfter, touchActive, productVisible, healthStatus: health.status() }
+            console.log(JSON.stringify(report, null, 2))
+
+            if (!coarse) throw new Error('Live mobile pointer is not coarse')
+            if (!ambientAnimation || ambientAnimation === 'none') throw new Error('Live ambient background animation is inactive')
+            if (!showcaseAnimation || showcaseAnimation === 'none') throw new Error('Live mobile showcase animation is inactive')
+            if (!sectionAnimation || sectionAnimation === 'none') throw new Error('Live section background motion is inactive')
+            if (waveRect.width < 300 || waveRect.height < 200) throw new Error('Live Shape Waves canvas is not visibly sized')
+            if (ambientBefore === ambientAfter) throw new Error('Live ambient background did not move')
+            if (waveBefore === waveAfter) throw new Error('Live Shape Waves did not animate')
+            if (touchActive !== 'true') throw new Error('Live touch feedback did not activate')
+            if (productVisible < 1) throw new Error('Live product scroll reveal did not activate')
+            if (health.status() !== 200) throw new Error(`Live health returned ${health.status()}`)
+
+            await browser.close()
+          })().catch((error) => { console.error(error); process.exit(1) })
+          NODE
+      - name: Upload live visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: celebration-live-mobile-motion-visuals
+          path: live-visual-artifacts
+          if-no-files-found: error
+          retention-days: 1
