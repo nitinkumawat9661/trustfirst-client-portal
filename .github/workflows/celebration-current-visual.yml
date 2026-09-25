@@ -27,9 +27,7 @@ jobs:
           mkdir -p visual-artifacts
           cd celebration-site
           node <<'NODE'
-          const crypto = require('crypto')
           const { chromium, devices } = require('playwright')
-          const hash = value => crypto.createHash('sha256').update(value).digest('hex')
           ;(async () => {
             const browser = await chromium.launch({ headless: true })
             const context = await browser.newContext({ ...devices['iPhone 13'] })
@@ -41,27 +39,30 @@ jobs:
             const italicStyle = await page.$eval('.heroItalic', el => getComputedStyle(el).fontStyle)
             const marqueeAnimation = await page.$eval('.trustStripTrack', el => getComputedStyle(el).animationName)
             const marqueeBefore = await page.$eval('.trustStripTrack', el => getComputedStyle(el).transform)
-            const waveBefore = hash(await page.$eval('.heroShapeWaves', el => el.toDataURL()))
+            const waveAnimation = await page.$eval('.heroShapeWaves', el => getComputedStyle(el).animationName)
+            const waveBefore = await page.$eval('.heroShapeWaves', el => getComputedStyle(el).transform)
             await page.screenshot({ path: '../visual-artifacts/current-mobile-hero-start.png', fullPage: false })
 
             await page.waitForTimeout(1700)
             const marqueeAfter = await page.$eval('.trustStripTrack', el => getComputedStyle(el).transform)
-            const waveAfter = hash(await page.$eval('.heroShapeWaves', el => el.toDataURL()))
+            const waveAfter = await page.$eval('.heroShapeWaves', el => getComputedStyle(el).transform)
             await page.screenshot({ path: '../visual-artifacts/current-mobile-hero-motion.png', fullPage: false })
 
             const health = await page.request.get('https://shopcelebration.in/api/health')
-            console.log(JSON.stringify({ title, italicStyle, marqueeAnimation, marqueeBefore, marqueeAfter, waveBefore, waveAfter, health: health.status() }, null, 2))
+            console.log(JSON.stringify({ title, italicStyle, marqueeAnimation, marqueeBefore, marqueeAfter, waveAnimation, waveBefore, waveAfter, health: health.status() }, null, 2))
 
             if (!title.includes('Make their day.') || !title.includes('Your way.')) throw new Error('Refreshed hero title missing')
             if (italicStyle !== 'italic') throw new Error('Selective italic hero accent missing')
             if (!marqueeAnimation || marqueeAnimation === 'none') throw new Error('Trust strip marquee inactive')
             if (marqueeBefore === marqueeAfter) throw new Error('Trust strip did not auto-move')
-            if (waveBefore === waveAfter) throw new Error('Shape Waves did not move')
+            if (!waveAnimation || waveAnimation === 'none') throw new Error('Shape Waves mobile drift inactive')
+            if (waveBefore === waveAfter) throw new Error('Shape Waves background did not drift')
             if (health.status() !== 200) throw new Error(`Health ${health.status()}`)
             await browser.close()
           })().catch(error => { console.error(error); process.exit(1) })
           NODE
       - name: Upload screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: celebration-current-mobile-visuals
