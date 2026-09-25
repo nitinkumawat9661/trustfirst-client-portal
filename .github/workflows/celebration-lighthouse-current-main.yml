@@ -1,10 +1,11 @@
-name: Celebration Current Main Lighthouse
+name: Celebration Hydration Split Lighthouse
 
 on:
   push:
     branches:
       - perf/mobile-hero-marquee
     paths:
+      - celebration-site/**
       - .github/workflows/celebration-lighthouse-current-main.yml
   workflow_dispatch:
 
@@ -77,14 +78,14 @@ jobs:
             SpeedIndex: audit('speed-index'),
             interactive: audit('interactive')
           }
-          console.log('LIGHTHOUSE_CURRENT_MAIN=' + JSON.stringify(summary))
+          console.log('LIGHTHOUSE_HYDRATION_SPLIT=' + JSON.stringify(summary))
           fs.writeFileSync('/tmp/celebration-current-summary.json', JSON.stringify(summary, null, 2))
           NODE
       - name: Upload Lighthouse evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: celebration-current-main-lighthouse
+          name: celebration-hydration-split-lighthouse
           path: |
             /tmp/celebration-current-lighthouse.json
             /tmp/celebration-current-summary.json
