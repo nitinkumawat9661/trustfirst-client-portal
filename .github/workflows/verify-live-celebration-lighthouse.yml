@@ -1,0 +1,95 @@
+name: Verify Live Celebration Lighthouse
+
+on:
+  push:
+    branches:
+      - verify/live-hero-marquee-lighthouse
+
+permissions:
+  contents: read
+
+jobs:
+  live-mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Verify live mobile motion and layout
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+          mkdir -p live-verify
+          node <<'NODE'
+          const { chromium, devices } = require('playwright')
+          ;(async () => {
+            const browser = await chromium.launch({ headless: true })
+            const context = await browser.newContext({ ...devices['iPhone 13'] })
+            const page = await context.newPage()
+            await page.goto('https://shopcelebration.in', { waitUntil: 'networkidle', timeout: 60000 })
+            await page.waitForTimeout(1200)
+
+            const heroRefresh = await page.locator('.heroRefresh').count()
+            const heroItalic = await page.locator('.heroItalic').count()
+            const heroVisual = await page.locator('.heroVisual').count()
+            const track = page.locator('.trustStripTrack')
+            const marqueeAnimation = await track.evaluate(el => getComputedStyle(el).animationName)
+            const marqueeBefore = await track.evaluate(el => getComputedStyle(el).transform)
+            const widthCheck = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }))
+            await page.screenshot({ path: 'live-verify/live-mobile-hero.png', fullPage: false })
+            await page.waitForTimeout(1800)
+            const marqueeAfter = await track.evaluate(el => getComputedStyle(el).transform)
+            const wave = page.locator('.heroShapeWaves')
+            const waveRect = await wave.boundingBox()
+            await page.screenshot({ path: 'live-verify/live-mobile-hero-motion.png', fullPage: false })
+            const health = await page.request.get('https://shopcelebration.in/api/health')
+
+            const report = { heroRefresh, heroItalic, heroVisual, marqueeAnimation, marqueeBefore, marqueeAfter, waveRect, widthCheck, healthStatus: health.status() }
+            console.log('LIVE_VISUAL=' + JSON.stringify(report))
+            if (heroRefresh !== 1 || heroItalic !== 1 || heroVisual !== 1) throw new Error('New hero is not live')
+            if (!marqueeAnimation || marqueeAnimation === 'none' || marqueeBefore === marqueeAfter) throw new Error('Trust strip marquee is not moving')
+            if (!waveRect || waveRect.width < 300 || waveRect.height < 180) throw new Error('Shape Waves is not visibly sized')
+            if (widthCheck.scrollWidth > widthCheck.clientWidth + 2) throw new Error(`Horizontal overflow: ${JSON.stringify(widthCheck)}`)
+            if (health.status() !== 200) throw new Error(`Health ${health.status()}`)
+            await browser.close()
+          })().catch(error => { console.error(error); process.exit(1) })
+          NODE
+
+      - name: Live Lighthouse mobile median
+        run: |
+          for run in 1 2 3; do
+            npx --yes lighthouse@12.8.2 https://shopcelebration.in/ \
+              --quiet \
+              --chrome-flags="--headless --no-sandbox --disable-gpu" \
+              --only-categories=performance,accessibility,best-practices,seo \
+              --form-factor=mobile \
+              --screenEmulation.mobile=true \
+              --screenEmulation.width=390 \
+              --screenEmulation.height=844 \
+              --screenEmulation.deviceScaleFactor=2 \
+              --throttling-method=simulate \
+              --output=json \
+              --output-path="live-verify/lighthouse-$run.json"
+          done
+          node <<'NODE'
+          const fs = require('fs')
+          const reports = [1,2,3].map(n => JSON.parse(fs.readFileSync(`live-verify/lighthouse-${n}.json`, 'utf8')))
+          const score = (r,k) => Math.round((r.categories[k]?.score || 0) * 100)
+          const num = (r,k) => Number(r.audits[k]?.numericValue || 0)
+          const median = a => [...a].sort((x,y)=>x-y)[Math.floor(a.length/2)]
+          const runs = reports.map((r,i) => ({ run:i+1, performance:score(r,'performance'), accessibility:score(r,'accessibility'), bestPractices:score(r,'best-practices'), seo:score(r,'seo'), FCPms:Math.round(num(r,'first-contentful-paint')), LCPms:Math.round(num(r,'largest-contentful-paint')), TBTms:Math.round(num(r,'total-blocking-time')), CLS:Number(num(r,'cumulative-layout-shift').toFixed(4)), SpeedIndexMs:Math.round(num(r,'speed-index')) }))
+          const summary = { performance:median(runs.map(x=>x.performance)), accessibility:median(runs.map(x=>x.accessibility)), bestPractices:median(runs.map(x=>x.bestPractices)), seo:median(runs.map(x=>x.seo)), FCPms:median(runs.map(x=>x.FCPms)), LCPms:median(runs.map(x=>x.LCPms)), TBTms:median(runs.map(x=>x.TBTms)), CLS:median(runs.map(x=>x.CLS)), SpeedIndexMs:median(runs.map(x=>x.SpeedIndexMs)) }
+          console.log('LIVE_LIGHTHOUSE_RUNS=' + JSON.stringify(runs))
+          console.log('LIVE_LIGHTHOUSE_MEDIAN=' + JSON.stringify(summary))
+          if (summary.performance < 80) process.exitCode = 2
+          if (summary.accessibility < 90 || summary.bestPractices < 90 || summary.seo < 90) process.exitCode = 3
+          NODE
+
+      - name: Upload live evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: celebration-live-hero-lighthouse
+          path: live-verify
+          if-no-files-found: error
+          retention-days: 1
