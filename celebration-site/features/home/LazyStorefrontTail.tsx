@@ -24,8 +24,9 @@ type TailProps = {
 
 type TailComponent = ComponentType<TailProps>
 
+const DEFERRED_HASHES = new Set(["#products", "#builder", "#custom-request", "#trust"])
+
 export function LazyStorefrontTail(props: TailProps) {
-  const sentinelRef = useRef<HTMLDivElement>(null)
   const loadingRef = useRef<Promise<void> | null>(null)
   const [Tail, setTail] = useState<TailComponent | null>(null)
 
@@ -44,24 +45,42 @@ export function LazyStorefrontTail(props: TailProps) {
       void loadTail()
       return
     }
+    if (Tail) return
 
-    const target = sentinelRef.current
-    if (!target || Tail) return
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry?.isIntersecting) return
-      observer.disconnect()
+    let done = false
+    const trigger = () => {
+      if (done) return
+      done = true
+      window.removeEventListener("scroll", onScroll)
+      window.removeEventListener("hashchange", onHashChange)
       void loadTail()
-    }, { rootMargin: "80px 0px" })
-    observer.observe(target)
+    }
+    const onScroll = () => {
+      if (window.scrollY >= 120) trigger()
+    }
+    const onHashChange = () => {
+      if (DEFERRED_HASHES.has(window.location.hash)) trigger()
+    }
 
-    return () => observer.disconnect()
+    window.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener("hashchange", onHashChange)
+    onHashChange()
+    onScroll()
+
+    return () => {
+      done = true
+      window.removeEventListener("scroll", onScroll)
+      window.removeEventListener("hashchange", onHashChange)
+    }
   }, [props.builderActive, Tail, loadTail])
 
   if (Tail) return <Tail {...props} />
 
   return (
-    <div ref={sentinelRef} className="storefrontTailPlaceholder" aria-hidden="true">
-      <div className="wrap storefrontTailPlaceholderInner" />
+    <div className="storefrontTailPlaceholder" aria-hidden="true">
+      <div className="wrap storefrontTailPlaceholderInner">
+        <span />
+      </div>
     </div>
   )
 }
