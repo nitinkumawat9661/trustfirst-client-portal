@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import type { CatalogConfig } from "../../lib/domain/catalog"
+import type { Tier } from "../../lib/domain/catalog"
 import { BudgetSection } from "../catalog/BudgetSection"
 import { OccasionRail } from "../catalog/OccasionRail"
 import { BUILDER_OPEN_EVENT, type BuilderOpenDetail } from "../builder/builder-events"
@@ -20,14 +20,12 @@ type BuilderRequest = {
   version: number
 }
 
-function firstTierId(catalog: CatalogConfig) {
-  return catalog.tiers.find((item) => item.active !== false)?.id || catalog.settings.defaultTierId
+function firstTierId(tiers: Tier[], defaultTierId: string) {
+  return tiers.find((item) => item.id === defaultTierId)?.id || tiers[0]?.id || defaultTierId
 }
 
-function initialOccasion(catalog: CatalogConfig) {
-  return catalog.occasions.includes(catalog.settings.defaultOccasion)
-    ? catalog.settings.defaultOccasion
-    : (catalog.occasions[0] || "")
+function initialOccasion(occasions: string[], defaultOccasion: string) {
+  return occasions.includes(defaultOccasion) ? defaultOccasion : (occasions[0] || "")
 }
 
 function trackLater(eventName: "storefront_view" | "budget_selected" | "builder_started", tierId?: string) {
@@ -37,16 +35,21 @@ function trackLater(eventName: "storefront_view" | "budget_selected" | "builder_
   }).catch(() => undefined)
 }
 
-export function StorefrontDiscovery({ initialCatalog, initialSocialProof = null }: {
-  initialCatalog: CatalogConfig
+export function StorefrontDiscovery({
+  tiers,
+  occasions,
+  defaultTierId,
+  defaultOccasion,
+  initialSocialProof = null
+}: {
+  tiers: Tier[]
+  occasions: string[]
+  defaultTierId: string
+  defaultOccasion: string
   initialSocialProof?: TierSocialProof | null
 }) {
-  const tiers = initialCatalog.tiers.filter((item) => item.active !== false)
-  const [selectedTierId, setSelectedTierId] = useState(() => {
-    const configured = tiers.find((item) => item.id === initialCatalog.settings.defaultTierId)
-    return configured?.id || firstTierId(initialCatalog)
-  })
-  const [occasion, setOccasion] = useState(() => initialOccasion(initialCatalog))
+  const [selectedTierId, setSelectedTierId] = useState(() => firstTierId(tiers, defaultTierId))
+  const [occasion, setOccasion] = useState(() => initialOccasion(occasions, defaultOccasion))
   const [builderRequest, setBuilderRequest] = useState<BuilderRequest>({ active: false, step: 1, version: 0 })
 
   const openBuilder = useCallback((step = 1, tierId = selectedTierId) => {
@@ -108,10 +111,9 @@ export function StorefrontDiscovery({ initialCatalog, initialSocialProof = null 
 
   return (
     <>
-      <OccasionRail value={occasion} occasions={initialCatalog.occasions} onChange={pickOccasion} />
-      <BudgetSection tiers={tiers} selectedTierId={selectedTierId} recommendedTierId={initialCatalog.settings.defaultTierId} socialProof={initialSocialProof} onSelect={pickTier} />
+      <OccasionRail value={occasion} occasions={occasions} onChange={pickOccasion} />
+      <BudgetSection tiers={tiers} selectedTierId={selectedTierId} recommendedTierId={defaultTierId} socialProof={initialSocialProof} onSelect={pickTier} />
       <LazyStorefrontTail
-        catalog={initialCatalog}
         socialProof={initialSocialProof}
         selectedTierId={selectedTierId}
         occasion={occasion}
