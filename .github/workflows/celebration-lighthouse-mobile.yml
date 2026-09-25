@@ -1,0 +1,98 @@
+name: Celebration Mobile Lighthouse
+
+on:
+  push:
+    branches:
+      - perf/mobile-hero-marquee
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: celebration-site
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: celebration-site/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Dependency audit
+        run: npm audit --omit=dev
+
+      - name: Source audit
+        run: npm run audit
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
+
+      - name: Start production server
+        run: |
+          npm start -- -H 127.0.0.1 -p 3099 > /tmp/celebration-lighthouse-server.log 2>&1 &
+          echo $! > /tmp/celebration-lighthouse-server.pid
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:3099/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/celebration-lighthouse-server.log
+          exit 1
+
+      - name: Lighthouse mobile audit
+        run: |
+          npx --yes lighthouse@12.8.2 http://127.0.0.1:3099/ \
+            --quiet \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --only-categories=performance,accessibility,best-practices,seo \
+            --form-factor=mobile \
+            --screenEmulation.mobile=true \
+            --screenEmulation.width=390 \
+            --screenEmulation.height=844 \
+            --screenEmulation.deviceScaleFactor=2 \
+            --throttling-method=simulate \
+            --output=json \
+            --output-path=/tmp/celebration-lighthouse.json
+
+          node <<'NODE'
+          const fs = require('fs')
+          const report = JSON.parse(fs.readFileSync('/tmp/celebration-lighthouse.json', 'utf8'))
+          const score = key => Math.round((report.categories[key]?.score || 0) * 100)
+          const audit = key => report.audits[key]?.displayValue || report.audits[key]?.numericValue
+          const summary = {
+            performance: score('performance'),
+            accessibility: score('accessibility'),
+            bestPractices: score('best-practices'),
+            seo: score('seo'),
+            FCP: audit('first-contentful-paint'),
+            LCP: audit('largest-contentful-paint'),
+            TBT: audit('total-blocking-time'),
+            CLS: audit('cumulative-layout-shift'),
+            SpeedIndex: audit('speed-index')
+          }
+          console.log('LIGHTHOUSE_SUMMARY=' + JSON.stringify(summary))
+          if (summary.performance < 85) process.exitCode = 2
+          if (summary.accessibility < 90 || summary.bestPractices < 90 || summary.seo < 90) process.exitCode = 3
+          NODE
+
+      - name: Upload Lighthouse report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: celebration-lighthouse-mobile
+          path: /tmp/celebration-lighthouse.json
+          if-no-files-found: warn
+          retention-days: 1
