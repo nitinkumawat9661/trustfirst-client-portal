@@ -1,0 +1,88 @@
+name: Celebration Private Main Mobile Visual
+
+on:
+  push:
+    branches:
+      - validate/private-main-lighthouse
+    paths:
+      - ".github/workflows/celebration-private-main-visual.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: celebration-site
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: celebration-site/package-lock.json
+      - name: Build storefront
+        run: |
+          npm ci
+          npm run typecheck
+          npm run build
+      - name: Install browser
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start local production server
+        run: |
+          npm start -- -H 127.0.0.1 -p 3099 > /tmp/celebration-visual-server.log 2>&1 &
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:3099/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/celebration-visual-server.log
+          exit 1
+      - name: Verify mobile hero and automatic trust marquee
+        run: |
+          mkdir -p ../celebration-visuals
+          node <<'NODE'
+          const { chromium, devices } = require('playwright')
+          ;(async () => {
+            const browser = await chromium.launch({ headless: true })
+            const context = await browser.newContext({ ...devices['iPhone 13'] })
+            const page = await context.newPage()
+            await page.goto('http://127.0.0.1:3099/', { waitUntil: 'networkidle', timeout: 60000 })
+            await page.waitForTimeout(500)
+
+            const before = await page.$eval('.trustStripTrack', el => getComputedStyle(el).transform)
+            const italic = await page.$eval('.heroItalic', el => getComputedStyle(el).fontStyle)
+            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+            const heroText = await page.locator('.hero h1').innerText()
+            const heroVisual = await page.locator('.heroVisual').count()
+            await page.screenshot({ path: '../celebration-visuals/mobile-hero-start.png', fullPage: false })
+            await page.waitForTimeout(1400)
+            const after = await page.$eval('.trustStripTrack', el => getComputedStyle(el).transform)
+            await page.screenshot({ path: '../celebration-visuals/mobile-hero-marquee-moving.png', fullPage: false })
+
+            await page.mouse.wheel(0, 350)
+            await page.waitForTimeout(900)
+            await page.screenshot({ path: '../celebration-visuals/mobile-after-scroll.png', fullPage: false })
+
+            console.log(JSON.stringify({ before, after, italic, overflow, heroText, heroVisual }, null, 2))
+            if (before === after) throw new Error('Trust strip is not auto-moving')
+            if (italic !== 'italic') throw new Error('Hero accent is not italic')
+            if (overflow > 1) throw new Error(`Horizontal overflow detected: ${overflow}px`)
+            if (!heroText.includes('Make their day.') || !heroText.includes('Your way.')) throw new Error('Hero headline missing')
+            if (heroVisual !== 1) throw new Error('Hero visual missing or duplicated')
+            await browser.close()
+          })().catch(error => { console.error(error); process.exit(1) })
+          NODE
+      - name: Upload visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: celebration-private-main-visuals
+          path: celebration-visuals
+          if-no-files-found: error
+          retention-days: 1
