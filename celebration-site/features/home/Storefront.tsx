@@ -30,13 +30,7 @@ export function Storefront({ initialCatalog, initialSocialProof = null, initialS
         <TrustStrip />
         <StorefrontHeader settings={initialSettings} />
         <Hero tiers={tiers} products={products} />
-        <StorefrontDiscovery
-          tiers={tiers}
-          occasions={initialCatalog.occasions}
-          defaultTierId={initialCatalog.settings.defaultTierId}
-          defaultOccasion={initialCatalog.settings.defaultOccasion}
-          initialSocialProof={initialSocialProof}
-        />
+        <StorefrontDiscovery initialCatalog={initialCatalog} initialSocialProof={initialSocialProof} />
       </div>
     </main>
   )
