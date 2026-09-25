@@ -6,6 +6,7 @@ import { ProductSection } from "../catalog/ProductSection"
 import { LazyHamperBuilder } from "../builder/LazyHamperBuilder"
 import { useHamperBuilder } from "../builder/useHamperBuilder"
 import { SiteFooter } from "../shell/SiteFooter"
+import { UxMessenger } from "../ux/UxMessenger"
 import { CustomRequestSection } from "./CustomRequestSection"
 import { FinalCta } from "./FinalCta"
 import { PromiseSection } from "./PromiseSection"
@@ -60,6 +61,7 @@ export function StorefrontTail({
 
   return (
     <>
+      <UxMessenger />
       <ProductSection products={state.products} categories={state.categories} allCategoryId={state.catalog.settings.allCategory.id} category={state.category} onCategory={state.setCategory} />
       <ProofAndReviews socialProof={state.socialProof} />
       <CustomRequestSection />
