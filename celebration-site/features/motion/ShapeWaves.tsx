@@ -41,7 +41,21 @@ export function ShapeWaves({ className = "", color = "#8b2529", cellSize = 12 }:
     const dpr = Math.min(window.devicePixelRatio || 1, coarsePointer ? 1 : 1.5)
     const frameInterval = 1000 / (coarsePointer ? 18 : 32)
 
+    function measure() {
+      const rect = canvas.getBoundingClientRect()
+      const nextWidth = Math.max(1, Math.round(rect.width))
+      const nextHeight = Math.max(1, Math.round(rect.height))
+      if (nextWidth === width && nextHeight === height && canvas.width && canvas.height) return false
+      width = nextWidth
+      height = nextHeight
+      canvas.width = Math.round(width * dpr)
+      canvas.height = Math.round(height * dpr)
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      return true
+    }
+
     function draw(now: number, staticFrame = false) {
+      if (!width || !height) measure()
       ctx.clearRect(0, 0, width, height)
       const t = reduced || staticFrame ? 0 : now * 0.001
       const step = Math.max(coarsePointer ? 16 : 12, cellSize)
@@ -87,16 +101,6 @@ export function ShapeWaves({ className = "", color = "#8b2529", cellSize = 12 }:
       ctx.globalAlpha = 1
     }
 
-    function resize() {
-      const rect = canvas.getBoundingClientRect()
-      width = Math.max(1, Math.round(rect.width))
-      height = Math.max(1, Math.round(rect.height))
-      canvas.width = Math.round(width * dpr)
-      canvas.height = Math.round(height * dpr)
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      draw(performance.now(), !running)
-    }
-
     function loop(now: number) {
       if (!running) return
       if (visible && !document.hidden && now - lastFrame >= frameInterval) {
@@ -112,26 +116,40 @@ export function ShapeWaves({ className = "", color = "#8b2529", cellSize = 12 }:
       window.removeEventListener("scroll", startMotion)
       window.removeEventListener("pointerdown", startMotion)
       window.clearTimeout(startTimer)
+      measure()
+      draw(performance.now())
       raf = requestAnimationFrame(loop)
     }
 
-    const resizeObserver = new ResizeObserver(resize)
+    const resizeObserver = new ResizeObserver(() => {
+      const changed = measure()
+      if (changed && (running || reduced || !coarsePointer)) draw(performance.now(), !running)
+    })
     resizeObserver.observe(canvas)
+
     const intersectionObserver = new IntersectionObserver(([entry]) => {
       visible = Boolean(entry?.isIntersecting)
-      if (visible) draw(performance.now(), !running)
+      if (visible && (running || reduced || !coarsePointer)) draw(performance.now(), !running)
     }, { rootMargin: "100px" })
     intersectionObserver.observe(canvas)
 
-    resize()
-    if (!reduced) {
-      if (coarsePointer) {
-        window.addEventListener("scroll", startMotion, { passive: true, once: true })
-        window.addEventListener("pointerdown", startMotion, { passive: true, once: true })
-        startTimer = window.setTimeout(startMotion, 6000)
-      } else {
+    if (reduced) {
+      raf = requestAnimationFrame(() => {
+        measure()
+        draw(0, true)
+      })
+    } else if (coarsePointer) {
+      // Mobile-first: let text/actions paint first. CSS ambient motion remains visible,
+      // then Shape Waves starts as soon as the user interacts (or after a quiet fallback).
+      measure()
+      window.addEventListener("scroll", startMotion, { passive: true, once: true })
+      window.addEventListener("pointerdown", startMotion, { passive: true, once: true })
+      startTimer = window.setTimeout(startMotion, 5500)
+    } else {
+      raf = requestAnimationFrame(() => {
+        measure()
         startMotion()
-      }
+      })
     }
 
     return () => {
