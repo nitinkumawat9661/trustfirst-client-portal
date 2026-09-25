@@ -55,8 +55,30 @@ export function StorefrontDiscovery({ initialCatalog, initialSocialProof = null 
   }, [selectedTierId])
 
   useEffect(() => {
-    const timer = window.setTimeout(() => trackLater("storefront_view"), 3600)
-    return () => window.clearTimeout(timer)
+    let tracked = false
+    let timer = 0
+    const send = () => {
+      if (tracked) return
+      tracked = true
+      cleanup()
+      trackLater("storefront_view")
+    }
+    const onScroll = () => {
+      if (window.scrollY >= 80) send()
+    }
+    const cleanup = () => {
+      window.clearTimeout(timer)
+      window.removeEventListener("scroll", onScroll)
+      window.removeEventListener("pointerdown", send)
+      window.removeEventListener("keydown", send)
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener("pointerdown", send, { passive: true, once: true })
+    window.addEventListener("keydown", send, { once: true })
+    timer = window.setTimeout(send, 12000)
+
+    return cleanup
   }, [])
 
   useEffect(() => {
