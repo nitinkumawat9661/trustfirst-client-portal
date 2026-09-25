@@ -1,0 +1,38 @@
+name: Validate Celebration Mobile Motion
+
+on:
+  push:
+    branches:
+      - validate/celebration-mobile-motion
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: celebration-site
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install
+        run: npm ci
+      - name: Production dependency audit
+        run: npm audit --omit=dev
+      - name: Source and domain audit
+        run: npm run audit
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Verify mobile motion layer
+        run: |
+          grep -q 'AmbientMotion' features/home/Storefront.tsx
+          grep -q 'pointer:coarse' styles/motion.css
+          grep -q 'ambientDriftOne' styles/motion.css
+          grep -q 'data-touch-active' styles/motion.css
+          grep -q 'frameInterval' features/motion/ShapeWaves.tsx
+          grep -q 'cellSize={11}' features/home/Hero.tsx
+      - name: Production build
+        run: npm run build
