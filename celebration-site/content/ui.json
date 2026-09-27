@@ -1,7 +1,7 @@
 {
   "nav": {
     "budgets": "Choose budget",
-    "products": "Gift options",
+    "products": "Curated hampers",
     "builder": "Build hamper",
     "promise": "Why Celebration",
     "create": "Build yours",
@@ -10,35 +10,43 @@
   "hero": {
     "primary": "Build your hamper →",
     "secondaryPrefix": "Starting",
-    "stats": ["Budgets", "Gift choices", "Your style"],
+    "stats": [
+      "Budgets",
+      "Items included",
+      "Curated by us"
+    ],
     "showcaseSubline": "Thoughtful • Personal • Made for them",
     "customFeelValue": "Custom"
   },
   "budgets": {
     "kicker": "CHOOSE YOUR BUDGET",
     "title": "Start with a budget that feels right.",
-    "body": "This is your total hamper budget. Pick a range and we’ll show gift choices that fit it.",
-    "choices": "choices",
-    "points": "mix points"
+    "body": "Pick your budget and see the item count upfront. Celebration curates the products inside each hamper for you.",
+    "choices": "items",
+    "points": "curated mix"
   },
   "products": {
-    "kicker": "PICK THEIR FAVOURITES",
-    "title": "Choose what they’ll actually love.",
-    "body": "Browse available gifts by category. Options automatically adapt to your selected budget.",
+    "kicker": "CURATED BY CELEBRATION",
+    "title": "We choose the gift mix for you.",
+    "body": "Products are curated according to the selected budget, occasion and availability.",
     "from": "Available from"
   },
   "builder": {
     "kicker": "BUILD YOUR HAMPER",
-    "title": "Your hamper, ready in 4 simple steps.",
-    "body": "Choose a budget, pick gifts, add delivery details and place your order.",
-    "stepLabels": ["1. Budget", "2. Gifts", "3. Details", "4. Payment"],
+    "title": "Your hamper, ready in 3 simple steps.",
+    "body": "Choose a budget, add delivery details and pay securely. Celebration curates the products inside your hamper.",
+    "stepLabels": [
+      "1. Budget",
+      "2. Details",
+      "3. Payment"
+    ],
     "budget": {
       "title": "1. What budget are you thinking?",
-      "body": "Pick a budget first. You can change it anytime before payment.",
-      "next": "Choose gifts →"
+      "body": "Pick a budget first. Each option shows exactly how many items will be included.",
+      "next": "Add details →"
     },
     "products": {
-      "title": "2. Pick their favourites",
+      "title": "Curated by Celebration",
       "search": "Search gifts",
       "back": "← Back",
       "next": "Add details →",
@@ -51,23 +59,53 @@
       "choicesLabel": "items",
       "mixPointsLabel": "selection limit",
       "availableFrom": "{amount} se available",
-      "maxChoices": "Up to {count} gifts",
+      "maxChoices": "{count} items included",
       "mixExceedsBudget": "This combination does not fit the selected hamper"
     },
     "details": {
-      "title": "3. Add the final details",
-      "body": "Tell us who it’s for and when you need it. We’ll use this to prepare and deliver it right.",
+      "title": "2. Add the final details",
+      "body": "Tell us who it’s for and when you need it. We’ll use this to curate, prepare and deliver it right.",
       "fields": {
-        "customerName": ["Your name *", "Full name"],
-        "phone": ["Mobile / WhatsApp *", "10-digit number"],
-        "receiverName": ["Who is this for? *", "Receiver name"],
-        "requiredDate": ["Need it by *", ""],
-        "occasion": ["Occasion", ""],
-        "pincode": ["Pincode *", "6 digits"],
-        "address": ["Delivery address *", "House / street / area"],
-        "city": ["City", "City"],
-        "state": ["State", "State"],
-        "message": ["Gift message", "What should we write on the card?"]
+        "customerName": [
+          "Your name *",
+          "Full name"
+        ],
+        "phone": [
+          "Mobile / WhatsApp *",
+          "10-digit number"
+        ],
+        "receiverName": [
+          "Who is this for? *",
+          "Receiver name"
+        ],
+        "requiredDate": [
+          "Need it by *",
+          ""
+        ],
+        "occasion": [
+          "Occasion",
+          ""
+        ],
+        "pincode": [
+          "Pincode *",
+          "6 digits"
+        ],
+        "address": [
+          "Delivery address *",
+          "House / street / area"
+        ],
+        "city": [
+          "City",
+          "City"
+        ],
+        "state": [
+          "State",
+          "State"
+        ],
+        "message": [
+          "Gift message",
+          "What should we write on the card?"
+        ]
       },
       "back": "← Back",
       "nextHint": "Next: review & payment",
@@ -78,14 +116,14 @@
       "hamper": "Hamper",
       "box": "Size",
       "occasion": "Occasion",
-      "products": "Gifts",
+      "products": "Items",
       "requiredBy": "Need by",
       "notSet": "Not set",
-      "curate": "Help me choose",
-      "note": "Final presentation may vary slightly with stock and size. We’ll confirm with you before any major substitution."
+      "curate": "Curated by Celebration",
+      "note": "Celebration selects the product mix according to your budget, occasion and availability. The item count shown for your tier stays fixed; presentation may vary slightly."
     },
     "payment": {
-      "title": "4. Review & pay",
+      "title": "3. Review & pay",
       "body": "Pay the shown amount via UPI. Your order starts after payment verification.",
       "payable": "PAY NOW",
       "upiPrefix": "UPI:",
@@ -116,10 +154,12 @@
   "cta": {
     "icon": "🎁",
     "title": "Still deciding what to send?",
-    "body": "Choose a budget, tell us a little about them, and we’ll help shape the hamper.",
+    "body": "Choose a budget and tell us a little about them. We’ll curate the hamper for you.",
     "button": "Build a custom hamper"
   },
-  "footer": {"policy": "Order & Protection Policy"},
+  "footer": {
+    "policy": "Order & Protection Policy"
+  },
   "tracking": {
     "title": "Track your Celebration order",
     "loading": "Loading your order…",
@@ -192,7 +232,16 @@
     "sortNewest": "Newest first",
     "sortRequiredDate": "Required date first",
     "filterLabel": "Order stages",
-    "filterLabels": {"active":"Active","payment":"Payment","packing":"Packing","approval":"Approval","shipping":"Shipping","issues":"Issues","closed":"Closed","all":"All"},
+    "filterLabels": {
+      "active": "Active",
+      "payment": "Payment",
+      "packing": "Packing",
+      "approval": "Approval",
+      "shipping": "Shipping",
+      "issues": "Issues",
+      "closed": "Closed",
+      "all": "All"
+    },
     "showingOrders": "{total} me se {visible} orders dikh rahe hain",
     "noMatchingOrders": "Is search/filter me koi order nahi mila.",
     "nextActionLabel": "NEXT ACTION",
@@ -240,20 +289,26 @@
     "shippingUpdateHint": "Courier/tracking zarurat ho to update karein.",
     "shippingSavedHeading": "Shipping details"
   },
-  "common": {"loadingEllipsis":"…","separator":" • ","none":"None","yes":"✓","current":"•"},
+  "common": {
+    "loadingEllipsis": "…",
+    "separator": " • ",
+    "none": "None",
+    "yes": "✓",
+    "current": "•"
+  },
   "whatsapp": {
     "titleSuffix": "Order",
     "orderId": "Order ID",
     "hamper": "Hamper",
     "occasion": "Occasion",
     "requiredBy": "Required by",
-    "preferences": "Preferences",
+    "preferences": "Curation",
     "customer": "Customer",
     "phone": "Phone",
     "giftFor": "Gift for",
     "address": "Address",
     "giftMessage": "Gift message",
     "tracking": "Tracking",
-    "curate": "Aap curate kar do"
+    "curate": "Celebration curated mix"
   }
 }
