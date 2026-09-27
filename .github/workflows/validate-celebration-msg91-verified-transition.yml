@@ -1,0 +1,27 @@
+name: Validate Celebration MSG91 Verified Transition
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "celebration-site/**"
+      - ".github/workflows/validate-celebration-msg91-verified-transition.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: celebration-site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: celebration-site/package-lock.json
+      - run: npm ci
+      - run: npm audit --omit=dev
+      - run: npm run audit
+      - run: npm run typecheck
+      - run: npm run build
