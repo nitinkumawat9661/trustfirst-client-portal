@@ -88,6 +88,46 @@ jobs:
           ssh-keygen -y -f "$HOME/.ssh/celebration_deploy" >/dev/null
           ssh-keygen -F "$VPS_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
 
+      - name: Reclaim safe Celebration deploy space
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -p "$VPS_PORT" \
+            -i "$HOME/.ssh/celebration_deploy" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            bash -s -- "$APP_ROOT" "$RUNTIME_USER" <<'REMOTE'
+          set -euo pipefail
+          APP_ROOT="$1"
+          RUNTIME_USER="$2"
+          test "$APP_ROOT" = "/var/www/celebration"
+          test "$RUNTIME_USER" = "nitin"
+          test -d "$APP_ROOT/releases"
+          OLD_RELEASE="$(readlink -f "$APP_ROOT/current")"
+          case "$OLD_RELEASE" in
+            "$APP_ROOT"/releases/*) ;;
+            *) echo "Unsafe current Celebration release: $OLD_RELEASE" >&2; exit 1 ;;
+          esac
+
+          echo "Reclaiming stale Celebration-only deploy data"
+          for candidate in "$APP_ROOT"/releases/github-*; do
+            [ -e "$candidate" ] || continue
+            RESOLVED="$(readlink -f "$candidate")"
+            if [ "$RESOLVED" != "$OLD_RELEASE" ]; then
+              case "$RESOLVED" in
+                "$APP_ROOT"/releases/github-*) sudo rm -rf -- "$candidate" ;;
+                *) echo "Skipping unexpected release path: $RESOLVED" >&2 ;;
+              esac
+            fi
+          done
+          sudo find /tmp -maxdepth 1 -type f -name 'celebration-*.tar.gz' -delete || true
+          sudo -u "$RUNTIME_USER" env HOME="/home/$RUNTIME_USER" npm cache clean --force >/dev/null 2>&1 || true
+          df -h "$APP_ROOT"
+          REMOTE
+
       - name: Upload immutable source archive
         shell: bash
         run: |
