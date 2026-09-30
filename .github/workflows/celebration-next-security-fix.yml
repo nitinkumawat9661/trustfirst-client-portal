@@ -22,16 +22,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Generate patched lockfile
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: celebration-site/package-lock.json
+
+      - name: Generate and verify patched dependency tree
         working-directory: celebration-site
         shell: bash
         run: |
           set -euo pipefail
-          npm install --package-lock-only --save-exact next@16.3.8
-          npm audit --omit=dev
+          npm install --save-exact next@16.3.8
+          npm audit --omit=dev --audit-level=critical
+          npm run audit
           npm run typecheck
 
-      - name: Commit generated dependency update to PR branch
+      - name: Commit generated dependency update to patch branch
         shell: bash
         run: |
           set -euo pipefail
@@ -40,6 +48,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH"
           git add celebration-site/package.json celebration-site/package-lock.json
-          git diff --cached --quiet && exit 0
+          if git diff --cached --quiet; then
+            echo "No dependency update required."
+            exit 0
+          fi
           git commit -m "chore: patch Celebration Next.js security advisory"
           git push --force origin "HEAD:$BRANCH"
