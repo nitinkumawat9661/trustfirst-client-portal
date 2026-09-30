@@ -3,7 +3,7 @@ import type { StoreSettings } from "../../lib/server/store-settings"
 import { AmbientMotion } from "../motion/AmbientMotion"
 import { StorefrontHeader } from "../shell/StorefrontHeader"
 import { TrustStrip } from "../shell/TrustStrip"
-import { CommerceCategoryStrip } from "./CommerceCategoryStrip"
+import { CommerceShowcase } from "./CommerceShowcase"
 import { Hero } from "./Hero"
 import { StorefrontDiscovery } from "./StorefrontDiscovery"
 
@@ -22,6 +22,7 @@ type StorefrontProps = {
 
 export function Storefront({ initialCatalog, initialSocialProof = null, initialSettings }: StorefrontProps) {
   const tiers = initialCatalog.tiers.filter((item) => item.active !== false)
+  const products = initialCatalog.products.filter((item) => item.active !== false)
 
   return (
     <main className="storefrontMotionRoot">
@@ -29,8 +30,8 @@ export function Storefront({ initialCatalog, initialSocialProof = null, initialS
       <div className="storefrontMotionContent">
         <TrustStrip />
         <StorefrontHeader settings={initialSettings} />
-        <Hero tiers={tiers} />
-        <CommerceCategoryStrip />
+        <Hero tiers={tiers} products={products} />
+        <CommerceShowcase catalog={initialCatalog} />
         <StorefrontDiscovery initialCatalog={initialCatalog} initialSocialProof={initialSocialProof} />
       </div>
     </main>

@@ -11,23 +11,38 @@ export function SiteHeader({ onCreate, showAccount = true }: { onCreate?: () => 
   const supportUrl = supportWhatsappUrl(settings.supportMessage, settings.whatsapp)
   return (
     <>
-      <header className="nav">
-        <div className="wrap navin">
+      <header className="nav celebrationCommerceNav">
+        <div className="wrap navin celebrationCommerceNavInner">
           <Link href={routes.home} className="brand policyBrand" prefetch={false}>
             <div className="logo">{storeContent.brand.name}</div>
             <div className="tag">{storeContent.brand.tagline}</div>
           </Link>
-          <nav className="links" aria-label="Store navigation">
-            <a href={`${routes.home}#budgets`}>{uiContent.nav.budgets}</a>
-            <a href={`${routes.home}#products`}>{uiContent.nav.products}</a>
-            <a href={`${routes.home}#builder`}>{uiContent.nav.builder}</a>
-            <a href={`${routes.home}#trust`}>{uiContent.nav.promise}</a>
-          </nav>
-          <div className="navAccountActions">
-            {showAccount && <Link className="navAccountLink" href={routes.account} prefetch={false} aria-label="My Celebration dashboard"><span aria-hidden="true">♡</span><b>My Celebration</b></Link>}
-            {onCreate ? <button className="primary navCta" type="button" onClick={onCreate}>{uiContent.nav.create}</button> : <Link className="secondary navStoreLink" href={routes.home} prefetch={false}>{uiContent.nav.backToStore}</Link>}
+
+          <div className="commerceSearch" role="search" aria-label="Celebration catalog search preview">
+            <span aria-hidden="true">⌕</span>
+            <span>Search hampers, jewelry, gifts...</span>
+          </div>
+
+          <div className="navAccountActions celebrationCommerceActions">
+            <Link className="commerceIconAction" href="/jewelry" prefetch={false} aria-label="Jewelry collection">♡</Link>
+            {showAccount && <Link className="commerceIconAction" href={routes.account} prefetch={false} aria-label="My Celebration">♥</Link>}
+            {onCreate
+              ? <button className="commerceIconAction commerceCartAction" type="button" onClick={onCreate} aria-label={uiContent.nav.create}>▣</button>
+              : <Link className="commerceIconAction commerceCartAction" href={`${routes.home}#builder`} prefetch={false} aria-label="Back to store">▣</Link>}
           </div>
         </div>
+
+        <div className="wrap celebrationCommerceMenuRow">
+          <nav className="links celebrationCommerceLinks" aria-label="Store navigation">
+            <a href={`${routes.home}#budgets`}>Hampers</a>
+            <Link href="/jewelry" prefetch={false}>Jewelry</Link>
+            <Link href="/jewelry?collection=combos" prefetch={false}>Combos</Link>
+            <a href={`${routes.home}#occasions`}>Occasions</a>
+            <a href={`${routes.home}#budgets`}>Budget</a>
+            <a href={`${routes.home}#trust`}>Why Celebration</a>
+          </nav>
+        </div>
+
         {showAccount && <div className="assistBar"><div className="wrap assistBarInner"><span><b>{settings.assistTitle}</b> {settings.assistBody}</span><div><a href={`${routes.home}#custom-request`}>Use my budget</a><a href={supportUrl} target="_blank" rel="noreferrer">WhatsApp</a></div></div></div>}
       </header>
       {showAccount && <a className="whatsappDock" href={supportUrl} target="_blank" rel="noreferrer" aria-label="WA Need help? Celebration WhatsApp support"><span aria-hidden="true">WA</span><b>Need help?</b></a>}

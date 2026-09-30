@@ -2,7 +2,9 @@ import Link from "next/link"
 import { StorefrontHeader } from "../../features/shell/StorefrontHeader"
 import { SiteFooter } from "../../features/shell/SiteFooter"
 import { TrustStrip } from "../../features/shell/TrustStrip"
-import { jewelryUiCategories, jewelryUiProducts } from "../../features/jewelry/jewelry-ui"
+import { catalogJewelryCategories, catalogJewelryProducts, isCatalogJewelryCombo } from "../../features/jewelry/catalog-jewelry"
+import { formatMoney } from "../../lib/domain/catalog"
+import { getCatalogConfig } from "../../lib/server/catalog"
 import { defaultStoreSettings, getStoreSettings } from "../../lib/server/store-settings"
 
 export const dynamic = "force-dynamic"
@@ -10,23 +12,28 @@ export const metadata = { title: "Jewelry | Celebration", description: "Celebrat
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
-function money(value: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value)
-}
-
 export default async function JewelryPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams
   const collection = (Array.isArray(params.collection) ? params.collection[0] : params.collection || "").toLowerCase()
   const rawCategory = Array.isArray(params.category) ? params.category[0] : params.category || ""
-  const activeCategory = jewelryUiCategories.find((item) => item.toLowerCase() === rawCategory.toLowerCase()) || "All Jewelry"
-  const settingsResult = await getStoreSettings().catch(() => null)
+
+  const [catalogResult, settingsResult] = await Promise.all([
+    getCatalogConfig().catch(() => null),
+    getStoreSettings().catch(() => null)
+  ])
   const settings = settingsResult?.settings || defaultStoreSettings
+  const catalog = catalogResult?.catalog
+  const allJewelry = catalog ? catalogJewelryProducts(catalog) : []
+  const categories = catalog ? catalogJewelryCategories(catalog) : []
+  const activeCategory = categories.find((item) => item.toLowerCase() === rawCategory.toLowerCase()) || "All Jewelry"
 
   const products = collection === "combos"
-    ? jewelryUiProducts.filter((item) => item.category === "Combos")
+    ? allJewelry.filter(isCatalogJewelryCombo)
     : activeCategory === "All Jewelry"
-      ? jewelryUiProducts
-      : jewelryUiProducts.filter((item) => item.category === activeCategory)
+      ? allJewelry
+      : allJewelry.filter((item) => item.category === activeCategory)
+
+  const heroProduct = allJewelry.find((item) => Boolean(item.imageUrl)) || allJewelry[0]
 
   return (
     <main className="jewelryStoreRoot">
@@ -38,57 +45,56 @@ export default async function JewelryPage({ searchParams }: { searchParams: Sear
           <div>
             <div className="kicker">CELEBRATION JEWELRY</div>
             <h1>Jewelry Collection</h1>
-            <p>Every piece tells a story. Shop single pieces and gift-ready combos in the same familiar Celebration experience.</p>
+            <p>Single pieces and gift-ready combos, shown directly from the Celebration catalog. Names, categories, availability and product images stay managed from the existing admin catalog.</p>
             <div className="jewelryHeroBadges" aria-label="Jewelry highlights">
-              <span>✦ Anti-tarnish look</span><span>◈ Stainless steel</span><span>♡ Trend-led designs</span><span>✧ Gift-ready</span>
+              <span>✦ Real catalog items</span><span>◈ Admin-managed images</span><span>♡ Single pieces</span><span>✧ Gift-ready combos</span>
             </div>
           </div>
-          <div className="jewelryHeroStage" aria-hidden="true"><span className="jewelryChain" /><i>❋</i><b>Celebration</b></div>
+          <div className="jewelryHeroStage">
+            {heroProduct?.imageUrl
+              ? <img className="jewelryHeroCatalogImage" src={heroProduct.imageUrl} alt={heroProduct.name} />
+              : <><span className="jewelryChain" aria-hidden="true" /><i aria-hidden="true">{heroProduct?.icon || "✦"}</i></>}
+            <b>Celebration</b>
+          </div>
         </div>
       </section>
 
       <section className="jewelryListingSection">
         <div className="wrap">
           <div className="jewelryCategoryRail" aria-label="Jewelry categories">
-            {jewelryUiCategories.map((category, index) => {
-              const active = collection === "combos" ? category === "Combos" : category === activeCategory
-              const href = category === "Combos"
-                ? "/jewelry?collection=combos"
-                : category === "All Jewelry"
-                  ? "/jewelry"
-                  : `/jewelry?category=${encodeURIComponent(category)}`
-              return <Link className={active ? "active" : ""} key={category} href={href} prefetch={false}><i aria-hidden="true">{["✦","❋","◌","◉","◯","✧"][index]}</i><span>{category}</span></Link>
+            <Link className={collection !== "combos" && activeCategory === "All Jewelry" ? "active" : ""} href="/jewelry" prefetch={false}><i aria-hidden="true">✦</i><span>All Jewelry</span></Link>
+            {categories.slice(0, 5).map((category, index) => {
+              const active = collection !== "combos" && category === activeCategory
+              return <Link className={active ? "active" : ""} key={category} href={`/jewelry?category=${encodeURIComponent(category)}`} prefetch={false}><i aria-hidden="true">{["❋","◌","◉","◯","✧"][index] || "✦"}</i><span>{category}</span></Link>
             })}
+            <Link className={collection === "combos" ? "active" : ""} href="/jewelry?collection=combos" prefetch={false}><i aria-hidden="true">✧</i><span>Combos</span></Link>
           </div>
 
           <div className="jewelryToolbar">
-            <div className="jewelryToolbarGroup"><button type="button">Sort by: <b>Popular</b></button><button type="button">Price⌄</button><button type="button">Material⌄</button><button type="button">Occasion⌄</button></div>
-            <button className="jewelryFilterButton" type="button">☷ Filters</button>
+            <div className="jewelryToolbarGroup"><span className="jewelryCatalogStatus">{products.length} catalog item{products.length === 1 ? "" : "s"}</span></div>
+            <Link className="jewelryFilterButton" href="/#products" prefetch={false}>All gift options</Link>
           </div>
 
           {products.length === 0 ? (
-            <div className="jewelryEmptyState"><i aria-hidden="true">✧</i><h2>{activeCategory}</h2><p>This category layout is ready. Products can be added without changing the UI structure.</p><Link className="secondary" href="/jewelry" prefetch={false}>View all jewelry</Link></div>
+            <div className="jewelryEmptyState"><i aria-hidden="true">✧</i><h2>{collection === "combos" ? "Combos" : activeCategory}</h2><p>No live catalog item matches this collection yet. Add or update jewelry products from the existing admin catalog and they will appear here automatically.</p><Link className="secondary" href="/jewelry" prefetch={false}>View all jewelry</Link></div>
           ) : (
             <div className="jewelryProductGrid">
-              {products.map((product, index) => {
-                const discount = Math.max(0, Math.round((1 - product.price / product.mrp) * 100))
-                return (
-                  <article className="jewelryProductCard" key={product.slug}>
-                    <Link className="jewelryProductVisual" href={`/jewelry/${product.slug}`} prefetch={false} aria-label={product.name}>
-                      {product.badge && <span className="jewelryBadge">{product.badge}</span>}
-                      <span className="jewelryHeart" aria-hidden="true">♡</span>
-                      <span className={`jewelrySatin satin-${index % 4}`} aria-hidden="true" />
-                      <span className="jewelryChain" aria-hidden="true" />
-                      <i aria-hidden="true">{product.symbol}</i>
-                    </Link>
-                    <div className="jewelryProductCopy">
-                      <Link href={`/jewelry/${product.slug}`} prefetch={false}>{product.shortName}</Link>
-                      <div className="jewelryPriceLine"><strong>{money(product.price)}</strong><s>{money(product.mrp)}</s><em>{discount}% off</em></div>
-                      <div className="jewelryRating">★ {product.rating} <span>({product.reviews})</span></div>
-                    </div>
-                  </article>
-                )
-              })}
+              {products.map((product, index) => (
+                <article className="jewelryProductCard" key={product.id}>
+                  <Link className="jewelryProductVisual" href={`/jewelry/${encodeURIComponent(product.id)}`} prefetch={false} aria-label={product.name}>
+                    <span className="jewelryBadge">{product.category}</span>
+                    <span className="jewelryHeart" aria-hidden="true">♡</span>
+                    {product.imageUrl
+                      ? <img className="jewelryCatalogImage" src={product.imageUrl} alt={product.name} loading="lazy" />
+                      : <><span className={`jewelrySatin satin-${index % 4}`} aria-hidden="true" /><span className="jewelryChain" aria-hidden="true" /><i aria-hidden="true">{product.icon || "✦"}</i></>}
+                  </Link>
+                  <div className="jewelryProductCopy">
+                    <Link href={`/jewelry/${encodeURIComponent(product.id)}`} prefetch={false}>{product.name}</Link>
+                    <div className="jewelryPriceLine"><strong>From {formatMoney(product.minTier)}</strong></div>
+                    <div className="jewelryCatalogNote">{product.note || product.category}</div>
+                  </div>
+                </article>
+              ))}
             </div>
           )}
         </div>

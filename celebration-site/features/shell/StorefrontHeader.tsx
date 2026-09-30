@@ -16,16 +16,15 @@ export function StorefrontHeader({ settings }: { settings: StoreSettings }) {
             <div className="tag">{storeContent.brand.tagline}</div>
           </Link>
 
-          <label className="commerceSearch" aria-label="Search Celebration">
+          <div className="commerceSearch" role="search" aria-label="Celebration catalog search preview">
             <span aria-hidden="true">⌕</span>
-            <input readOnly placeholder="Search hampers, jewelry, gifts..." />
-          </label>
+            <span>Search hampers, jewelry, gifts...</span>
+          </div>
 
           <div className="navAccountActions celebrationCommerceActions">
-            <Link className="navAccountLink" href={routes.account} prefetch={false} aria-label="My Celebration dashboard">
-              <span aria-hidden="true">♡</span><b>My Celebration</b>
-            </Link>
-            <Link className="secondary navStoreLink celebrationJewelryShortcut" href="/jewelry" prefetch={false}>Jewelry</Link>
+            <Link className="commerceIconAction" href="/jewelry" prefetch={false} aria-label="Jewelry collection">♡</Link>
+            <Link className="commerceIconAction" href={routes.account} prefetch={false} aria-label="My Celebration">♥</Link>
+            <a className="commerceIconAction commerceCartAction" href={`${routes.home}#builder`} aria-label="Open hamper builder">▣</a>
           </div>
         </div>
 

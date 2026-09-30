@@ -4,6 +4,8 @@ export const routes = {
   privacy: "/privacy",
   track: "/track",
   account: "/account",
+  jewelry: "/jewelry",
+  jewelryProduct: (slug: string) => `/jewelry/${encodeURIComponent(slug)}`,
   paymentReturn: "/payment/return",
   admin: "/admin",
   api: {
