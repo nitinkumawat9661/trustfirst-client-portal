@@ -1,0 +1,95 @@
+name: Celebration VPS Diagnostics
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/celebration-vps-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Inspect Celebration VPS auth handoff
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+
+    steps:
+      - name: Configure verified SSH access
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in VPS_HOST VPS_PORT VPS_USER VPS_SSH_PRIVATE_KEY VPS_KNOWN_HOSTS; do
+            [ -n "${!name:-}" ] || { echo "Missing required value: $name" >&2; exit 1; }
+          done
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" | tr -d '\r' > "$HOME/.ssh/celebration_diag"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/celebration_diag" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/celebration_diag" >/dev/null
+          ssh-keygen -F "$VPS_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
+
+      - name: Read sanitized VPS diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -p "$VPS_PORT" \
+            -i "$HOME/.ssh/celebration_diag" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" <<'REMOTE'
+          set -euo pipefail
+          echo "ACTIVE_RELEASE=$(readlink -f /var/www/celebration/current)"
+          printf 'OUTBOUND_IPV4='
+          curl -4 --silent --show-error --max-time 10 https://api.ipify.org || true
+          echo
+
+          echo "RECENT_MSG91_LOGS_BEGIN"
+          PM2_HOME=/home/nitin/.pm2 pm2 logs celebration-site --lines 180 --nostream 2>&1 \
+            | grep -A8 -B5 "msg91-password-reset-token" \
+            | tail -n 100 || true
+          echo "RECENT_MSG91_LOGS_END"
+
+          echo "MSG91_AUTH_PROBE_BEGIN"
+          cd /var/www/celebration/current
+          node <<'NODE'
+          const { loadEnvConfig } = require('@next/env')
+          loadEnvConfig(process.cwd(), false)
+          const authkey = (process.env.MSG91_AUTH_KEY || '').trim()
+          const provider = (process.env.SMS_PROVIDER || '').trim()
+          console.log(JSON.stringify({ provider, authKeyPresent: Boolean(authkey), authKeyLength: authkey.length }))
+          if (!authkey) process.exit(0)
+          const body = new URLSearchParams({ authkey, 'access-token': 'diagnostic-invalid-access-token-0000000000000000' })
+          fetch('https://control.msg91.com/api/v5/widget/verifyAccessToken', {
+            method: 'POST',
+            headers: { accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+            signal: AbortSignal.timeout(10000)
+          }).then(async (response) => {
+            const payload = await response.json().catch(() => null)
+            const root = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}
+            const safe = {
+              httpStatus: response.status,
+              type: typeof root.type === 'string' ? root.type.slice(0, 64) : '',
+              code: typeof root.code === 'number' ? String(root.code) : (typeof root.code === 'string' ? root.code.slice(0, 32) : ''),
+              message: typeof root.message === 'string' ? root.message.slice(0, 160) : ''
+            }
+            console.log(JSON.stringify(safe))
+          }).catch((error) => {
+            console.log(JSON.stringify({ probeError: error?.name || 'Error' }))
+          })
+          NODE
+          echo "MSG91_AUTH_PROBE_END"
+          REMOTE
