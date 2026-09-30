@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "celebration-site/**"
+      - ".github/workflows/deploy-celebration-production.yml"
   workflow_dispatch:
 
 permissions:
@@ -142,6 +143,39 @@ jobs:
             *) echo "Unsafe new release path" >&2; exit 1 ;;
           esac
 
+          run_as_runtime() {
+            sudo -u "$RUNTIME_USER" env HOME="/home/$RUNTIME_USER" PM2_HOME="$PM2_HOME" "$@"
+          }
+
+          if [ "$NEW_RELEASE" = "$OLD_RELEASE" ]; then
+            echo "Requested Celebration release is already active: $NEW_RELEASE"
+            sudo rm -f -- "$ARCHIVE"
+            exit 0
+          fi
+
+          echo "Cleaning stale Celebration deploy artifacts before build"
+          for candidate in "$APP_ROOT"/releases/github-*; do
+            [ -e "$candidate" ] || continue
+            RESOLVED="$(readlink -f "$candidate")"
+            if [ "$RESOLVED" != "$OLD_RELEASE" ]; then
+              case "$RESOLVED" in
+                "$APP_ROOT"/releases/github-*) sudo rm -rf -- "$candidate" ;;
+                *) echo "Skipping unexpected release path: $RESOLVED" >&2 ;;
+              esac
+            fi
+          done
+          sudo find /tmp -maxdepth 1 -type f -name 'celebration-*.tar.gz' ! -path "$ARCHIVE" -delete || true
+          run_as_runtime npm cache clean --force >/dev/null 2>&1 || true
+
+          FREE_KB="$(df -Pk "$APP_ROOT" | awk 'NR==2 {print $4}')"
+          echo "Celebration deploy free space before build: ${FREE_KB} KB"
+          if [ "${FREE_KB:-0}" -lt 1572864 ]; then
+            echo "Insufficient free space for safe Celebration build (need at least 1.5 GiB)." >&2
+            df -h "$APP_ROOT" >&2 || true
+            sudo du -sh "$APP_ROOT"/releases/* 2>/dev/null | sort -h >&2 || true
+            exit 1
+          fi
+
           if [ -e "$NEW_RELEASE" ]; then
             sudo rm -rf -- "$NEW_RELEASE"
           fi
@@ -150,10 +184,6 @@ jobs:
           sudo -u "$RUNTIME_USER" tar -xzf "$ARCHIVE" -C "$NEW_RELEASE"
           sudo rm -f -- "$ARCHIVE"
           sudo -u "$RUNTIME_USER" ln -s "$APP_ROOT/shared/.env.production" "$NEW_RELEASE/.env.production"
-
-          run_as_runtime() {
-            sudo -u "$RUNTIME_USER" env HOME="/home/$RUNTIME_USER" PM2_HOME="$PM2_HOME" "$@"
-          }
 
           echo "Installing and verifying new Celebration release"
           run_as_runtime bash -c 'cd "$1" && npm ci && npm audit --omit=dev && npm run audit && npm run typecheck && npm run build' _ "$NEW_RELEASE"
@@ -211,6 +241,7 @@ jobs:
           ACTIVE="$(readlink -f "$APP_ROOT/current")"
           test "$ACTIVE" = "$NEW_RELEASE"
           run_as_runtime pm2 describe "$PM2_APP" >/dev/null
+          run_as_runtime npm cache clean --force >/dev/null 2>&1 || true
           echo "Celebration release active: $NEW_RELEASE"
           REMOTE
 
