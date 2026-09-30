@@ -1,0 +1,92 @@
+/* UI-only jewelry presentation layer. Existing Celebration order APIs and hamper checkout are intentionally untouched. */
+
+.celebrationCommerceNav .links{gap:18px}
+.celebrationCommerceLinks a{position:relative;color:#4a2020;font-size:11px;font-weight:800;text-decoration:none;white-space:nowrap}
+.celebrationCommerceLinks a:after{content:"";position:absolute;left:50%;right:50%;bottom:-8px;height:2px;border-radius:2px;background:linear-gradient(90deg,#7d1119,#c9913d);transition:left .18s ease,right .18s ease}
+.celebrationCommerceLinks a:hover:after{left:0;right:0}
+.celebrationJewelryShortcut{min-height:40px;padding-inline:14px;font-size:10px}
+
+.jewelryStoreRoot{min-height:100vh;background:linear-gradient(180deg,#fffaf5 0%,#fff8f2 45%,#fffaf6 100%)}
+.jewelryHero{padding:0;border-bottom:1px solid #e7d7ca;background:linear-gradient(135deg,#fff8f0 0%,#f5dfd1 45%,#d7a77f 100%)}
+.jewelryHeroGrid{min-height:315px;display:grid;grid-template-columns:minmax(0,1.12fr) minmax(320px,.88fr);align-items:center;gap:38px;padding-top:34px;padding-bottom:34px;overflow:hidden}
+.jewelryHero h1{font:700 clamp(42px,5vw,64px)/.98 var(--font-display);letter-spacing:-.045em;color:#651419;margin:0}
+.jewelryHero p{max-width:580px;margin:14px 0 0;color:#725650;font-size:14px;line-height:1.7}
+.jewelryHeroBadges{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:20px;max-width:570px}
+.jewelryHeroBadges span{min-height:42px;display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid rgba(123,56,44,.13);border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,249,242,.56));box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 7px 20px rgba(79,31,22,.05);font-size:10px;font-weight:800;color:#5d2926}
+.jewelryHeroStage{height:250px;position:relative;border-radius:34px;background:radial-gradient(circle at 62% 38%,rgba(255,255,255,.68),transparent 11rem),linear-gradient(145deg,#c48f6d,#f3d8c7 48%,#b4795e);box-shadow:0 24px 60px rgba(80,39,27,.18),inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden;border:1px solid rgba(122,56,43,.18)}
+.jewelryHeroStage:before{content:"";position:absolute;width:240px;height:330px;left:54%;top:-70px;transform:rotate(19deg);border-radius:50%;background:linear-gradient(160deg,rgba(255,255,255,.52),rgba(255,241,230,.08));filter:blur(1px)}
+.jewelryHeroStage .jewelryChain{top:16px;left:50%;height:150px;width:110px}
+.jewelryHeroStage>i{position:absolute;left:50%;top:134px;transform:translateX(-50%);font-style:normal;font-size:58px;color:#f4f0ec;text-shadow:0 2px 0 #7e5e51,0 8px 16px rgba(49,28,23,.34),0 0 1px #47302a}
+.jewelryHeroStage>b{position:absolute;right:20px;bottom:16px;font:700 20px/1 var(--font-display);color:rgba(92,29,27,.72)}
+
+.jewelryListingSection{padding:28px 0 64px}
+.jewelryCategoryRail{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding:8px 0 18px;border-bottom:1px solid #ead9cb}
+.jewelryCategoryRail a{display:grid;justify-items:center;gap:8px;text-decoration:none;color:#6d5048;font-size:10px;font-weight:800;position:relative;padding-bottom:12px}
+.jewelryCategoryRail a i{width:68px;height:68px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:28px;color:#a56d3d;background:radial-gradient(circle at 35% 30%,#fff,#f5e4d5 55%,#e6c8ad);border:1px solid #e5cfbc;box-shadow:inset 0 1px 0 #fff,0 9px 22px rgba(67,28,21,.08)}
+.jewelryCategoryRail a.active{color:#74191d}
+.jewelryCategoryRail a.active:after{content:"";position:absolute;bottom:-1px;height:3px;width:76%;border-radius:3px;background:#74191d}
+.jewelryCategoryRail a.active i{background:radial-gradient(circle at 35% 30%,#8c261f,#2f0f0d 66%,#160706);color:#efc780;border-color:#a87542;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 12px 28px rgba(85,24,20,.22)}
+
+.jewelryToolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 0}
+.jewelryToolbarGroup{display:flex;gap:8px;flex-wrap:wrap}
+.jewelryToolbar button,.jewelryFilterButton{min-height:38px;border:1px solid #e1ccba;border-radius:10px;background:linear-gradient(180deg,#fff,#fff9f3);padding:8px 12px;color:#6b4740;font-size:10px;box-shadow:inset 0 1px 0 #fff,0 5px 14px rgba(64,26,19,.04)}
+.jewelryToolbar button b{color:#71181c}
+
+.jewelryProductGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.jewelryProductCard{background:linear-gradient(180deg,#fff,#fffaf5);border:1px solid #e7d5c6;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(69,27,20,.07);transition:transform .18s ease,box-shadow .18s ease}
+.jewelryProductCard:hover{transform:translateY(-3px);box-shadow:0 18px 38px rgba(69,27,20,.11)}
+.jewelryProductVisual{height:250px;display:block;position:relative;overflow:hidden;text-decoration:none;background:#ead0be}
+.jewelrySatin{position:absolute;inset:0;background:linear-gradient(135deg,#f7e8df 0%,#d7ab91 38%,#f7ded0 63%,#b98770 100%)}
+.jewelrySatin:before,.jewelrySatin:after{content:"";position:absolute;border-radius:50%;filter:blur(3px)}
+.jewelrySatin:before{width:72%;height:115%;left:-8%;top:-16%;background:linear-gradient(150deg,rgba(255,255,255,.68),rgba(255,255,255,.04));transform:rotate(-19deg)}
+.jewelrySatin:after{width:58%;height:110%;right:-14%;top:-12%;background:linear-gradient(150deg,rgba(101,49,33,.18),rgba(255,255,255,.24));transform:rotate(23deg)}
+.satin-1{background:linear-gradient(135deg,#f4d8cc,#b9836c 34%,#edcbb9 59%,#d29e84)}
+.satin-2{background:linear-gradient(135deg,#f7e6da,#e5b89e 34%,#fff3ea 58%,#bd846d)}
+.satin-3{background:linear-gradient(135deg,#e4c0ac,#f7e6db 40%,#be826a 72%,#f3d5c4)}
+.jewelryChain{position:absolute;top:-14px;left:50%;transform:translateX(-50%);width:85px;height:140px;border:3px double rgba(245,240,232,.94);border-top:0;border-radius:0 0 52% 52%;filter:drop-shadow(0 2px 1px rgba(67,42,32,.34))}
+.jewelryProductVisual>i{position:absolute;left:50%;top:51%;transform:translate(-50%,-50%);font-style:normal;font-size:52px;color:#f5f0e9;text-shadow:0 1px 0 #7b655e,0 7px 14px rgba(52,31,26,.32)}
+.jewelryBadge{position:absolute;z-index:3;left:10px;top:10px;background:linear-gradient(180deg,#8e241f,#2b0c0a);color:#fff2d9;border:1px solid rgba(245,197,129,.45);border-radius:7px;padding:5px 8px;font-size:8px;font-weight:900;box-shadow:0 6px 14px rgba(52,15,12,.2)}
+.jewelryHeart{position:absolute;right:10px;top:10px;z-index:3;width:30px;height:30px;border-radius:50%;border:1px solid #ead8cb;background:rgba(255,255,255,.9);color:#7d1119;font-size:15px;display:grid;place-items:center}
+.jewelryProductCopy{padding:12px 13px 14px}
+.jewelryProductCopy>a{display:block;color:#481b1a;text-decoration:none;font-size:12px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jewelryPriceLine{display:flex;align-items:baseline;gap:7px;margin-top:7px}.jewelryPriceLine strong{font-size:16px;color:#381414}.jewelryPriceLine s{font-size:10px;color:#9c8178}.jewelryPriceLine em{font-style:normal;font-size:8px;color:#a53b2e;font-weight:800}
+.jewelryRating{margin-top:6px;color:#d88622;font-size:9px;font-weight:850}.jewelryRating span{color:#8c7169;font-weight:600}
+
+.jewelryDetailSection{padding:26px 0 72px}
+.jewelryBreadcrumb{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:9px;color:#90756d;margin-bottom:18px}.jewelryBreadcrumb a{color:#72534c;text-decoration:none}.jewelryBreadcrumb b{color:#7a181c}
+.jewelryDetailGrid{display:grid;grid-template-columns:82px minmax(0,1.3fr) minmax(340px,.9fr);gap:16px;align-items:start}
+.jewelryThumbRail{display:grid;gap:10px}
+.jewelryThumbRail button{height:88px;border:1px solid #e5d0c1;border-radius:12px;position:relative;overflow:hidden;background:#ead2c2;padding:0;box-shadow:0 7px 16px rgba(63,27,20,.05)}
+.jewelryThumbRail button.active{border:2px solid #8c1b20}
+.jewelryThumbRail button i{position:absolute;inset:0;display:grid;place-items:center;font-style:normal;font-size:26px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.28)}
+.jewelryDetailVisual{height:535px;position:relative;overflow:hidden;border-radius:18px;border:1px solid #dfc9b8;background:#e2bba5;box-shadow:0 20px 50px rgba(67,28,21,.12)}
+.jewelryDetailVisual .jewelryChainLarge{top:-40px;width:190px;height:310px;border-width:4px}
+.jewelryDetailVisual>i{position:absolute;left:50%;top:51%;transform:translate(-50%,-50%);font-style:normal;font-size:112px;color:#f5f2ed;text-shadow:0 2px 0 #7f6a61,0 14px 26px rgba(45,27,23,.35)}
+.jewelryImageCounter{position:absolute;right:14px;bottom:14px;background:rgba(35,14,12,.78);color:white;padding:5px 8px;border-radius:999px;font-size:8px}
+
+.jewelryDetailBuyBox{padding:8px 4px 0 12px}
+.jewelryBadges{display:flex;gap:7px}.jewelryBadges span{background:#7d1119;color:#fff;border-radius:999px;padding:5px 9px;font-size:8px;font-weight:850}.jewelryBadges .stock{background:#eaf4df;color:#4c6f32}
+.jewelryDetailBuyBox h1{font:700 30px/1.08 var(--font-display);color:#431718;margin:12px 0 8px;letter-spacing:-.025em}
+.jewelryDetailRating{font-size:10px}.jewelryDetailRating b{color:#4a2621;margin-left:6px}.jewelryDetailPrice{display:flex;align-items:baseline;gap:9px;margin-top:16px}.jewelryDetailPrice strong{font-size:28px;color:#381313}.jewelryDetailPrice s{color:#927a73;font-size:11px}.jewelryDetailPrice em{font-style:normal;color:#9b2e24;font-size:10px;font-weight:900;border:1px solid #e8b9ae;background:#fff1ec;border-radius:999px;padding:4px 7px}.jewelryDetailBuyBox>small{display:block;color:#8f756e;font-size:8px;margin-top:2px}
+.jewelryFeatureIcons{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:22px 0;padding:16px 0;border-top:1px solid #ead9cc;border-bottom:1px solid #ead9cc}.jewelryFeatureIcons div{display:grid;justify-items:center;gap:5px;text-align:center;color:#70524b}.jewelryFeatureIcons i{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(180deg,#fff,#f7e8dc);border:1px solid #e7d3c4;font-style:normal;color:#9b5b32}.jewelryFeatureIcons span{font-size:8px;line-height:1.2}
+.jewelryQuantityRow{display:grid;grid-template-columns:38px 52px 38px;align-items:center;width:max-content;border:1px solid #e2cebe;border-radius:10px;overflow:hidden;background:#fff;margin-bottom:12px}.jewelryQuantityRow button,.jewelryQuantityRow span{height:38px;border:0;background:#fff;display:grid;place-items:center}.jewelryQuantityRow span{border-inline:1px solid #eadbd0;font-size:11px}
+.jewelryPurchaseActions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.jewelryPurchaseActions .primary,.jewelryPurchaseActions .secondary{min-height:50px}.jewelryPurchaseActions button:disabled{opacity:1;cursor:not-allowed}
+.jewelryTrustRow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:22px;padding-top:16px;border-top:1px solid #ead9cc}.jewelryTrustRow>div{display:flex;align-items:center;gap:7px}.jewelryTrustRow i{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#fff;border:1px solid #ead8ca;font-style:normal}.jewelryTrustRow span{display:grid}.jewelryTrustRow b{font-size:8.5px}.jewelryTrustRow small{font-size:7px;color:#977d74}
+
+.jewelryDetailTabs{margin-top:24px;border:1px solid #e2cebd;border-radius:17px;background:linear-gradient(180deg,#fff,#fffaf6);box-shadow:0 12px 32px rgba(65,27,20,.06);overflow:hidden}.jewelryDetailTabs nav{display:flex;gap:24px;padding:0 18px;border-bottom:1px solid #ead9cc;overflow:auto}.jewelryDetailTabs nav button{min-height:48px;border:0;background:transparent;font-size:9px;color:#795d55;white-space:nowrap;position:relative}.jewelryDetailTabs nav button.active{font-weight:900;color:#74191d}.jewelryDetailTabs nav button.active:after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:#74191d}.jewelryDetailBody{display:grid;grid-template-columns:1fr 290px;gap:26px;padding:22px}.jewelryDetailBody p{font-size:11px;line-height:1.75;color:#705650;margin-top:0}.jewelryDetailBody ul{display:grid;gap:8px;padding-left:18px}.jewelryDetailBody li{font-size:10px;color:#57312e}.jewelryDetailBody li::marker{color:#861a20}.jewelryLifestyleFrame{min-height:220px;position:relative;overflow:hidden;border-radius:14px;background:#e1b8a0;border:1px solid #dfc6b4}.jewelryLifestyleFrame .jewelryChainSmall{top:-16px;width:92px;height:160px}.jewelryLifestyleFrame>i{position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);font-style:normal;font-size:58px;color:#fff;text-shadow:0 8px 18px rgba(50,28,21,.3)}
+
+@media(min-width:900px){
+  .celebrationCommerceNav .links{display:flex;align-items:center}
+  .celebrationCommerceActions .celebrationJewelryShortcut{display:none}
+}
+
+@media(max-width:899px){
+  .jewelryHeroGrid{grid-template-columns:1fr;gap:20px;padding-top:28px;padding-bottom:28px}.jewelryHeroStage{height:220px}.jewelryCategoryRail{grid-template-columns:repeat(3,1fr);row-gap:16px}.jewelryProductGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.jewelryDetailGrid{grid-template-columns:70px 1fr}.jewelryDetailBuyBox{grid-column:1/-1;padding:8px 0 0}.jewelryDetailBody{grid-template-columns:1fr}.jewelryLifestyleFrame{min-height:260px}
+}
+
+@media(max-width:639px){
+  .celebrationJewelryShortcut{display:inline-flex}.celebrationCommerceNavInner{gap:6px}
+  .jewelryHero{padding:0}.jewelryHeroGrid{padding-top:24px;padding-bottom:24px}.jewelryHero h1{font-size:42px}.jewelryHero p{font-size:12px}.jewelryHeroBadges{grid-template-columns:1fr 1fr}.jewelryHeroBadges span{font-size:8.5px;padding:8px}.jewelryHeroStage{height:190px;border-radius:22px}
+  .jewelryListingSection{padding-top:18px}.jewelryCategoryRail{display:flex;overflow:auto;gap:10px;scrollbar-width:none;padding-bottom:14px}.jewelryCategoryRail::-webkit-scrollbar{display:none}.jewelryCategoryRail a{min-width:76px}.jewelryCategoryRail a i{width:58px;height:58px;font-size:23px}.jewelryToolbar{align-items:flex-start}.jewelryToolbarGroup{display:grid;grid-template-columns:repeat(2,1fr);width:100%}.jewelryFilterButton{flex:0 0 auto}.jewelryProductGrid{gap:10px}.jewelryProductVisual{height:180px}.jewelryProductVisual>i{font-size:42px}.jewelryProductCopy{padding:10px}.jewelryProductCopy>a{font-size:10px}.jewelryPriceLine{gap:4px;flex-wrap:wrap}.jewelryPriceLine strong{font-size:14px}
+  .jewelryBreadcrumb{font-size:8px}.jewelryDetailGrid{grid-template-columns:1fr}.jewelryThumbRail{grid-row:2;display:flex;overflow:auto}.jewelryThumbRail button{width:64px;height:64px;flex:0 0 64px}.jewelryDetailVisual{grid-row:1;height:390px}.jewelryDetailBuyBox{grid-row:3}.jewelryDetailBuyBox h1{font-size:27px}.jewelryFeatureIcons{gap:4px}.jewelryFeatureIcons i{width:30px;height:30px}.jewelryTrustRow{grid-template-columns:1fr}.jewelryDetailTabs nav{gap:14px;padding-inline:12px}.jewelryDetailBody{padding:16px}.jewelryPurchaseActions{grid-template-columns:1fr 1fr}
+}
