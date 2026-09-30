@@ -57,14 +57,14 @@ jobs:
           echo
 
           echo "RECENT_MSG91_LOGS_BEGIN"
-          PM2_HOME=/home/nitin/.pm2 pm2 logs celebration-site --lines 180 --nostream 2>&1 \
+          sudo -u nitin env HOME=/home/nitin PM2_HOME=/home/nitin/.pm2 \
+            pm2 logs celebration-site --lines 180 --nostream 2>&1 \
             | grep -A8 -B5 "msg91-password-reset-token" \
             | tail -n 100 || true
           echo "RECENT_MSG91_LOGS_END"
 
           echo "MSG91_AUTH_PROBE_BEGIN"
-          cd /var/www/celebration/current
-          node <<'NODE'
+          sudo -u nitin env HOME=/home/nitin bash -lc 'cd /var/www/celebration/current && node' <<'NODE'
           const { loadEnvConfig } = require('@next/env')
           loadEnvConfig(process.cwd(), false)
           const authkey = (process.env.MSG91_AUTH_KEY || '').trim()
