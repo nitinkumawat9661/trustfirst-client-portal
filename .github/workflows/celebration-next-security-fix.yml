@@ -31,13 +31,15 @@ jobs:
           npm audit --omit=dev
           npm run typecheck
 
-      - name: Commit generated dependency update
+      - name: Commit generated dependency update to PR branch
         shell: bash
         run: |
           set -euo pipefail
+          BRANCH="automation/celebration-next-16.3.8"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
           git add celebration-site/package.json celebration-site/package-lock.json
           git diff --cached --quiet && exit 0
           git commit -m "chore: patch Celebration Next.js security advisory"
-          git push origin HEAD:main
+          git push --force origin "HEAD:$BRANCH"
