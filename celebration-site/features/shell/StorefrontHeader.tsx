@@ -16,24 +16,23 @@ export function StorefrontHeader({ settings }: { settings: StoreSettings }) {
             <div className="tag">{storeContent.brand.tagline}</div>
           </Link>
 
-          <label className="commerceSearch" aria-label="Search Celebration">
+          <div className="commerceSearch" role="search" aria-label="Celebration catalog search preview">
             <span aria-hidden="true">⌕</span>
-            <input readOnly placeholder="Search hampers, jewelry, gifts..." />
-          </label>
+            <span>Search hampers, jewelry, gifts...</span>
+          </div>
 
           <div className="navAccountActions celebrationCommerceActions">
-            <Link className="navAccountLink" href={routes.account} prefetch={false} aria-label="My Celebration dashboard">
-              <span aria-hidden="true">♡</span><b>My Celebration</b>
-            </Link>
-            <Link className="secondary navStoreLink celebrationJewelryShortcut" href="/jewelry" prefetch={false}>Jewelry</Link>
+            <a className="commerceIconAction" href="#jewelry" aria-label="Jewelry collection">♡</a>
+            <Link className="commerceIconAction" href={routes.account} prefetch={false} aria-label="My Celebration">♥</Link>
+            <a className="commerceIconAction commerceCartAction" href="#builder" aria-label="Open hamper builder">▣</a>
           </div>
         </div>
 
         <div className="wrap celebrationCommerceMenuRow">
           <nav className="links celebrationCommerceLinks" aria-label="Store navigation">
             <a href={`${routes.home}#budgets`}>Hampers</a>
-            <Link href="/jewelry" prefetch={false}>Jewelry</Link>
-            <Link href="/jewelry?collection=combos" prefetch={false}>Combos</Link>
+            <a href={`${routes.home}#jewelry`}>Jewelry</a>
+            <a href={`${routes.home}#jewelry`}>Combos</a>
             <a href={`${routes.home}#occasions`}>Occasions</a>
             <a href={`${routes.home}#budgets`}>Budget</a>
             <a href={`${routes.home}#trust`}>Why Celebration</a>
