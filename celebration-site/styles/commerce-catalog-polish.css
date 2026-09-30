@@ -1,0 +1,51 @@
+/* Final catalog-backed polish for the approved Celebration commerce UI. */
+
+.jewelryHeroStage{isolation:isolate}
+.jewelryHeroCatalogImage{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+.jewelryHeroStage:after{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,rgba(57,17,14,.12),rgba(255,247,239,.02) 55%,rgba(83,29,21,.15));pointer-events:none}
+.jewelryHeroStage>b{z-index:2}
+
+.jewelryCategoryRail{grid-template-columns:repeat(auto-fit,minmax(94px,1fr))}
+.jewelryCatalogStatus{display:inline-flex;align-items:center;min-height:38px;padding:8px 12px;border:1px solid #e1ccba;border-radius:10px;background:linear-gradient(180deg,#fff,#fff9f3);color:#6b4740;font-size:10px;box-shadow:inset 0 1px 0 #fff,0 5px 14px rgba(64,26,19,.04)}
+.jewelryFilterButton{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+
+.jewelryCatalogImage{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
+.jewelryProductVisual:has(.jewelryCatalogImage) .jewelryBadge,.jewelryProductVisual:has(.jewelryCatalogImage) .jewelryHeart{z-index:3}
+.jewelryCatalogNote{margin-top:6px;color:#876f66;font-size:9px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:24px}
+.jewelryPriceLine strong{font-size:15px}
+
+.jewelryThumbRail button img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.jewelryDetailVisual{background:#ead8cb}
+.jewelryDetailCatalogImage{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.jewelryImageCounter{z-index:2}
+.jewelryDetailPrice strong{font-size:26px}
+.jewelryFeatureIcons div:nth-child(2) span{max-width:68px;line-height:1.15;word-break:break-word}
+.jewelryPurchaseActions a{min-height:50px;display:flex;align-items:center;justify-content:center;border-radius:12px;text-decoration:none;font-size:11px;font-weight:900}
+.jewelryTrustRow{margin-top:18px}
+.jewelryLifestyleFrame{position:relative;overflow:hidden}
+.jewelryLifestyleFrame img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.jewelryDetailTabs nav button:disabled{opacity:.58;cursor:default}
+
+/* Preserve the familiar ecommerce density from the approved reference on desktop. */
+@media(min-width:1000px){
+  .jewelryListingSection>.wrap,.jewelryDetailSection>.wrap{max-width:1180px}
+  .jewelryProductGrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+  .jewelryProductVisual{height:245px}
+  .jewelryDetailGrid{grid-template-columns:78px minmax(0,1.25fr) minmax(340px,.88fr)}
+}
+
+@media(max-width:760px){
+  .jewelryCategoryRail{display:flex;overflow-x:auto;gap:8px;padding-bottom:14px}
+  .jewelryCategoryRail a{min-width:88px;flex:0 0 88px}
+  .jewelryCategoryRail a i{width:58px;height:58px}
+  .jewelryToolbar{align-items:stretch}
+  .jewelryCatalogStatus,.jewelryFilterButton{min-height:36px}
+  .jewelryProductGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  .jewelryProductVisual{height:auto;aspect-ratio:1/1.06}
+  .jewelryDetailGrid{grid-template-columns:1fr}
+  .jewelryThumbRail{display:flex;overflow-x:auto;order:2}
+  .jewelryThumbRail button{min-width:72px;width:72px;height:72px}
+  .jewelryDetailVisual{height:auto;aspect-ratio:1/1.08;order:1}
+  .jewelryDetailBuyBox{order:3;padding:8px 0 0}
+  .jewelryPurchaseActions{position:sticky;bottom:8px;z-index:8;padding:8px;border:1px solid #ead8ca;border-radius:15px;background:rgba(255,250,245,.96);box-shadow:0 12px 32px rgba(66,25,19,.14);backdrop-filter:blur(12px)}
+}
