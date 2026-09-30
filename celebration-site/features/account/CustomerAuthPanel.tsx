@@ -223,17 +223,6 @@ export function CustomerAuthPanel({
     return () => window.clearInterval(timer)
   }, [resendIn > 0])
 
-  useEffect(() => {
-    if (screen !== "forgot-phone" || !widgetReady) {
-      setCaptchaVerified(false)
-      return
-    }
-    const syncCaptchaState = () => setCaptchaVerified(window.isCaptchaVerified?.() === true)
-    syncCaptchaState()
-    const timer = window.setInterval(syncCaptchaState, 250)
-    return () => window.clearInterval(timer)
-  }, [screen, widgetReady])
-
   function clearErrors() {
     setLocalError("")
     onClearError?.()
@@ -369,11 +358,6 @@ export function CustomerAuthPanel({
         return
       }
 
-      if (!captchaVerified || window.isCaptchaVerified?.() !== true) {
-        setCaptchaVerified(false)
-        return
-      }
-
       if (!window.sendOtp) throw new Error("SMS_OTP_UNAVAILABLE")
       const result = await providerCall((success, failure) => window.sendOtp?.(`91${localPhone}`, success, failure), "SMS_OTP_PROVIDER_FAILED")
       setRequestId(extractReqId(result))
@@ -474,12 +458,12 @@ export function CustomerAuthPanel({
           <div className={`resetSecurityCard ${captchaVerified ? "verified" : widgetReady ? "pending" : "idle"}`}>
             <div className="resetSecurityHead">
               <span className="resetSecurityMark" aria-hidden="true">{captchaVerified ? "✓" : "•"}</span>
-              <div><b>{captchaVerified ? "Security check complete" : widgetReady ? "Confirm you’re human" : "Secure verification"}</b><small>{captchaVerified ? "Verified — OTP sending is now enabled." : widgetReady ? "Complete the check below to enable OTP." : "Continue once to load the protected check."}</small></div>
+              <div><b>{captchaVerified ? "Security check complete" : widgetReady ? "Confirm you’re human" : "Secure verification"}</b><small>{captchaVerified ? "Verified — OTP sending is now enabled." : widgetReady ? "Complete the provider security check, then send OTP." : "Continue once to load the protected check."}</small></div>
             </div>
             <div className={`resetCaptchaViewport ${widgetReady ? "ready" : ""}`}><div id="celebration-msg91-captcha" className="resetCaptcha" aria-live="polite" /></div>
           </div>
           {friendlyError && <div className="errorBox" role="alert">{friendlyError}</div>}
-          <button className="primary fullWidth resetOtpButton" disabled={actionBusy || (!widgetReady && !resetPhoneReady) || (widgetReady && !captchaVerified)} type="submit">{actionBusy ? (widgetReady ? "Sending OTP…" : "Preparing security…") : widgetReady ? "Send SMS OTP" : "Continue securely"}</button>
+          <button className="primary fullWidth resetOtpButton" disabled={actionBusy || (!widgetReady && !resetPhoneReady)} type="submit">{actionBusy ? (widgetReady ? "Sending OTP…" : "Preparing security…") : widgetReady ? "Send SMS OTP" : "Continue securely"}</button>
           <button className="authTextButton" type="button" onClick={backToLogin}>← Back to login</button>
         </form>
       </div>
