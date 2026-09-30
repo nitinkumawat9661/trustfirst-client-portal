@@ -1,5 +1,6 @@
 name: Celebration VPS Diagnostics
 
+# Triggered intentionally to verify the live MSG91 password-reset handoff.
 on:
   push:
     branches:
