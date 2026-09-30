@@ -1,0 +1,328 @@
+/* Premium account + password recovery visual pass.
+   Visual-only overrides: no account, OTP, captcha or reset flow logic changes. */
+
+.accountPage{
+  position:relative;
+  min-height:calc(100vh - 140px);
+  padding:52px 0 84px;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 18% 16%,rgba(116,25,29,.075),transparent 28%),
+    radial-gradient(circle at 84% 12%,rgba(188,92,50,.085),transparent 30%),
+    linear-gradient(180deg,#fffaf6 0%,#fff7f0 48%,#fffaf6 100%);
+}
+.accountPage:before,.accountPage:after{
+  content:"";
+  position:absolute;
+  pointer-events:none;
+  border-radius:999px;
+  filter:blur(2px);
+  opacity:.55;
+}
+.accountPage:before{
+  width:320px;height:320px;left:-150px;top:120px;
+  background:radial-gradient(circle,rgba(116,25,29,.08),rgba(116,25,29,0) 70%);
+}
+.accountPage:after{
+  width:360px;height:360px;right:-190px;bottom:30px;
+  background:radial-gradient(circle,rgba(210,140,85,.14),rgba(210,140,85,0) 68%);
+}
+.accountPage>.wrap{position:relative;z-index:1}
+.accountPublicWrap{max-width:640px;margin:0 auto}
+
+.customerAuthCard{
+  position:relative;
+  overflow:hidden;
+  padding:34px 36px 32px;
+  border:1px solid rgba(116,25,29,.11);
+  border-radius:30px;
+  background:rgba(255,255,255,.94);
+  box-shadow:
+    0 28px 80px rgba(78,31,25,.13),
+    0 4px 14px rgba(78,31,25,.045),
+    inset 0 1px 0 rgba(255,255,255,.95);
+  backdrop-filter:blur(18px);
+}
+.customerAuthCard:before{
+  content:"";
+  position:absolute;
+  inset:0 0 auto;
+  height:4px;
+  background:linear-gradient(90deg,#74191d 0%,#a62927 38%,#d69a67 72%,#f0c89d 100%);
+}
+.customerAuthCard:after{
+  content:"";
+  position:absolute;
+  width:190px;height:190px;
+  right:-92px;top:-105px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(166,41,39,.09),rgba(166,41,39,0) 68%);
+  pointer-events:none;
+}
+
+.customerAuthIntro{
+  position:relative;
+  z-index:1;
+  padding-right:0;
+  margin-bottom:22px;
+  text-align:center;
+}
+.customerAuthIntro .kicker{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:28px;
+  margin:0 0 12px;
+  padding:6px 11px;
+  border:1px solid rgba(188,92,50,.18);
+  border-radius:999px;
+  background:#fff7ef;
+  color:#a64c2d;
+  font-size:9px;
+  letter-spacing:.16em;
+}
+.customerAuthIntro h2{
+  max-width:520px;
+  margin:0 auto;
+  color:#641317;
+  font:700 38px/1.02 var(--font-display);
+  letter-spacing:-.035em;
+  text-wrap:balance;
+}
+.customerAuthIntro p{
+  max-width:500px;
+  margin:12px auto 0;
+  color:#7b625b;
+  font-size:12.5px;
+  line-height:1.65;
+  text-wrap:pretty;
+}
+
+.customerAuthTabs{
+  margin:0 0 20px;
+  padding:5px;
+  gap:5px;
+  border:1px solid rgba(116,25,29,.09);
+  border-radius:17px;
+  background:#f9eee5;
+  box-shadow:inset 0 1px 3px rgba(80,35,25,.04);
+}
+.customerAuthTabs button{
+  min-height:45px;
+  border-radius:12px;
+  font-size:11px;
+  font-weight:850;
+}
+.customerAuthTabs button.active{
+  color:#74191d;
+  background:#fff;
+  box-shadow:0 7px 20px rgba(80,35,25,.09),inset 0 0 0 1px rgba(116,25,29,.04);
+}
+
+.customerAuthForm{gap:15px}
+.customerAuthForm .field{gap:7px}
+.customerAuthForm .field>span{
+  color:#492221;
+  font-size:11.5px;
+  font-weight:850;
+  letter-spacing:.005em;
+}
+.customerAuthForm .control{
+  width:100%;
+  min-height:56px;
+  padding:13px 16px;
+  border:1px solid #dfcbbd;
+  border-radius:16px;
+  background:#fffdfa;
+  color:#321516;
+  font-size:16px;
+  box-shadow:0 1px 0 rgba(255,255,255,.9),inset 0 1px 3px rgba(80,35,25,.025);
+  transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
+}
+.customerAuthForm .control:hover{border-color:#d4b6a4;background:#fff}
+.customerAuthForm .control:focus{
+  border-color:rgba(116,25,29,.55);
+  background:#fff;
+  box-shadow:0 0 0 4px rgba(116,25,29,.08),0 8px 24px rgba(80,35,25,.05);
+}
+.customerAuthForm .control::placeholder{color:#ad9289}
+.passwordControlWrap{position:relative}
+.passwordControlWrap .control{padding-right:70px}
+.passwordToggle{
+  right:10px;
+  border-radius:999px!important;
+  min-width:48px;
+  min-height:34px;
+  padding-inline:10px!important;
+  color:#74191d!important;
+  background:#fff5ed!important;
+  border:1px solid #ead6c7!important;
+  font-size:9px!important;
+  font-weight:850!important;
+}
+
+.customerAuthForm .primary.fullWidth{
+  width:100%;
+  min-height:56px;
+  margin-top:2px;
+  border-radius:16px;
+  background:linear-gradient(135deg,#74191d 0%,#8d1f23 58%,#a72c2b 100%);
+  color:#fff;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.005em;
+  box-shadow:0 14px 34px rgba(116,25,29,.22),inset 0 1px 0 rgba(255,255,255,.15);
+  transition:transform .16s ease,box-shadow .16s ease,filter .16s ease;
+}
+.customerAuthForm .primary.fullWidth:hover:not(:disabled){
+  transform:translateY(-1px);
+  box-shadow:0 17px 38px rgba(116,25,29,.27),inset 0 1px 0 rgba(255,255,255,.16);
+  filter:saturate(1.03);
+}
+.customerAuthForm .primary.fullWidth:active:not(:disabled){transform:translateY(0)}
+.customerAuthForm .primary.fullWidth:disabled{opacity:.5;box-shadow:none}
+
+.forgotPasswordRow{margin-top:-3px}
+.authTextButton{
+  color:#74191d;
+  font-size:10.5px;
+  font-weight:850;
+  text-underline-offset:3px;
+}
+.customerAuthHelp{
+  margin-top:20px;
+  padding:14px 15px;
+  border:1px solid #efdfd4;
+  border-radius:14px;
+  background:#fff9f4;
+  font-size:10.5px;
+}
+.customerAuthPrivacy{
+  margin-top:14px;
+  padding-top:14px;
+  color:#927970;
+  text-align:center;
+  font-size:9.5px;
+}
+
+.customerResetCard{min-height:0}
+.customerResetCard .customerAuthIntro{margin-bottom:24px;padding-right:0}
+.customerResetCard .customerAuthForm{gap:16px}
+
+.resetSecurityCard{
+  width:100%;
+  max-width:460px;
+  gap:12px;
+  justify-self:center;
+  padding:15px 16px 16px;
+  border:1px solid #ead5c8;
+  border-radius:18px;
+  background:linear-gradient(145deg,#fffdfb 0%,#fff7f0 100%);
+  box-shadow:0 10px 30px rgba(78,31,25,.055),inset 0 1px 0 rgba(255,255,255,.9);
+}
+.resetSecurityCard.pending{border-color:#dfc2af;box-shadow:0 12px 34px rgba(78,31,25,.075)}
+.resetSecurityCard.verified{
+  border-color:#c9dfc5;
+  background:linear-gradient(145deg,#fbfff9 0%,#f1f8ef 100%);
+  box-shadow:0 12px 34px rgba(42,118,67,.08);
+}
+.resetSecurityHead{gap:11px}
+.resetSecurityMark{
+  width:34px;height:34px;flex-basis:34px;
+  border-radius:11px;
+  background:#fff1e8;
+  color:#74191d;
+  font-size:14px;
+  box-shadow:0 5px 14px rgba(88,35,31,.05);
+}
+.resetSecurityHead>div{gap:3px}
+.resetSecurityHead b{font-size:11.5px;line-height:1.2}
+.resetSecurityHead small{font-size:9.5px;line-height:1.42}
+.resetCaptchaViewport.ready{
+  width:278px;
+  height:70px;
+  border-radius:13px;
+  border-color:#ead8cb;
+  box-shadow:0 6px 16px rgba(80,35,25,.04),inset 0 0 0 1px rgba(255,255,255,.8);
+}
+.resetCaptcha{transform:scale(.92)}
+
+.otpControl{
+  min-height:62px!important;
+  border-radius:17px!important;
+  background:#fff!important;
+  color:#5e171a!important;
+  font-size:24px!important;
+  letter-spacing:.34em!important;
+  font-variant-numeric:tabular-nums;
+  box-shadow:inset 0 0 0 1px rgba(116,25,29,.02)!important;
+}
+.resetResendRow{
+  padding:2px 2px 0;
+  color:#8b7068;
+  font-size:10.5px;
+}
+.resetVerifiedNotice{
+  gap:12px;
+  padding:14px 15px;
+  border-radius:17px;
+  border-color:#c7dfc3;
+  background:linear-gradient(145deg,#fbfff9,#eff8ed);
+  box-shadow:0 10px 24px rgba(42,118,67,.065);
+}
+.resetVerifiedNotice>span{
+  width:36px;height:36px;flex-basis:36px;
+  background:#dff1dc;
+  font-size:16px;
+}
+.resetVerifiedNotice b{font-size:12px}
+.resetVerifiedNotice small{font-size:9.5px;line-height:1.45}
+
+.customerResetCard .errorBox{
+  padding:12px 14px;
+  border-radius:14px;
+  border:1px solid rgba(157,41,37,.18);
+  background:#fff4f1;
+  color:#8f2e2a;
+  font-size:10.5px;
+  line-height:1.5;
+}
+
+.accountState{
+  border-radius:24px;
+  box-shadow:0 18px 50px rgba(77,28,22,.07);
+}
+
+@media(max-width:759px){
+  .accountPage{padding:24px 0 56px;min-height:calc(100dvh - 112px)}
+  .accountPage:before{width:230px;height:230px;left:-140px;top:80px}
+  .accountPage:after{width:250px;height:250px;right:-150px;bottom:10px}
+  .accountPublicWrap{max-width:100%}
+  .customerAuthCard{
+    padding:25px 18px 22px;
+    border-radius:24px;
+    box-shadow:0 20px 55px rgba(78,31,25,.11),0 3px 10px rgba(78,31,25,.035);
+  }
+  .customerAuthIntro{margin-bottom:18px}
+  .customerAuthIntro .kicker{min-height:26px;margin-bottom:10px;font-size:8.5px}
+  .customerAuthIntro h2{font-size:31px;line-height:1.04}
+  .customerAuthIntro p{font-size:11.5px;line-height:1.6;margin-top:10px}
+  .customerAuthTabs{margin-bottom:16px}
+  .customerAuthForm{gap:13px}
+  .customerAuthForm .control{min-height:53px;border-radius:15px;padding:12px 14px}
+  .customerAuthForm .primary.fullWidth{min-height:53px;border-radius:15px}
+  .customerAuthHelp{margin-top:16px}
+  .resetSecurityCard{padding:13px;border-radius:16px}
+  .resetCaptchaViewport.ready{width:249px;height:64px}
+  .resetCaptcha{transform:scale(.82)}
+  .otpControl{min-height:58px!important;font-size:21px!important;letter-spacing:.27em!important}
+}
+
+@media(min-width:760px){
+  .accountPage{padding-top:58px}
+  .customerResetCard{padding-top:38px;padding-bottom:36px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .customerAuthForm .control,.customerAuthForm .primary.fullWidth{transition:none}
+}
