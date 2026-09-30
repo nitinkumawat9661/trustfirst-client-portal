@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          BRANCH="automation/celebration-next-16.3.8"
+          BRANCH="fix/celebration-next-security-16-3-8"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH"
