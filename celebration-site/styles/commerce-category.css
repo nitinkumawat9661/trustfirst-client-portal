@@ -1,0 +1,17 @@
+.commerceCategorySection{padding:30px 0 34px;background:linear-gradient(180deg,#fffaf5,#fff7ef);border-bottom:1px solid #ead8ca}
+.commerceCategoryHead{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:16px}
+.commerceCategoryHead h2{margin:0;font:700 30px/1.05 var(--font-display);letter-spacing:-.035em;color:#641317}
+.commerceCategoryHead>a{font-size:9px;font-weight:850;color:#7d1119;text-decoration:none}
+.commerceCategoryGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.commerceCategoryCard{display:grid;gap:5px;text-decoration:none;color:#4a2020;min-width:0}
+.commerceCategoryVisual{height:118px;border:1px solid #e4cebd;border-radius:15px;overflow:hidden;position:relative;background:#ead0bf;box-shadow:0 10px 24px rgba(67,28,20,.07)}
+.commerceCategoryVisual .jewelrySatin{inset:0}
+.commerceCategoryVisual:after{content:"";position:absolute;inset:auto 10px 8px;height:24px;background:linear-gradient(180deg,transparent,rgba(43,14,12,.18));border-radius:50%;filter:blur(7px)}
+.commerceCategoryVisual i{position:absolute;inset:0;display:grid;place-items:center;font-style:normal;font-size:40px;color:#fff5e9;text-shadow:0 2px 0 #7e665b,0 7px 15px rgba(51,28,21,.28)}
+.commerceCategoryCard:first-child .commerceCategoryVisual{background:linear-gradient(145deg,#35110f,#7d201b 62%,#24100d)}
+.commerceCategoryCard:first-child .commerceCategoryVisual .jewelrySatin{display:none}
+.commerceCategoryCard:first-child .commerceCategoryVisual i{color:#e5b45e;font-size:45px}
+.commerceCategoryCard b{font-size:11px;color:#4a1b1b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.commerceCategoryCard small{font-size:8px;color:#8b6d64;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:799px){.commerceCategoryGrid{display:flex;overflow:auto;scroll-snap-type:x proximity;scrollbar-width:none;padding-bottom:6px}.commerceCategoryGrid::-webkit-scrollbar{display:none}.commerceCategoryCard{flex:0 0 148px;scroll-snap-align:start}.commerceCategoryVisual{height:105px}}
+@media(max-width:639px){.commerceCategorySection{padding:24px 0 28px}.commerceCategoryHead h2{font-size:26px}.commerceCategoryHead .kicker{font-size:8px}.commerceCategoryCard{flex-basis:132px}.commerceCategoryVisual{height:96px}.commerceCategoryVisual i{font-size:35px}}
