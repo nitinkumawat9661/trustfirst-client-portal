@@ -1,0 +1,43 @@
+name: Celebration Next Security Fix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/celebration-next-security-fix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    name: Upgrade Celebration Next.js to patched release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Generate patched lockfile
+        working-directory: celebration-site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --save-exact next@16.3.8
+          npm audit --omit=dev
+          npm run typecheck
+
+      - name: Commit generated dependency update
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add celebration-site/package.json celebration-site/package-lock.json
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: patch Celebration Next.js security advisory"
+          git push origin HEAD:main
