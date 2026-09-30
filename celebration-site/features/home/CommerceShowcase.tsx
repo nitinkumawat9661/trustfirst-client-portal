@@ -1,12 +1,7 @@
 import type { CatalogConfig, GiftProduct } from "../../lib/domain/catalog"
 import { formatMoney, visibleProducts } from "../../lib/domain/catalog"
 import { storeContent } from "../../lib/domain/content"
-
-const JEWELRY_WORDS = /\b(jewel|jewellery|jewelry|necklace|pendant|chain|earring|earrings|ring|rings|bracelet|bangle|anklet|accessory|accessories|combo|set)\b/i
-
-function isJewelryProduct(product: GiftProduct) {
-  return JEWELRY_WORDS.test(`${product.category} ${product.name}`)
-}
+import { catalogJewelryCategories, catalogJewelryProducts } from "../jewelry/catalog-jewelry"
 
 function sortedForVisuals(products: GiftProduct[]) {
   return [...products].sort((a, b) => Number(Boolean(b.imageUrl)) - Number(Boolean(a.imageUrl)))
@@ -29,8 +24,8 @@ export function CommerceShowcase({ catalog }: { catalog: CatalogConfig }) {
   })).filter((item): item is { category: string; product: GiftProduct } => Boolean(item.product))
 
   const bestPicks = visuallySorted.slice(0, 6)
-  const jewelryProducts = sortedForVisuals(products.filter(isJewelryProduct))
-  const jewelryCategories = Array.from(new Set(jewelryProducts.map((item) => item.category)))
+  const jewelryProducts = sortedForVisuals(catalogJewelryProducts(catalog))
+  const jewelryCategories = catalogJewelryCategories(catalog)
 
   return (
     <div className="commerceShowcase">
@@ -62,7 +57,7 @@ export function CommerceShowcase({ catalog }: { catalog: CatalogConfig }) {
       {bestPicks.length > 0 && (
         <section className="commerceSection commerceBestPicks" aria-labelledby="best-picks-title">
           <div className="wrap">
-            <div className="commerceSectionHead"><h2 id="best-picks-title">Best Picks for You</h2><div className="commercePills" aria-label="Collections"><span className="active">Hampers</span><a href="#jewelry">Jewelry</a><a href="#jewelry">Combos</a></div></div>
+            <div className="commerceSectionHead"><h2 id="best-picks-title">Best Picks for You</h2><div className="commercePills" aria-label="Collections"><span className="active">Hampers</span><a href="/jewelry">Jewelry</a><a href="/jewelry?collection=combos">Combos</a></div></div>
             <div className="commerceProductRail">
               {bestPicks.map((product) => (
                 <a className="commerceProductCard" href="#builder" key={product.id}>
@@ -82,8 +77,8 @@ export function CommerceShowcase({ catalog }: { catalog: CatalogConfig }) {
             <div>
               <div className="eyebrow">CELEBRATION JEWELRY</div>
               <h2 id="jewelry-title">Jewelry Collection</h2>
-              <p>Single pieces, gift-ready picks and combos from the same Celebration catalog. Product images, names and availability stay driven by the catalog.</p>
-              <div className="commerceJewelryBadges"><span>♡ Anti-tarnish ready</span><span>✦ Giftable styles</span><span>◈ Premium presentation</span><span>✓ Catalog controlled</span></div>
+              <p>Single pieces, gift-ready picks and combos from the same Celebration catalog. Product names, categories, pricing and images stay driven by the existing catalog.</p>
+              <div className="commerceJewelryBadges"><span>♡ Single pieces</span><span>✦ Gift-ready picks</span><span>◈ Combo-friendly</span><span>✓ Catalog controlled</span></div>
             </div>
             {jewelryProducts[0] && <div className="commerceJewelryHeroProduct"><ProductMedia product={jewelryProducts[0]} className="commerceJewelryHeroImage" /></div>}
           </div>
@@ -91,15 +86,15 @@ export function CommerceShowcase({ catalog }: { catalog: CatalogConfig }) {
           {jewelryProducts.length > 0 ? (
             <>
               <div className="commerceJewelryCategoryRail" aria-label="Jewelry categories">
-                <a className="active" href="#jewelry">All Jewelry</a>
-                {jewelryCategories.slice(0, 6).map((category) => <a href="#products" key={category}>{category}</a>)}
+                <a className="active" href="/jewelry">All Jewelry</a>
+                {jewelryCategories.slice(0, 6).map((category) => <a href={`/jewelry?category=${encodeURIComponent(category)}`} key={category}>{category}</a>)}
               </div>
-              <div className="commerceJewelryToolbar"><span>Sort by: <b>Popular</b></span><span>Price</span><span>Material</span><span>Occasion</span><a href="#products">☰ Filters</a></div>
+              <div className="commerceJewelryToolbar"><span>Catalog collection</span><span>{jewelryProducts.length} live items</span><a href="/jewelry">View Jewelry →</a></div>
               <div className="commerceJewelryGrid">
-                {jewelryProducts.slice(0, 9).map((product, index) => (
-                  <a className="commerceJewelryCard" href="#builder" key={product.id}>
-                    <div className="commerceJewelryImageWrap"><ProductMedia product={product} className="commerceJewelryImage" />{index === 0 && <span className="commerceBadge">Best Seller</span>}<span className="commerceHeart" aria-hidden="true">♡</span></div>
-                    <div className="commerceJewelryCopy"><b>{product.name}</b><strong>From {formatMoney(product.minTier)}</strong><span>★ Catalog item</span></div>
+                {jewelryProducts.slice(0, 9).map((product) => (
+                  <a className="commerceJewelryCard" href={`/jewelry/${encodeURIComponent(product.id)}`} key={product.id}>
+                    <div className="commerceJewelryImageWrap"><ProductMedia product={product} className="commerceJewelryImage" /><span className="commerceBadge">{product.category}</span><span className="commerceHeart" aria-hidden="true">♡</span></div>
+                    <div className="commerceJewelryCopy"><b>{product.name}</b><strong>From {formatMoney(product.minTier)}</strong><span>{product.note || "Celebration catalog item"}</span></div>
                   </a>
                 ))}
               </div>
@@ -107,7 +102,7 @@ export function CommerceShowcase({ catalog }: { catalog: CatalogConfig }) {
           ) : (
             <div className="commerceJewelryEmpty">
               <b>Jewelry storefront is ready.</b>
-              <p>Add jewelry products through the existing catalog/admin flow and this section will populate automatically with their names, categories, prices and images.</p>
+              <p>Add jewelry items through the existing catalog admin with their real category, image and available-from value. This section will populate automatically without code changes.</p>
             </div>
           )}
         </div>
