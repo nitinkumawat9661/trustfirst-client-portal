@@ -16,6 +16,18 @@ function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : ""
 }
 
+function successMessageIdentifier(value: JsonObject) {
+  const type = stringValue(value.type).toLowerCase()
+  const status = stringValue(value.status).toLowerCase()
+  const providerSuccess = type === "success" || status === "success" || value.success === true
+  if (!providerSuccess) return ""
+
+  const message = stringValue(value.message)
+  if (!message) return ""
+  const digits = message.replace(/\D/g, "")
+  return digits.length >= 10 && digits.length <= 15 ? message : ""
+}
+
 function verifiedIdentifier(payload: unknown) {
   const queue: JsonObject[] = []
   const root = asObject(payload)
@@ -28,6 +40,14 @@ function verifiedIdentifier(payload: unknown) {
       const value = stringValue(current[key])
       if (value) return value
     }
+
+    // MSG91's live verifyAccessToken response can return the verified mobile
+    // directly as `message` when `type` is `success` (for example 91XXXXXXXXXX).
+    // Accept that shape only for an explicit success payload and only when the
+    // message is phone-like, so arbitrary provider messages are never trusted.
+    const messageIdentifier = successMessageIdentifier(current)
+    if (messageIdentifier) return messageIdentifier
+
     for (const key of ["data", "result", "response", "message"]) {
       const child = asObject(current[key])
       if (child) queue.push(child)
