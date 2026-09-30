@@ -1,0 +1,24 @@
+/* Presentation-only cart/checkout refinement. Existing hamper builder, order creation and payment logic are untouched. */
+.builderCard{background:linear-gradient(180deg,#fffdf9,#fff8f1);border:1px solid #e2cdbb;border-radius:24px;box-shadow:0 24px 64px rgba(73,28,21,.11),inset 0 1px 0 #fff;overflow:hidden}
+.builderCard .builderTitle{padding-bottom:14px;border-bottom:1px solid #ecdcd0}
+.builderCard .builderTitle h3{font:700 28px/1.06 var(--font-display);color:#641317;letter-spacing:-.03em}
+.builderCard .builderTitle p{color:#81655d}
+.steps,.fourSteps{background:linear-gradient(180deg,#f8e8dc,#f3dccd);border:1px solid #e5cdbb;box-shadow:inset 0 1px 0 rgba(255,255,255,.8)}
+.stepBtn{background:transparent;color:#76584f;font-weight:850}.stepBtn.active{background:linear-gradient(180deg,#8f1b22,#681117);color:white;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 7px 16px rgba(116,25,29,.17)}
+.pick{background:linear-gradient(180deg,#fff,#fff9f3);border-color:#e4cfbf;box-shadow:0 8px 20px rgba(69,27,20,.045)}
+.pick.active{border-color:#b77d4b;background:linear-gradient(180deg,#fffaf4,#f8eadf);box-shadow:0 12px 24px rgba(116,25,29,.08),inset 0 0 0 1px rgba(201,145,61,.18)}
+.summary{background:linear-gradient(180deg,#35110f,#5e1715 58%,#28100d);color:#fff;border:1px solid #815447;border-radius:20px;box-shadow:0 22px 48px rgba(57,21,16,.22),inset 0 1px 0 rgba(255,255,255,.12)}
+.summary h4,.summary strong,.summary b{color:#fff}.summary span,.summary small,.summary p{color:#e9d5c6}.summary a{color:#f3ca8e}.summary .primary{background:linear-gradient(180deg,#b1262f,#80141b);border-color:#cf6267}
+.checkoutSectionCard{background:linear-gradient(180deg,#fffdf9,#fff9f4);border-color:#e2cdbb;box-shadow:0 14px 34px rgba(69,27,20,.065),inset 0 1px 0 #fff;border-radius:20px}
+.checkoutSectionHead{border-bottom-color:#ead9cc}.checkoutSectionHead span{color:#a45d34}.checkoutSectionHead h4{font-size:21px;color:#62171a}.checkoutSectionHead small{color:#8d736a}
+.checkoutFormGrid .control{border-color:#dfc7b5;background:linear-gradient(180deg,#fff,#fffdf9);box-shadow:inset 0 1px 1px rgba(72,28,21,.03),0 5px 12px rgba(72,28,21,.025)}
+.checkoutFormGrid .control:focus{border-color:#b47b49;box-shadow:0 0 0 4px rgba(201,145,61,.12)}
+.checkoutAccount{background:linear-gradient(180deg,#fff,#fff9f2)!important;border-color:#e2ccba!important;box-shadow:0 10px 24px rgba(69,27,20,.05)}
+.automatedPaymentBox{background:linear-gradient(145deg,#35110f,#671a17 60%,#2b100e)!important;border-color:#885445!important;color:#fff!important;box-shadow:0 20px 44px rgba(60,21,16,.2)!important}
+.automatedPaymentBox span,.automatedPaymentBox small{color:#ead8ca!important}.automatedPaymentBox strong{color:#fff!important}.automatedPaymentBox .paymentSticker{background:linear-gradient(180deg,#fff7ea,#e7c893)!important;color:#651419;box-shadow:inset 0 1px 0 #fff,0 10px 22px rgba(0,0,0,.16)!important}.automatedPaymentBox .payButton{background:linear-gradient(180deg,#b82731,#7a1219);border:1px solid #ce5a61}
+.paymentSteps div{background:linear-gradient(180deg,#fff,#fff8f1);border:1px solid #e3cfbf;box-shadow:0 7px 18px rgba(70,27,20,.04)}.paymentSteps b{background:linear-gradient(180deg,#8c1b21,#681116)!important;color:#fff!important;box-shadow:inset 0 1px rgba(255,255,255,.16)}
+.policyCheck{border-color:#e2cdbb!important;border-radius:14px!important;background:linear-gradient(180deg,#fff,#fffaf5)!important}
+.checkoutProgressNote{background:linear-gradient(180deg,#fff8ef,#fffdf9);border-color:#e5cfbc;box-shadow:0 7px 16px rgba(70,27,20,.03)}
+.paymentStateCard.pending{background:linear-gradient(180deg,#fff9e9,#fffdf7)}.paymentStateCard.failed{background:linear-gradient(180deg,#fff3f0,#fff9f7)}
+@media(min-width:900px){.builderCard{padding:30px}.checkoutSectionCard{padding:20px}.summary{position:sticky;top:110px}}
+@media(max-width:639px){.builderCard{border-radius:19px}.summary{border-radius:17px}.checkoutSectionCard{border-radius:17px}.checkoutSectionHead h4{font-size:19px}}
