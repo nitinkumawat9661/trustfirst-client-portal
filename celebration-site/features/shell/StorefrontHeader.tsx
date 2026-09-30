@@ -22,17 +22,17 @@ export function StorefrontHeader({ settings }: { settings: StoreSettings }) {
           </div>
 
           <div className="navAccountActions celebrationCommerceActions">
-            <a className="commerceIconAction" href="#jewelry" aria-label="Jewelry collection">♡</a>
+            <Link className="commerceIconAction" href="/jewelry" prefetch={false} aria-label="Jewelry collection">♡</Link>
             <Link className="commerceIconAction" href={routes.account} prefetch={false} aria-label="My Celebration">♥</Link>
-            <a className="commerceIconAction commerceCartAction" href="#builder" aria-label="Open hamper builder">▣</a>
+            <a className="commerceIconAction commerceCartAction" href={`${routes.home}#builder`} aria-label="Open hamper builder">▣</a>
           </div>
         </div>
 
         <div className="wrap celebrationCommerceMenuRow">
           <nav className="links celebrationCommerceLinks" aria-label="Store navigation">
             <a href={`${routes.home}#budgets`}>Hampers</a>
-            <a href={`${routes.home}#jewelry`}>Jewelry</a>
-            <a href={`${routes.home}#jewelry`}>Combos</a>
+            <Link href="/jewelry" prefetch={false}>Jewelry</Link>
+            <Link href="/jewelry?collection=combos" prefetch={false}>Combos</Link>
             <a href={`${routes.home}#occasions`}>Occasions</a>
             <a href={`${routes.home}#budgets`}>Budget</a>
             <a href={`${routes.home}#trust`}>Why Celebration</a>
