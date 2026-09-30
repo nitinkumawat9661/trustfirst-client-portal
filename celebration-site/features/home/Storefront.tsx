@@ -3,6 +3,7 @@ import type { StoreSettings } from "../../lib/server/store-settings"
 import { AmbientMotion } from "../motion/AmbientMotion"
 import { StorefrontHeader } from "../shell/StorefrontHeader"
 import { TrustStrip } from "../shell/TrustStrip"
+import { CommerceCategoryStrip } from "./CommerceCategoryStrip"
 import { Hero } from "./Hero"
 import { StorefrontDiscovery } from "./StorefrontDiscovery"
 
@@ -29,6 +30,7 @@ export function Storefront({ initialCatalog, initialSocialProof = null, initialS
         <TrustStrip />
         <StorefrontHeader settings={initialSettings} />
         <Hero tiers={tiers} />
+        <CommerceCategoryStrip />
         <StorefrontDiscovery initialCatalog={initialCatalog} initialSocialProof={initialSocialProof} />
       </div>
     </main>
