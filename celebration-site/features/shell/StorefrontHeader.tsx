@@ -16,6 +16,20 @@ export function StorefrontHeader({ settings }: { settings: StoreSettings }) {
             <div className="tag">{storeContent.brand.tagline}</div>
           </Link>
 
+          <label className="commerceSearch" aria-label="Search Celebration">
+            <span aria-hidden="true">⌕</span>
+            <input readOnly placeholder="Search hampers, jewelry, gifts..." />
+          </label>
+
+          <div className="navAccountActions celebrationCommerceActions">
+            <Link className="navAccountLink" href={routes.account} prefetch={false} aria-label="My Celebration dashboard">
+              <span aria-hidden="true">♡</span><b>My Celebration</b>
+            </Link>
+            <Link className="secondary navStoreLink celebrationJewelryShortcut" href="/jewelry" prefetch={false}>Jewelry</Link>
+          </div>
+        </div>
+
+        <div className="wrap celebrationCommerceMenuRow">
           <nav className="links celebrationCommerceLinks" aria-label="Store navigation">
             <a href={`${routes.home}#budgets`}>Hampers</a>
             <Link href="/jewelry" prefetch={false}>Jewelry</Link>
@@ -24,13 +38,6 @@ export function StorefrontHeader({ settings }: { settings: StoreSettings }) {
             <a href={`${routes.home}#budgets`}>Budget</a>
             <a href={`${routes.home}#trust`}>Why Celebration</a>
           </nav>
-
-          <div className="navAccountActions celebrationCommerceActions">
-            <Link className="navAccountLink" href={routes.account} prefetch={false} aria-label="My Celebration dashboard">
-              <span aria-hidden="true">♡</span><b>My Celebration</b>
-            </Link>
-            <Link className="secondary navStoreLink celebrationJewelryShortcut" href="/jewelry" prefetch={false}>Jewelry</Link>
-          </div>
         </div>
 
         <div className="assistBar">
