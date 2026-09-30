@@ -63,7 +63,7 @@ jobs:
             | tail -n 100 || true
           echo "RECENT_MSG91_LOGS_END"
 
-          echo "MSG91_AUTH_PROBE_BEGIN"
+          echo "MSG91_FORMAT_PROBES_BEGIN"
           sudo -u nitin env HOME=/home/nitin bash -lc 'cd /var/www/celebration/current && node' <<'NODE'
           const { loadEnvConfig } = require('@next/env')
           loadEnvConfig(process.cwd(), false)
@@ -71,25 +71,48 @@ jobs:
           const provider = (process.env.SMS_PROVIDER || '').trim()
           console.log(JSON.stringify({ provider, authKeyPresent: Boolean(authkey), authKeyLength: authkey.length }))
           if (!authkey) process.exit(0)
-          const body = new URLSearchParams({ authkey, 'access-token': 'diagnostic-invalid-access-token-0000000000000000' })
-          fetch('https://control.msg91.com/api/v5/widget/verifyAccessToken', {
-            method: 'POST',
-            headers: { accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
-            body: body.toString(),
-            signal: AbortSignal.timeout(10000)
-          }).then(async (response) => {
-            const payload = await response.json().catch(() => null)
+
+          const endpoint = 'https://control.msg91.com/api/v5/widget/verifyAccessToken'
+          const fakeToken = 'diagnostic-invalid-access-token-0000000000000000'
+
+          function safePayload(response, payload, label) {
             const root = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}
-            const safe = {
+            return {
+              label,
               httpStatus: response.status,
               type: typeof root.type === 'string' ? root.type.slice(0, 64) : '',
               code: typeof root.code === 'number' ? String(root.code) : (typeof root.code === 'string' ? root.code.slice(0, 32) : ''),
               message: typeof root.message === 'string' ? root.message.slice(0, 160) : ''
             }
-            console.log(JSON.stringify(safe))
-          }).catch((error) => {
-            console.log(JSON.stringify({ probeError: error?.name || 'Error' }))
-          })
+          }
+
+          async function probe(label, options) {
+            try {
+              const response = await fetch(endpoint, { method: 'POST', signal: AbortSignal.timeout(10000), ...options })
+              const payload = await response.json().catch(() => null)
+              console.log(JSON.stringify(safePayload(response, payload, label)))
+            } catch (error) {
+              console.log(JSON.stringify({ label, probeError: error?.name || 'Error' }))
+            }
+          }
+
+          ;(async () => {
+            await probe('form-body', {
+              headers: { accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ authkey, 'access-token': fakeToken }).toString()
+            })
+            await probe('json-body', {
+              headers: { accept: 'application/json', 'content-type': 'application/json' },
+              body: JSON.stringify({ authkey, 'access-token': fakeToken })
+            })
+            await probe('headers-only', {
+              headers: { accept: 'application/json', authkey, 'access-token': fakeToken }
+            })
+            await probe('auth-header-json-token', {
+              headers: { accept: 'application/json', 'content-type': 'application/json', authkey },
+              body: JSON.stringify({ 'access-token': fakeToken })
+            })
+          })()
           NODE
-          echo "MSG91_AUTH_PROBE_END"
+          echo "MSG91_FORMAT_PROBES_END"
           REMOTE
