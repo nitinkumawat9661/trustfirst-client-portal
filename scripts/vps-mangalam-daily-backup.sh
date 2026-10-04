@@ -44,7 +44,8 @@ ARCHIVE="/tmp/mangalam-backup-$STAMP.tar.gz"
 CURRENT_USER="$(id -un)"
 CURRENT_GROUP="$(id -gn)"
 
-sudo install -d -m 700 -o "$CURRENT_USER" -g "$CURRENT_GROUP" "$BACKUP_ROOT"
+[[ -d "$BACKUP_ROOT" ]] || { echo "Backup root is missing: $BACKUP_ROOT" >&2; exit 1; }
+[[ -w "$BACKUP_ROOT" ]] || { echo "Backup root is not writable by $CURRENT_USER: $BACKUP_ROOT" >&2; exit 1; }
 install -d -m 700 "$WORK_DIR"
 
 pg_dump --format=custom --compress=9 --no-owner --no-acl --file "$WORK_DIR/trustfirst_demo.dump" "$PG_URL"
