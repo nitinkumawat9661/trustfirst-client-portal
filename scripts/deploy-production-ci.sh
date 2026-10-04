@@ -425,8 +425,9 @@ case "$DEPLOY_PATH:$PM2_APP_NAME:$ENV_FILE" in
   *[Cc]afe[Ll]uxe*|*[Cc]afe[Ll]uxesite*) fail "TrustFirst deployment target references CafeLuxe." ;;
 esac
 
-CAFE_BEFORE="$(ss -ltnp 2>/dev/null | grep -E '[:.]3000[[:space:]]' || true)"
-log "CafeLuxe port 3000 snapshot captured."
+CAFE_BEFORE="$(ss -ltnH 2>/dev/null | awk '$4 ~ /:3000$/ {print $4}' | sort -u)"
+[ -n "$CAFE_BEFORE" ] || fail "CafeLuxe port 3000 listener is missing before TrustFirst deployment."
+log "CafeLuxe port 3000 stable listener endpoint captured: $CAFE_BEFORE"
 
 resolve_existing_runtime
 
@@ -548,8 +549,9 @@ curl --silent --show-error --fail --max-time 15 "$PRODUCTION_URL/api/auth/sessio
 curl --silent --show-error --fail --max-time 15 "$PUBLIC_URL" >/dev/null \
   || fail "Public Mangalam domain health check failed."
 
-CAFE_AFTER="$(ss -ltnp 2>/dev/null | grep -E '[:.]3000[[:space:]]' || true)"
-[ "$CAFE_AFTER" = "$CAFE_BEFORE" ] || fail "CafeLuxe port 3000 listener changed unexpectedly."
+CAFE_AFTER="$(ss -ltnH 2>/dev/null | awk '$4 ~ /:3000$/ {print $4}' | sort -u)"
+[ -n "$CAFE_AFTER" ] || fail "CafeLuxe port 3000 listener disappeared during TrustFirst deployment."
+[ "$CAFE_AFTER" = "$CAFE_BEFORE" ] || fail "CafeLuxe port 3000 listener endpoint changed unexpectedly."
 
 printf '%s\n' "$DEPLOY_SHA" > "$DEPLOY_PATH/.trustfirst-deployed-commit"
 finalize_old_runtime
