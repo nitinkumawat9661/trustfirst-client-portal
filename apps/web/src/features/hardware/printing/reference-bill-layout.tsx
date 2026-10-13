@@ -490,7 +490,7 @@ export function buildReferenceGstSummary(
   const rates = [...new Set(rows.filter((row) => row.taxCents !== 0).map((row) => row.taxRateBps))];
   return {
     rows: summaryRows,
-    rateLabel: rates.length === 0 ? "0%" : rates.length === 1 ? formatGstRate(rates[0]) : "Multiple rates",
+    rateLabel: rates.length === 0 ? "0%" : rates.length === 1 ? formatGstRate(rates[0] ?? 0) : "Multiple rates",
     totalTaxableCents: summaryRows.reduce((sum, row) => sum + row.taxableCents, 0),
     totalTaxCents: summaryRows.reduce((sum, row) => sum + row.taxCents, 0),
   };
