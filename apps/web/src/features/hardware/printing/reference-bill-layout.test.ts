@@ -41,14 +41,14 @@ describe("format 3 historical and future bill GST summary", () => {
     expect(summary.totalTaxCents).toBe(40273);
     expect(summary.totalTaxableCents).toBe(223740);
     expect(summary.rateLabel).toBe("18%");
-    expect(originalInvoiceTax[0].taxCents).toBe(40273);
+    expect(originalInvoiceTax[0]!.taxCents).toBe(40273);
   });
 
   it("uses the IGST column for inter-state documents without duplicate split tax", () => {
     const summary = buildReferenceGstSummary(originalInvoiceTax, "inter-state");
-    expect(summary.rows[0].cgstCents).toBe(0);
-    expect(summary.rows[0].sgstCents).toBe(0);
-    expect(summary.rows[0].taxCents).toBe(40273);
+    expect(summary.rows[0]!.cgstCents).toBe(0);
+    expect(summary.rows[0]!.sgstCents).toBe(0);
+    expect(summary.rows[0]!.taxCents).toBe(40273);
   });
 
   it("keeps separate taxable and tax amounts for multiple GST rates", () => {
@@ -58,8 +58,8 @@ describe("format 3 historical and future bill GST summary", () => {
       { taxableCents: 0, taxCents: 0, taxRateBps: 0 },
     ], "intra-state");
     expect(summary.rows).toHaveLength(3);
-    expect(summary.rows[0].cgstCents + summary.rows[0].sgstCents).toBe(2500);
-    expect(summary.rows[1].cgstCents + summary.rows[1].sgstCents).toBe(12000);
+    expect(summary.rows[0]!.cgstCents + summary.rows[0]!.sgstCents).toBe(2500);
+    expect(summary.rows[1]!.cgstCents + summary.rows[1]!.sgstCents).toBe(12000);
     expect(summary.rateLabel).toBe("Multiple rates");
     expect(summary.totalTaxableCents).toBe(150000);
     expect(summary.totalTaxCents).toBe(14500);
