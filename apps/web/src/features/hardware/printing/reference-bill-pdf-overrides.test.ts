@@ -24,6 +24,15 @@ describe("Mangalam bill PDF balance overrides", () => {
     expect(REFERENCE_BILL_PDF_OVERRIDES).toContain(".bill-roundoff-row");
   });
 
+  it("renders format 3 as a separate compact five-column GST summary", () => {
+    expect(REFERENCE_BILL_PDF_OVERRIDES).toContain(".bill-gst-summary {");
+    expect(REFERENCE_BILL_PDF_OVERRIDES).toContain(".bill-gst-table {");
+    expect(REFERENCE_BILL_PDF_OVERRIDES).toContain("table-layout: fixed;");
+    expect(REFERENCE_BILL_PDF_OVERRIDES).toContain(".bill-gst-totals {");
+    expect(REFERENCE_BILL_PDF_OVERRIDES).toContain("repeat(3, minmax(0, 1fr))");
+    expect(REFERENCE_BILL_PDF_OVERRIDES).toContain("page-break-inside: avoid;");
+  });
+
   it("keeps terms readable and reduces the short-bill signature block", () => {
     expect(REFERENCE_BILL_PDF_OVERRIDES).toContain(".bill-footer {");
     expect(REFERENCE_BILL_PDF_OVERRIDES).toContain("font-size: 8.3px;");

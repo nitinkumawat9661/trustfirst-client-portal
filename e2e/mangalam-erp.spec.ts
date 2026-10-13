@@ -138,7 +138,12 @@ test("customer, supplier, sale, purchase, Estimate Bill and same-page printing w
   await expect(page.getByText("Pending", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Status", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Confirmed - deducted/i)).toHaveCount(0);
-  await expect(page.locator(".bill-tax-summary-line")).toContainText("Taxable Value @12%");
+  await expect(page.locator(".bill-gst-title")).toHaveText("GST SUMMARY");
+  await expect(page.locator(".bill-gst-table thead")).toContainText("Taxable Value");
+  await expect(page.locator(".bill-gst-table thead")).toContainText("CGST Amount");
+  await expect(page.locator(".bill-gst-table thead")).toContainText("SGST Amount");
+  await expect(page.locator(".bill-gst-table tbody tr").first()).toContainText("6%");
+  await expect(page.locator(".bill-gst-totals")).toContainText("12%");
   await expect(page.locator(".bill-words")).toContainText(/^Rupees .+ Only$/);
 
   await page.emulateMedia({ media: "print" });

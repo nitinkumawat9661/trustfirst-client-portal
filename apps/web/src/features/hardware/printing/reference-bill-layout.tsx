@@ -263,11 +263,9 @@ function BillTotals({
   taxMode: ReferenceTaxMode;
   totalQuantity: number;
 }) {
-  const taxLines = projection.gstSummary.map((row) => {
-    const cgst = taxMode === "intra-state" ? Math.floor(row.taxCents / 2) : 0;
-    const sgst = taxMode === "intra-state" ? row.taxCents - cgst : 0;
-    return { ...row, cgst, sgst };
-  });
+  // Render the stored tax breakdown, including older invoices, without changing
+  // persisted document amounts or rerunning financial calculations.
+  const taxSummary = buildReferenceGstSummary(projection.gstSummary, taxMode);
   const displayTotals = resolveReferenceBillTotals(projection);
   const taxableValueCents = projection.items.reduce((sum, item) => sum + item.taxableCents, 0);
   const summaryRows: Array<{ label: string; valueCents: number }> = [
@@ -293,7 +291,59 @@ function BillTotals({
           </div>
         ))}
       </div>
-      <div className="bill-tax-summary-line">{formatTaxSummary(taxLines, taxMode)}</div>
+      <div className="bill-gst-summary">
+        <div className="bill-gst-title">GST SUMMARY</div>
+        <table className="bill-gst-table">
+          <thead>
+            <tr>
+              <th scope="col">Taxable Value</th>
+              {taxMode === "inter-state" ? (
+                <>
+                  <th scope="col">IGST Rate</th>
+                  <th scope="col">IGST Amount</th>
+                </>
+              ) : (
+                <>
+                  <th scope="col">CGST Rate</th>
+                  <th scope="col">CGST Amount</th>
+                  <th scope="col">SGST Rate</th>
+                  <th scope="col">SGST Amount</th>
+                </>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {taxSummary.rows.map((row) => (
+              <tr key={row.taxRateBps}>
+                <td>{moneyPlain(row.taxableCents)}</td>
+                {taxMode === "inter-state" ? (
+                  <>
+                    <td>{formatGstRate(row.taxRateBps)}</td>
+                    <td>{moneyPlain(row.taxCents)}</td>
+                  </>
+                ) : (
+                  <>
+                    <td>{formatGstRate(row.taxRateBps / 2)}</td>
+                    <td>{moneyPlain(row.cgstCents)}</td>
+                    <td>{formatGstRate(row.taxRateBps / 2)}</td>
+                    <td>{moneyPlain(row.sgstCents)}</td>
+                  </>
+                )}
+              </tr>
+            ))}
+            {taxSummary.rows.length === 0 ? (
+              <tr>
+                <td colSpan={taxMode === "inter-state" ? 3 : 5} className="bill-gst-empty">No GST applicable</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+        <div className="bill-gst-totals">
+          <div><span>Total GST</span><strong>{moneyPlain(taxSummary.totalTaxCents)}</strong></div>
+          <div><span>GST Rate</span><strong>{taxSummary.rateLabel}</strong></div>
+          <div><span>Taxable Value</span><strong>{moneyPlain(taxSummary.totalTaxableCents)}</strong></div>
+        </div>
+      </div>
       {displayTotals.roundOffCents !== 0 ? (
         <div className="bill-roundoff-row">
           <span className="bill-roundoff-label">
@@ -420,15 +470,34 @@ function formatDiscount(item: PrintItem) {
   return item.discountCents ? moneyPlain(item.discountCents) : "-";
 }
 
-function formatTaxSummary(
-  rows: Array<HardwarePrintProjection["gstSummary"][number] & { cgst: number; sgst: number }>,
+/**
+ * Use the already-saved rate-group totals for old and new documents alike.
+ * Split each intra-state group in integer paise to preserve the original tax
+ * total, including odd-paise tax amounts.
+ */
+export function buildReferenceGstSummary(
+  rows: HardwarePrintProjection["gstSummary"],
   taxMode: ReferenceTaxMode,
 ) {
-  if (!rows.length) return "GST Details: No GST applicable.";
-  return rows.map((row) => taxMode === "inter-state"
-    ? `GST Details: Taxable Value @${row.taxRateBps / 100}% = ${moneyPlain(row.taxableCents)} | IGST ${row.taxRateBps / 100}% = ${moneyPlain(row.taxCents)}`
-    : `GST Details: Taxable Value @${row.taxRateBps / 100}% = ${moneyPlain(row.taxableCents)} | CGST ${row.taxRateBps / 200}% = ${moneyPlain(row.cgst)} | SGST ${row.taxRateBps / 200}% = ${moneyPlain(row.sgst)}`
-  ).join("   ");
+  const summaryRows = rows.map((row) => {
+    const cgstCents = taxMode === "intra-state" ? Math.floor(row.taxCents / 2) : 0;
+    return {
+      ...row,
+      cgstCents,
+      sgstCents: taxMode === "intra-state" ? row.taxCents - cgstCents : 0,
+    };
+  });
+  const rates = [...new Set(rows.filter((row) => row.taxCents !== 0).map((row) => row.taxRateBps))];
+  return {
+    rows: summaryRows,
+    rateLabel: rates.length === 0 ? "0%" : rates.length === 1 ? formatGstRate(rates[0] ?? 0) : "Multiple rates",
+    totalTaxableCents: summaryRows.reduce((sum, row) => sum + row.taxableCents, 0),
+    totalTaxCents: summaryRows.reduce((sum, row) => sum + row.taxCents, 0),
+  };
+}
+
+function formatGstRate(rateBps: number) {
+  return `${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(rateBps / 100)}%`;
 }
 
 export function formatPartyName(value: string) {
