@@ -39,6 +39,7 @@ describe("format 3 historical and future bill GST summary", () => {
       sgstCents: 20137,
     }]);
     expect(summary.totalTaxCents).toBe(40273);
+    expect(summary.rows[0]!.cgstCents + summary.rows[0]!.sgstCents).toBe(summary.totalTaxCents);
     expect(summary.totalTaxableCents).toBe(223740);
     expect(summary.rateLabel).toBe("18%");
     expect(originalInvoiceTax[0]!.taxCents).toBe(40273);
