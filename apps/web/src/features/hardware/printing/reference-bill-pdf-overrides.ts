@@ -46,12 +46,60 @@ export const REFERENCE_BILL_PDF_OVERRIDES = `
     padding: 1.2mm 2mm;
     font-variant-numeric: tabular-nums;
   }
-  .bill-tax-summary-line {
+  /* Format 3: a separate, readable rate-wise GST table for every print. */
+  .bill-gst-summary {
     border-top: 1px solid #18181b;
-    padding: 1.7mm 2mm;
-    font-size: 8.2px;
-    font-weight: 700;
-    line-height: 1.3;
+    padding: 1.5mm 2mm 1.8mm;
+    background: #fff;
+    color: #18181b;
+  }
+  .bill-gst-title {
+    margin-bottom: 1.2mm;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+  }
+  .bill-gst-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .bill-gst-table th,
+  .bill-gst-table td {
+    border: 1px solid #52525b;
+    padding: 1.3mm 1mm;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+  .bill-gst-table th {
+    background: #f4f4f5;
+    font-weight: 800;
+    text-align: center;
+  }
+  .bill-gst-table .bill-gst-empty { text-align: center; }
+  .bill-gst-totals {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border: 1px solid #52525b;
+    border-top: 0;
+    font-size: 8px;
+  }
+  .bill-gst-totals > div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.8mm;
+    padding: 1.4mm 1.5mm;
+  }
+  .bill-gst-totals > div + div { border-left: 1px solid #52525b; }
+  .bill-gst-totals span { font-size: 7.5px; font-weight: 600; }
+  .bill-gst-totals strong {
+    font-size: 9px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
   }
   .bill-roundoff-row {
     display: grid;
@@ -108,6 +156,8 @@ export const REFERENCE_BILL_PDF_OVERRIDES = `
       min-height: 100% !important;
     }
 
+    .bill-gst-summary { break-inside: avoid; page-break-inside: avoid; }
+    .bill-gst-table tr { break-inside: avoid; page-break-inside: avoid; }
     .bill-page-final { min-height: 0 !important; }
     .bill-page-final .bill-table-wrap {
       display: block !important;
