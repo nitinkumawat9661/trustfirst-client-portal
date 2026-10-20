@@ -18,7 +18,7 @@ describe("Manglam configuration pack", () => {
     expect(manglamTradingConfiguration.businessType).toBe("hardware and sanitary");
     expect(manglamTradingConfiguration.firmName).toBe("MANGALAM SANITARY");
     expect(manglamTradingConfiguration.legalName).toBe("KRISHAN KUMAR");
-    expect(manglamTradingConfiguration.gstin).toBe("08EFPK7672A1ZT");
+    expect(manglamTradingConfiguration.gstin).toBe("08EPFPK7672A1ZT");
     expect(manglamTradingConfiguration.identityStatus).toBe("LOCKED");
     expect(manglamTradingConfiguration.invoicePrefix).toBe("PENDING_CLIENT_CONFIRMATION");
     expect(manglamTradingConfiguration.quotationPrefix).toBe("PENDING_CLIENT_CONFIRMATION");
